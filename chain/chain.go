@@ -10,18 +10,23 @@ type Block struct {
 }
 
 type Chain struct {
-	blocks []Block // first is leaf and last is the root block, always
+	blocks []Block
 }
 
 type PubKey = []byte
 type Key = []byte
 type Signature = []byte
 
-func NewRoot(rootPubKey PubKey) Block {
-	return Block{HashToPrev: nil, InviteePubKey: rootPubKey, InvitersSignature: nil}
+func NewChain(rootPubKey PubKey) Chain {
+	chain = Chain{blocks: make(Chain, 1, 12)}
+	chain.blocks[0] = Block{
+		HashToPrev: nil,
+		InviteePubKey: rootPubKey,
+		InvitersSignature: nil,
+	}
 }
 
-func (c Chain) AddBlock(invitersKey Key, inviteesPubKey PubKey, position int) {
+func (c *Chain) AddBlock(invitersKey Key, inviteesPubKey PubKey, position int) {
 	assert.D.True(invitersKey.PubKey == c.LeafPubKey())
 
 	newBlock := Block{
@@ -30,11 +35,13 @@ func (c Chain) AddBlock(invitersKey Key, inviteesPubKey PubKey, position int) {
 		Position:      position,
 	}
 	h := newBlock.Hash()
-	newBloc.InvitersSignature = invitersKey.Sign(h)
+	newBlock.InvitersSignature = invitersKey.Sign(h)
+
+	c.blocks = append(c.blocks, newBlock)
 }
 
 func (c Chain) LeafPubKey() PubKey {
 	assert.D.True(len(c.blocks) > 0)
 
-	return c.blocks[0].InviteePubKey
+	return c.blocks[len(c.blocks)-1].InviteePubKey
 }
