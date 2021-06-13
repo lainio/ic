@@ -13,6 +13,7 @@ func (b Block) Hash() []byte {
 	return nil // TODO: 
 }
 
+// Chain is the data type for Invitation Chain, it's ID is rootPubKey. TODO:
 type Chain struct {
 	blocks []Block
 }
