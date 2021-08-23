@@ -7,6 +7,11 @@ import (
 )
 
 type PubKey = []byte
+
+func VerifySign(pubKey PubKey, msg []byte, sig Signature) bool {
+	return ed25519.Verify(pubKey, msg, sig)
+}
+
 type Key struct {
 	PrivKey []byte
 	PubKey
@@ -27,7 +32,7 @@ func (k Key) Sign(h []byte) Signature {
 }
 
 func (k Key) VerifySign(msg []byte, sig Signature) bool {
-	return ed25519.Verify(k.PubKey, msg, sig)
+	return VerifySign(k.PubKey, msg, sig)
 }
 
 type Signature = []byte
