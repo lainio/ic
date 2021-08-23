@@ -1,16 +1,27 @@
 package chain
 
-import "github.com/lainio/err2/assert"
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/gob"
+
+	"github.com/findy-network/ic/crypto"
+	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
+)
 
 type Block struct {
-	HashToPrev        []byte    // check the size later
-	InviteePubKey     PubKey    // TODO: check the type later?
-	InvitersSignature Signature // TODO: check the type
+	HashToPrev        []byte           // check the size later
+	InviteePubKey     crypto.PubKey    // TODO: check the type later?
+	InvitersSignature crypto.Signature // TODO: check the type
 	Position          int
 }
 
-func (b Block) Hash() []byte {
-	return nil // TODO: 
+func (b Block) Bytes() []byte {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err2.Check(enc.Encode(b))
+	return buf.Bytes()
 }
 
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey. TODO:
@@ -18,33 +29,17 @@ type Chain struct {
 	blocks []Block
 }
 
-type PubKey = []byte
-type Key struct {
-	PrivKey []byte
-	PubKey
-}
-
-func (k Key) PubKeyEqual( pubKey PubKey) bool {
-	return byteEqual(k.PubKey, pubKey)
-}
-
-func (k Key) Sign(h []byte) Signature {
-	return nil // TODO: 
-}
-
-type Signature = []byte
-
-func NewChain(rootPubKey PubKey) Chain {
+func NewChain(rootPubKey crypto.PubKey) Chain {
 	chain := Chain{blocks: make([]Block, 1, 12)}
 	chain.blocks[0] = Block{
-		HashToPrev: nil,
-		InviteePubKey: rootPubKey,
+		HashToPrev:        nil,
+		InviteePubKey:     rootPubKey,
 		InvitersSignature: nil,
 	}
 	return chain
 }
 
-func (c *Chain) AddBlock(invitersKey Key, inviteesPubKey PubKey, position int) {
+func (c *Chain) AddBlock(invitersKey *crypto.Key, inviteesPubKey crypto.PubKey, position int) {
 	assert.D.True(invitersKey.PubKeyEqual(c.LeafPubKey()))
 
 	newBlock := Block{
@@ -52,30 +47,22 @@ func (c *Chain) AddBlock(invitersKey Key, inviteesPubKey PubKey, position int) {
 		InviteePubKey: inviteesPubKey,
 		Position:      position,
 	}
-	h := newBlock.Hash()
-	newBlock.InvitersSignature = invitersKey.Sign(h)
+	newBlock.InvitersSignature = invitersKey.Sign(newBlock.Bytes())
 
 	c.blocks = append(c.blocks, newBlock)
 }
 
-func (c Chain) LeafPubKey() PubKey {
+func (c Chain) LeafPubKey() crypto.PubKey {
 	assert.D.True(len(c.blocks) > 0)
 
 	return c.blocks[len(c.blocks)-1].InviteePubKey
 }
 
 func (c Chain) HashToLeaf() []byte {
-	return nil // TODO:
-}
-
-func byteEqual(a, b []byte) bool {
-    if len(a) != len(b) {
-        return false
-    }
-    for i, v := range a {
-        if v != b[i] {
-            return false
-        }
-    }
-    return true
+	if c.blocks == nil {
+		return nil
+	}
+	lastBlockBytes := c.blocks[len(c.blocks)-1].Bytes()
+	ha := sha256.Sum256(lastBlockBytes)
+	return ha[:]
 }
