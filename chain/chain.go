@@ -37,19 +37,33 @@ func (b Block) VerifySign(invitersPubKey crypto.PubKey) bool {
 	return crypto.VerifySign(invitersPubKey, b.NoSign().Bytes(), b.InvitersSignature)
 }
 
-// Chain is the data type for Invitation Chain, it's ID is rootPubKey. TODO:
+// Chain is the data type for Invitation Chain, it's ID is rootPubKey
 type Chain struct {
-	blocks []Block
+	Blocks []Block // Blocks is exported variable for serialization
 }
 
 func NewChain(rootPubKey crypto.PubKey) Chain {
-	chain := Chain{blocks: make([]Block, 1, 12)}
-	chain.blocks[0] = Block{
+	chain := Chain{Blocks: make([]Block, 1, 12)}
+	chain.Blocks[0] = Block{
 		HashToPrev:        nil,
 		InviteePubKey:     rootPubKey,
 		InvitersSignature: nil,
 	}
 	return chain
+}
+
+func NewChainFromData(d []byte) (c Chain) {
+	r := bytes.NewReader(d)
+	dec := gob.NewDecoder(r)
+	err2.Check(dec.Decode(&c))
+	return c
+}
+
+func (c Chain) Bytes() []byte {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err2.Check(enc.Encode(c))
+	return buf.Bytes()
 }
 
 func (c *Chain) AddBlock(
@@ -66,32 +80,32 @@ func (c *Chain) AddBlock(
 	}
 	newBlock.InvitersSignature = invitersKey.Sign(newBlock.Bytes())
 
-	c.blocks = append(c.blocks, newBlock)
+	c.Blocks = append(c.Blocks, newBlock)
 }
 
 func (c Chain) LeafPubKey() crypto.PubKey {
-	assert.D.True(len(c.blocks) > 0)
+	assert.D.True(len(c.Blocks) > 0)
 
-	return c.blocks[len(c.blocks)-1].InviteePubKey
+	return c.Blocks[len(c.Blocks)-1].InviteePubKey
 }
 
 func (c Chain) HashToLeaf() []byte {
-	if c.blocks == nil {
+	if c.Blocks == nil {
 		return nil
 	}
-	lastBlockBytes := c.blocks[len(c.blocks)-1].Bytes()
+	lastBlockBytes := c.Blocks[len(c.Blocks)-1].Bytes()
 	ha := sha256.Sum256(lastBlockBytes)
 	return ha[:]
 }
 
 func (c Chain) Verify() bool {
-	assert.D.True(len(c.blocks) > 1, "cannot verify empty chain")
+	assert.D.True(len(c.Blocks) > 1, "cannot verify empty chain")
 
 	var invitersPubKey crypto.PubKey
 	// start with the root key
-	invitersPubKey = c.blocks[0].InviteePubKey
+	invitersPubKey = c.Blocks[0].InviteePubKey
 
-	for _, b := range c.blocks[1:] {
+	for _, b := range c.Blocks[1:] {
 		if !b.VerifySign(invitersPubKey) {
 			return false
 		}
