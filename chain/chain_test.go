@@ -41,6 +41,16 @@ func TestRead(t *testing.T) {
 	assert.True(t, c2.Verify())
 }
 
+func TestVerifyChainFail(t *testing.T) {
+	assert.Len(t, c.Blocks, 2)
+	assert.True(t, c.Verify())
+
+	b2 := c.Blocks[1]
+	b2.InvitersSignature[len(b2.InvitersSignature)-1] += 0x01
+
+	assert.False(t, c.Verify())
+}
+
 func TestVerifyChain(t *testing.T) {
 	assert.Len(t, c.Blocks, 2)
 	assert.True(t, c.Verify())
