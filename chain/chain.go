@@ -56,7 +56,7 @@ func SameRoot(c1, c2 Chain) bool {
 	return EqualBlocks(c1.FirstBlock(), c2.FirstBlock())
 }
 
-func CommonInviter(c1, c2 Chain) bool {
+func SameInviter(c1, c2 Chain) bool {
 	if !c1.Verify() || !c2.Verify() {
 		return false
 	}

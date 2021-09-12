@@ -96,8 +96,8 @@ func TestInvitation(t *testing.T) {
 
 // common inviter
 func TestCommonInviter(t *testing.T) {
-	assert.True(t, CommonInviter(alice.Chain, bob.Chain))
-	assert.False(t, CommonInviter(c, bob.Chain))
+	assert.True(t, SameInviter(alice.Chain, bob.Chain))
+	assert.False(t, SameInviter(c, bob.Chain))
 
 	ceciliaKey := crypto.NewKey()
 	ceciliaChain := bob.Chain.Invite(bob.Key, ceciliaKey.PubKey, 1)
