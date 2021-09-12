@@ -33,6 +33,13 @@ func (b Block) NoSign() Block {
 	return newBlock
 }
 
+func EqualBlocks(b1, b2 Block) bool {
+	return crypto.ByteEqual(b1.HashToPrev, b2.HashToPrev) &&
+		crypto.ByteEqual(b1.InviteePubKey, b2.InviteePubKey) &&
+		crypto.ByteEqual(b1.InvitersSignature, b2.InvitersSignature) &&
+		b1.Position == b2.Position
+}
+
 func (b Block) VerifySign(invitersPubKey crypto.PubKey) bool {
 	return crypto.VerifySign(invitersPubKey, b.NoSign().Bytes(), b.InvitersSignature)
 }
@@ -40,6 +47,23 @@ func (b Block) VerifySign(invitersPubKey crypto.PubKey) bool {
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey
 type Chain struct {
 	Blocks []Block // Blocks is exported variable for serialization
+}
+
+func SameRoot(c1, c2 Chain) bool {
+	if !c1.Verify() || !c2.Verify() {
+		return false
+	}
+	return EqualBlocks(c1.FirstBlock(), c2.FirstBlock())
+}
+
+func CommonInviter(c1, c2 Chain) bool {
+	if !c1.Verify() || !c2.Verify() {
+		return false
+	}
+	return EqualBlocks(
+		c1.SecondLastBlock(),
+		c2.SecondLastBlock(),
+	)
 }
 
 func NewChain(rootPubKey crypto.PubKey) Chain {
@@ -86,14 +110,14 @@ func (c *Chain) AddBlock(
 func (c Chain) LeafPubKey() crypto.PubKey {
 	assert.D.True(len(c.Blocks) > 0)
 
-	return c.Blocks[len(c.Blocks)-1].InviteePubKey
+	return c.LastBlock().InviteePubKey
 }
 
 func (c Chain) HashToLeaf() []byte {
 	if c.Blocks == nil {
 		return nil
 	}
-	lastBlockBytes := c.Blocks[len(c.Blocks)-1].Bytes()
+	lastBlockBytes := c.LastBlock().Bytes()
 	ha := sha256.Sum256(lastBlockBytes)
 	return ha[:]
 }
@@ -103,15 +127,53 @@ func (c Chain) Verify() bool {
 
 	var invitersPubKey crypto.PubKey
 	// start with the root key
-	invitersPubKey = c.Blocks[0].InviteePubKey
+	invitersPubKey = c.FirstBlock().InviteePubKey
 
 	for _, b := range c.Blocks[1:] {
 		if !b.VerifySign(invitersPubKey) {
 			return false
 		}
-		// the next block is signed with this blocks pub key i.e. this is
-		// chain
+		// the next block is signed with this blocks pub key
 		invitersPubKey = b.InviteePubKey
 	}
 	return true
+}
+
+func (c Chain) Clone() Chain {
+	return NewChainFromData(c.Bytes())
+}
+
+func (c Chain) Invite(
+	invitersKey *crypto.Key,
+	inviteesPubKey crypto.PubKey,
+	level int,
+) Chain {
+	assert.D.True(len(c.Blocks) > 0, "we need that root exists")
+
+	nc := c.Clone()
+	nc.AddBlock(invitersKey, inviteesPubKey, level)
+	return nc
+}
+
+func (c Chain) IsInvitee(invitee Chain) bool {
+	if !invitee.Verify() {
+		return false
+	}
+
+	return EqualBlocks(
+		c.LastBlock(),
+		invitee.SecondLastBlock(),
+	)
+}
+
+func (c Chain) FirstBlock() Block {
+	return c.Blocks[0]
+}
+
+func (c Chain) LastBlock() Block {
+	return c.Blocks[len(c.Blocks)-1]
+}
+
+func (c Chain) SecondLastBlock() Block {
+	return c.Blocks[len(c.Blocks)-2]
 }
