@@ -66,6 +66,25 @@ func SameInviter(c1, c2 Chain) bool {
 	)
 }
 
+// CommonInviter returns distance (current level) from chain's root if it
+// exists.  If not it returns -1
+func CommonInviter(c1, c2 Chain) (level int) {
+	if !SameRoot(c1, c2) {
+		return -1
+	}
+	c := c1
+	if len(c1.Blocks) > len(c2.Blocks) {
+		c = c2
+	}
+	for i := range c.Blocks[1:] {
+		if !EqualBlocks(c1.Blocks[i], c2.Blocks[i]) {
+			return i - 1
+		}
+		level = i
+	}
+	return level
+}
+
 func NewChain(rootPubKey crypto.PubKey) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{

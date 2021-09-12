@@ -41,6 +41,8 @@ func setup() {
 	bob.Key = crypto.NewKey()
 
 	root.Chain = NewChain(root.Key.PubKey)
+
+	// root invites alice and bod but the have no invitation between
 	alice.Chain = root.Chain.Invite(root.Key, alice.Key.PubKey, 1)
 	bob.Chain = root.Chain.Invite(root.Key, bob.Key.PubKey, 1)
 }
@@ -84,24 +86,74 @@ func TestInvitation(t *testing.T) {
 	assert.Len(t, bob.Blocks, 2)
 	assert.True(t, bob.Verify())
 
-	ceciliaKey := crypto.NewKey()
-	ceciliaChain := bob.Chain.Invite(bob.Key, ceciliaKey.PubKey, 1)
-	assert.Len(t, ceciliaChain.Blocks, 3)
-	assert.True(t, ceciliaChain.Verify())
-	assert.False(t, SameRoot(c, ceciliaChain), "we have two different roots")
-	assert.True(t, SameRoot(alice.Chain, ceciliaChain))
+	cecilia := struct {
+		*crypto.Key
+		Chain
+	}{
+		Key: crypto.NewKey(),
+	}
+	cecilia.Chain = bob.Chain.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	assert.Len(t, cecilia.Chain.Blocks, 3)
+	assert.True(t, cecilia.Chain.Verify())
+	assert.False(t, SameRoot(c, cecilia.Chain), "we have two different roots")
+	assert.True(t, SameRoot(alice.Chain, cecilia.Chain))
 }
 
 // common root : my distance, her distance
 
 // common inviter
 func TestCommonInviter(t *testing.T) {
+	// alice and bod have common root 
+	cecilia := struct {
+		*crypto.Key
+		Chain
+	}{
+		Key: crypto.NewKey(),
+	}
+	// bob intives cecilia
+	cecilia.Chain = bob.Chain.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	assert.Len(t, cecilia.Chain.Blocks, 3)
+	assert.True(t, cecilia.Chain.Verify())
+
+	david := struct {
+		*crypto.Key
+		Chain
+	}{
+		Key: crypto.NewKey(),
+	}
+	// alice invites david
+	david.Chain = alice.Chain.Invite(alice.Key, david.Key.PubKey, 1)
+
+	assert.Equal(t, 0, CommonInviter(cecilia.Chain, david.Chain),
+"cecilia and david have only common root")
+	edvin := struct {
+		*crypto.Key
+		Chain
+	}{
+		Key: crypto.NewKey(),
+	}
+	edvin.Chain = alice.Chain.Invite(alice.Key, edvin.Key.PubKey, 1)
+	assert.Equal(t, 1, CommonInviter(edvin.Chain, david.Chain))
+	edvin2Chain := alice.Chain.Invite(alice.Key, crypto.NewKey().PubKey, 1)
+	assert.Equal(t, 1, CommonInviter(edvin2Chain, david.Chain))
+
+	fred1Chain := edvin.Chain.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
+	fred2Chain := edvin.Chain.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
+	assert.Equal(t, 2, CommonInviter(fred2Chain, fred1Chain))
+}
+
+func TestSameInviter(t *testing.T) {
 	assert.True(t, SameInviter(alice.Chain, bob.Chain))
 	assert.False(t, SameInviter(c, bob.Chain))
 
-	ceciliaKey := crypto.NewKey()
-	ceciliaChain := bob.Chain.Invite(bob.Key, ceciliaKey.PubKey, 1)
-	assert.Len(t, ceciliaChain.Blocks, 3)
-	assert.True(t, ceciliaChain.Verify())
-	assert.True(t, bob.Chain.IsInvitee(ceciliaChain))
+	cecilia := struct {
+		*crypto.Key
+		Chain
+	}{
+		Key: crypto.NewKey(),
+	}
+	cecilia.Chain = bob.Chain.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	assert.Len(t, cecilia.Chain.Blocks, 3)
+	assert.True(t, cecilia.Chain.Verify())
+	assert.True(t, bob.Chain.IsInvitee(cecilia.Chain))
 }
