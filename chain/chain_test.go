@@ -103,7 +103,7 @@ func TestInvitation(t *testing.T) {
 
 // common inviter
 func TestCommonInviter(t *testing.T) {
-	// alice and bod have common root 
+	// alice and bod have common root
 	cecilia := struct {
 		*crypto.Key
 		Chain
@@ -125,7 +125,7 @@ func TestCommonInviter(t *testing.T) {
 	david.Chain = alice.Chain.Invite(alice.Key, david.Key.PubKey, 1)
 
 	assert.Equal(t, 0, CommonInviter(cecilia.Chain, david.Chain),
-"cecilia and david have only common root")
+		"cecilia and david have only common root")
 	edvin := struct {
 		*crypto.Key
 		Chain
@@ -133,13 +133,17 @@ func TestCommonInviter(t *testing.T) {
 		Key: crypto.NewKey(),
 	}
 	edvin.Chain = alice.Chain.Invite(alice.Key, edvin.Key.PubKey, 1)
-	assert.Equal(t, 1, CommonInviter(edvin.Chain, david.Chain))
+	assert.Equal(t, 1, CommonInviter(edvin.Chain, david.Chain),
+		"alice is at level 1 and inviter of both")
+
 	edvin2Chain := alice.Chain.Invite(alice.Key, crypto.NewKey().PubKey, 1)
-	assert.Equal(t, 1, CommonInviter(edvin2Chain, david.Chain))
+	assert.Equal(t, 1, CommonInviter(edvin2Chain, david.Chain),
+		"alice is at level 1 and inviter of both")
 
 	fred1Chain := edvin.Chain.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
 	fred2Chain := edvin.Chain.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
-	assert.Equal(t, 2, CommonInviter(fred2Chain, fred1Chain))
+	assert.Equal(t, 2, CommonInviter(fred2Chain, fred1Chain),
+		"edvin is at level 2")
 }
 
 func TestSameInviter(t *testing.T) {
