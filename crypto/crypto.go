@@ -24,7 +24,7 @@ func NewKey() *Key {
 }
 
 func (k Key) PubKeyEqual(pubKey PubKey) bool {
-	return ByteEqual(k.PubKey, pubKey)
+	return EqualBytes(k.PubKey, pubKey)
 }
 
 func (k Key) Sign(h []byte) Signature {
@@ -37,7 +37,7 @@ func (k Key) VerifySign(msg []byte, sig Signature) bool {
 
 type Signature = []byte
 
-func ByteEqual(a, b []byte) bool {
+func EqualBytes(a, b []byte) bool {
 	if len(a) != len(b) {
 		return false
 	}

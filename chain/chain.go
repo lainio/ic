@@ -34,9 +34,9 @@ func (b Block) NoSign() Block {
 }
 
 func EqualBlocks(b1, b2 Block) bool {
-	return crypto.ByteEqual(b1.HashToPrev, b2.HashToPrev) &&
-		crypto.ByteEqual(b1.InviteePubKey, b2.InviteePubKey) &&
-		crypto.ByteEqual(b1.InvitersSignature, b2.InvitersSignature) &&
+	return crypto.EqualBytes(b1.HashToPrev, b2.HashToPrev) &&
+		crypto.EqualBytes(b1.InviteePubKey, b2.InviteePubKey) &&
+		crypto.EqualBytes(b1.InvitersSignature, b2.InvitersSignature) &&
 		b1.Position == b2.Position
 }
 
