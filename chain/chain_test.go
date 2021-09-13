@@ -161,3 +161,8 @@ func TestSameInviter(t *testing.T) {
 	assert.True(t, cecilia.Chain.Verify())
 	assert.True(t, bob.Chain.IsInvitee(cecilia.Chain))
 }
+
+func TestChallengeInvitee(t *testing.T) {
+	// chain leaf is the only part who has the prive key for the leaf, so
+	// it can response the challenge properly.
+}

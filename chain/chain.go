@@ -53,7 +53,7 @@ func SameRoot(c1, c2 Chain) bool {
 	if !c1.Verify() || !c2.Verify() {
 		return false
 	}
-	return EqualBlocks(c1.FirstBlock(), c2.FirstBlock())
+	return EqualBlocks(c1.firstBlock(), c2.firstBlock())
 }
 
 func SameInviter(c1, c2 Chain) bool {
@@ -61,8 +61,8 @@ func SameInviter(c1, c2 Chain) bool {
 		return false
 	}
 	return EqualBlocks(
-		c1.SecondLastBlock(),
-		c2.SecondLastBlock(),
+		c1.secondLastBlock(),
+		c2.secondLastBlock(),
 	)
 }
 
@@ -109,6 +109,7 @@ func (c Chain) Bytes() []byte {
 	return buf.Bytes()
 }
 
+// todo: should we refactor to immutable which returns a new chain?
 func (c *Chain) AddBlock(
 	invitersKey *crypto.Key,
 	inviteesPubKey crypto.PubKey,
@@ -129,14 +130,14 @@ func (c *Chain) AddBlock(
 func (c Chain) LeafPubKey() crypto.PubKey {
 	assert.D.True(len(c.Blocks) > 0)
 
-	return c.LastBlock().InviteePubKey
+	return c.lastBlock().InviteePubKey
 }
 
 func (c Chain) HashToLeaf() []byte {
 	if c.Blocks == nil {
 		return nil
 	}
-	lastBlockBytes := c.LastBlock().Bytes()
+	lastBlockBytes := c.lastBlock().Bytes()
 	ha := sha256.Sum256(lastBlockBytes)
 	return ha[:]
 }
@@ -146,7 +147,7 @@ func (c Chain) Verify() bool {
 
 	var invitersPubKey crypto.PubKey
 	// start with the root key
-	invitersPubKey = c.FirstBlock().InviteePubKey
+	invitersPubKey = c.firstBlock().InviteePubKey
 
 	for _, b := range c.Blocks[1:] {
 		if !b.VerifySign(invitersPubKey) {
@@ -180,19 +181,19 @@ func (c Chain) IsInvitee(invitee Chain) bool {
 	}
 
 	return EqualBlocks(
-		c.LastBlock(),
-		invitee.SecondLastBlock(),
+		c.lastBlock(),
+		invitee.secondLastBlock(),
 	)
 }
 
-func (c Chain) FirstBlock() Block {
+func (c Chain) firstBlock() Block {
 	return c.Blocks[0]
 }
 
-func (c Chain) LastBlock() Block {
+func (c Chain) lastBlock() Block {
 	return c.Blocks[len(c.Blocks)-1]
 }
 
-func (c Chain) SecondLastBlock() Block {
+func (c Chain) secondLastBlock() Block {
 	return c.Blocks[len(c.Blocks)-2]
 }
