@@ -2,8 +2,10 @@ package crypto
 
 import (
 	"crypto/ed25519"
+	"crypto/rand"
 
 	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
 )
 
 type PubKey = []byte
@@ -33,6 +35,13 @@ func (k Key) Sign(h []byte) Signature {
 
 func (k Key) VerifySign(msg []byte, sig Signature) bool {
 	return VerifySign(k.PubKey, msg, sig)
+}
+
+func RandSlice(n int) []byte {
+	b := make([]byte, n)
+	r := err2.Int.Try(rand.Read(b))
+	assert.P.True(r == n)
+	return b
 }
 
 type Signature = []byte
