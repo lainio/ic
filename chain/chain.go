@@ -17,6 +17,13 @@ type Block struct {
 	Position          int
 }
 
+func NewVerifyBlock() Block {
+	return Block{
+		HashToPrev:    crypto.RandSlice(32),
+		InviteePubKey: crypto.RandSlice(32),
+	}
+}
+
 func (b Block) Bytes() []byte {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -41,7 +48,11 @@ func EqualBlocks(b1, b2 Block) bool {
 }
 
 func (b Block) VerifySign(invitersPubKey crypto.PubKey) bool {
-	return crypto.VerifySign(invitersPubKey, b.NoSign().Bytes(), b.InvitersSignature)
+	return crypto.VerifySign(
+		invitersPubKey,
+		b.NoSign().Bytes(),
+		b.InvitersSignature,
+	)
 }
 
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey
@@ -184,6 +195,13 @@ func (c Chain) IsInvitee(invitee Chain) bool {
 		c.lastBlock(),
 		invitee.secondLastBlock(),
 	)
+}
+
+func (c Chain) Callenge(f func(d []byte) crypto.Signature) bool {
+	pubKey := c.lastBlock().InviteePubKey
+	cb := NewVerifyBlock().Bytes()
+	sig := f(cb)
+	return crypto.VerifySign(pubKey, cb, sig)
 }
 
 func (c Chain) firstBlock() Block {

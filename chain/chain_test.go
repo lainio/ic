@@ -165,4 +165,19 @@ func TestSameInviter(t *testing.T) {
 func TestChallengeInvitee(t *testing.T) {
 	// chain leaf is the only part who has the prive key for the leaf, so
 	// it can response the challenge properly.
+	assert.True(t, alice.Chain.Callenge(
+		func (d []byte) crypto.Signature {
+			return alice.Sign(d)
+		},
+	))
+	assert.False(t, bob.Chain.Callenge(
+		func (d []byte) crypto.Signature {
+			return alice.Sign(d)
+		},
+	))
+	assert.True(t, bob.Chain.Callenge(
+		func (d []byte) crypto.Signature {
+			return bob.Sign(d)
+		},
+	))
 }
