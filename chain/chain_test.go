@@ -33,7 +33,7 @@ func setup() {
 	c = NewChain(rootKey.PubKey)
 	inviteeKey = crypto.NewKey()
 	level := 1
-	c.AddBlock(rootKey, inviteeKey.PubKey, level)
+	c.addBlock(rootKey, inviteeKey.PubKey, level)
 
 	// root, alice, bob setup
 	root.Key = crypto.NewKey()
@@ -43,8 +43,8 @@ func setup() {
 	root.Chain = NewChain(root.Key.PubKey)
 
 	// root invites alice and bod but the have no invitation between
-	alice.Chain = root.Chain.Invite(root.Key, alice.Key.PubKey, 1)
-	bob.Chain = root.Chain.Invite(root.Key, bob.Key.PubKey, 1)
+	alice.Chain = root.Invite(root.Key, alice.Key.PubKey, 1)
+	bob.Chain = root.Invite(root.Key, bob.Key.PubKey, 1)
 }
 
 func TestNewChain(t *testing.T) {
@@ -74,7 +74,7 @@ func TestVerifyChain(t *testing.T) {
 
 	newInvitee := crypto.NewKey()
 	level := 3
-	c.AddBlock(inviteeKey, newInvitee.PubKey, level)
+	c.addBlock(inviteeKey, newInvitee.PubKey, level)
 
 	assert.Len(t, c.Blocks, 3)
 	assert.True(t, c.Verify())
@@ -92,9 +92,9 @@ func TestInvitation(t *testing.T) {
 	}{
 		Key: crypto.NewKey(),
 	}
-	cecilia.Chain = bob.Chain.Invite(bob.Key, cecilia.Key.PubKey, 1)
-	assert.Len(t, cecilia.Chain.Blocks, 3)
-	assert.True(t, cecilia.Chain.Verify())
+	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	assert.Len(t, cecilia.Blocks, 3)
+	assert.True(t, cecilia.Verify())
 	assert.False(t, SameRoot(c, cecilia.Chain), "we have two different roots")
 	assert.True(t, SameRoot(alice.Chain, cecilia.Chain))
 }
@@ -111,9 +111,9 @@ func TestCommonInviter(t *testing.T) {
 		Key: crypto.NewKey(),
 	}
 	// bob intives cecilia
-	cecilia.Chain = bob.Chain.Invite(bob.Key, cecilia.Key.PubKey, 1)
-	assert.Len(t, cecilia.Chain.Blocks, 3)
-	assert.True(t, cecilia.Chain.Verify())
+	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	assert.Len(t, cecilia.Blocks, 3)
+	assert.True(t, cecilia.Verify())
 
 	david := struct {
 		*crypto.Key
@@ -122,7 +122,7 @@ func TestCommonInviter(t *testing.T) {
 		Key: crypto.NewKey(),
 	}
 	// alice invites david
-	david.Chain = alice.Chain.Invite(alice.Key, david.Key.PubKey, 1)
+	david.Chain = alice.Invite(alice.Key, david.Key.PubKey, 1)
 
 	assert.Equal(t, 0, CommonInviter(cecilia.Chain, david.Chain),
 		"cecilia and david have only common root")
@@ -132,7 +132,7 @@ func TestCommonInviter(t *testing.T) {
 	}{
 		Key: crypto.NewKey(),
 	}
-	edvin.Chain = alice.Chain.Invite(alice.Key, edvin.Key.PubKey, 1)
+	edvin.Chain = alice.Invite(alice.Key, edvin.Key.PubKey, 1)
 	assert.Equal(t, 1, CommonInviter(edvin.Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
@@ -140,8 +140,8 @@ func TestCommonInviter(t *testing.T) {
 	assert.Equal(t, 1, CommonInviter(edvin2Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
-	fred1Chain := edvin.Chain.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
-	fred2Chain := edvin.Chain.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
+	fred1Chain := edvin.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
+	fred2Chain := edvin.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
 	assert.Equal(t, 2, CommonInviter(fred2Chain, fred1Chain),
 		"edvin is at level 2")
 }
@@ -156,28 +156,40 @@ func TestSameInviter(t *testing.T) {
 	}{
 		Key: crypto.NewKey(),
 	}
-	cecilia.Chain = bob.Chain.Invite(bob.Key, cecilia.Key.PubKey, 1)
-	assert.Len(t, cecilia.Chain.Blocks, 3)
-	assert.True(t, cecilia.Chain.Verify())
-	assert.True(t, bob.Chain.IsInvitee(cecilia.Chain))
+	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	assert.Len(t, cecilia.Blocks, 3)
+	assert.True(t, cecilia.Verify())
+	assert.True(t, bob.IsInviterFor(cecilia.Chain))
+	assert.False(t, alice.IsInviterFor(cecilia.Chain))
 }
 
 func TestChallengeInvitee(t *testing.T) {
 	// chain leaf is the only part who has the prive key for the leaf, so
 	// it can response the challenge properly.
-	assert.True(t, alice.Chain.Callenge(
-		func (d []byte) crypto.Signature {
+	// Challenge is needed that we can be sure that the party who presents the
+	// chain is the actual owner of the chain.
+
+	assert.True(t, alice.Callenge(
+		func(d []byte) crypto.Signature {
 			return alice.Sign(d)
 		},
 	))
-	assert.False(t, bob.Chain.Callenge(
-		func (d []byte) crypto.Signature {
+	assert.False(t, bob.Callenge(
+		func(d []byte) crypto.Signature {
 			return alice.Sign(d)
 		},
 	))
-	assert.True(t, bob.Chain.Callenge(
-		func (d []byte) crypto.Signature {
+	assert.True(t, bob.Callenge(
+		func(d []byte) crypto.Signature {
 			return bob.Sign(d)
 		},
 	))
 }
+
+// Issuer adds her own chain to every credential it's issuing, I haven't solved
+// the correlation yet. Is it an issue because chain doesn't include any
+// identifiers. PubKey is identifier, if we don't use PubKey as an identifier,
+// it the only option to use some other identifier and behind it similar to
+// DIDDoc concept. How about if chain holder creates new sub chains just to hide
+// it's actual identity?
+// For what purpose we could use them?

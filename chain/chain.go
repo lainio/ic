@@ -121,7 +121,7 @@ func (c Chain) Bytes() []byte {
 }
 
 // todo: should we refactor to immutable which returns a new chain?
-func (c *Chain) AddBlock(
+func (c *Chain) addBlock(
 	invitersKey *crypto.Key,
 	inviteesPubKey crypto.PubKey,
 	position int,
@@ -129,7 +129,7 @@ func (c *Chain) AddBlock(
 	assert.D.True(invitersKey.PubKeyEqual(c.LeafPubKey()))
 
 	newBlock := Block{
-		HashToPrev:    c.HashToLeaf(),
+		HashToPrev:    c.hashToLeaf(),
 		InviteePubKey: inviteesPubKey,
 		Position:      position,
 	}
@@ -144,12 +144,11 @@ func (c Chain) LeafPubKey() crypto.PubKey {
 	return c.lastBlock().InviteePubKey
 }
 
-func (c Chain) HashToLeaf() []byte {
+func (c Chain) hashToLeaf() []byte {
 	if c.Blocks == nil {
 		return nil
 	}
-	lastBlockBytes := c.lastBlock().Bytes()
-	ha := sha256.Sum256(lastBlockBytes)
+	ha := sha256.Sum256(c.lastBlock().Bytes())
 	return ha[:]
 }
 
@@ -179,14 +178,14 @@ func (c Chain) Invite(
 	inviteesPubKey crypto.PubKey,
 	level int,
 ) Chain {
-	assert.D.True(len(c.Blocks) > 0, "we need that root exists")
+	assert.D.True(len(c.Blocks) > 0, "root must exist")
 
 	nc := c.Clone()
-	nc.AddBlock(invitersKey, inviteesPubKey, level)
+	nc.addBlock(invitersKey, inviteesPubKey, level)
 	return nc
 }
 
-func (c Chain) IsInvitee(invitee Chain) bool {
+func (c Chain) IsInviterFor(invitee Chain) bool {
 	if !invitee.Verify() {
 		return false
 	}
