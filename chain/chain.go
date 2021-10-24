@@ -163,7 +163,7 @@ func (c Chain) Verify() bool {
 		if !b.VerifySign(invitersPubKey) {
 			return false
 		}
-		// the next block is signed with this blocks pub key
+		// the next block is signed with this block's pub key
 		invitersPubKey = b.InviteePubKey
 	}
 	return true
