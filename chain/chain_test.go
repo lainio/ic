@@ -146,6 +146,7 @@ func TestCommonInviter(t *testing.T) {
 		"edvin is at level 2")
 }
 
+// TestSameInviter test that two chain holders have same inviter.
 func TestSameInviter(t *testing.T) {
 	assert.True(t, SameInviter(alice.Chain, bob.Chain))
 	assert.False(t, SameInviter(c, bob.Chain))
@@ -163,23 +164,33 @@ func TestSameInviter(t *testing.T) {
 	assert.False(t, alice.IsInviterFor(cecilia.Chain))
 }
 
+// TestChallengeInvitee test shows how we can challenge the party who presents
+// us the chain. Chains are present as full! At least for now. They don't
+// include any personal data, and we try to make sure that they won't include
+// any data which could be used to correlate the use of the chain. Chain is only
+// for the proofing the position in the Invitation Chain.
 func TestChallengeInvitee(t *testing.T) {
-	// chain leaf is the only part who has the prive key for the leaf, so
+	// chain leaf is the only part who has the private key for the leaf, so
 	// it can response the challenge properly.
+
 	// Challenge is needed that we can be sure that the party who presents the
 	// chain is the actual owner of the chain.
 
-	assert.True(t, alice.Callenge(
+	// When let's say Bob have received Alice's chain he can use Challenge
+	// method for Alice's Chain to let Alice proof that she controls the chain
+	assert.True(t, alice.Challenge(
+		func(d []byte) crypto.Signature {
+			// In realtime usage here we would send the d for Alice's signing
+			// over the network.
+			return alice.Sign(d)
+		},
+	))
+	assert.False(t, bob.Challenge(
 		func(d []byte) crypto.Signature {
 			return alice.Sign(d)
 		},
 	))
-	assert.False(t, bob.Callenge(
-		func(d []byte) crypto.Signature {
-			return alice.Sign(d)
-		},
-	))
-	assert.True(t, bob.Callenge(
+	assert.True(t, bob.Challenge(
 		func(d []byte) crypto.Signature {
 			return bob.Sign(d)
 		},

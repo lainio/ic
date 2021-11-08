@@ -1,3 +1,6 @@
+// package chain present Invitation Chain and its Block and other methods.
+// Invitation Chain is meant to be used as part of a communication protocol. At
+// this level we don't think where chains are stored either.
 package chain
 
 import (
@@ -17,6 +20,8 @@ type Block struct {
 	Position          int
 }
 
+// NewVerifyBlock returns new randomized Block that can be used for verification
+// or challenges, etc.
 func NewVerifyBlock() Block {
 	return Block{
 		HashToPrev:    crypto.RandSlice(32),
@@ -196,7 +201,11 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 	)
 }
 
-func (c Chain) Callenge(f func(d []byte) crypto.Signature) bool {
+// Challenge offers a method and placeholder for challenging leaf holder. Most
+// common cases is that caller of the function implements the closure where it
+// calls other party over the network to sign the challenge which is readily
+// build and randomized.
+func (c Chain) Challenge(f func(d []byte) crypto.Signature) bool {
 	pubKey := c.lastBlock().InviteePubKey
 	cb := NewVerifyBlock().Bytes()
 	sig := f(cb)
