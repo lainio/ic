@@ -125,12 +125,11 @@ func (c Chain) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// todo: should we refactor to immutable which returns a new chain?
-func (c *Chain) addBlock(
+func (c Chain) Invite(
 	invitersKey *crypto.Key,
 	inviteesPubKey crypto.PubKey,
 	position int,
-) {
+) (nc Chain) {
 	assert.D.True(invitersKey.PubKeyEqual(c.LeafPubKey()))
 
 	newBlock := Block{
@@ -140,7 +139,9 @@ func (c *Chain) addBlock(
 	}
 	newBlock.InvitersSignature = invitersKey.Sign(newBlock.Bytes())
 
-	c.Blocks = append(c.Blocks, newBlock)
+	nc = c.Clone()
+	nc.Blocks = append(nc.Blocks, newBlock)
+	return nc
 }
 
 func (c Chain) LeafPubKey() crypto.PubKey {
@@ -176,18 +177,6 @@ func (c Chain) Verify() bool {
 
 func (c Chain) Clone() Chain {
 	return NewChainFromData(c.Bytes())
-}
-
-func (c Chain) Invite(
-	invitersKey *crypto.Key,
-	inviteesPubKey crypto.PubKey,
-	level int,
-) Chain {
-	assert.D.True(len(c.Blocks) > 0, "root must exist")
-
-	nc := c.Clone()
-	nc.addBlock(invitersKey, inviteesPubKey, level)
-	return nc
 }
 
 func (c Chain) IsInviterFor(invitee Chain) bool {

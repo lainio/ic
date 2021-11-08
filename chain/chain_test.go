@@ -33,7 +33,7 @@ func setup() {
 	c = NewChain(rootKey.PubKey)
 	inviteeKey = crypto.NewKey()
 	level := 1
-	c.addBlock(rootKey, inviteeKey.PubKey, level)
+	c = c.Invite(rootKey, inviteeKey.PubKey, level)
 
 	// root, alice, bob setup
 	root.Key = crypto.NewKey()
@@ -74,7 +74,7 @@ func TestVerifyChain(t *testing.T) {
 
 	newInvitee := crypto.NewKey()
 	level := 3
-	c.addBlock(inviteeKey, newInvitee.PubKey, level)
+	c = c.Invite(inviteeKey, newInvitee.PubKey, level)
 
 	assert.Len(t, c.Blocks, 3)
 	assert.True(t, c.Verify())
@@ -101,7 +101,7 @@ func TestInvitation(t *testing.T) {
 
 // common root : my distance, her distance
 
-// common inviter
+// TestCommonInviter tests that Chain owners have one common inviter
 func TestCommonInviter(t *testing.T) {
 	// alice and bod have common root
 	cecilia := struct {
