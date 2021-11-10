@@ -126,11 +126,11 @@ func (c Chain) Bytes() []byte {
 }
 
 func (c Chain) Invite(
-	invitersKey *crypto.Key,
+	invitersKey crypto.Key,
 	inviteesPubKey crypto.PubKey,
 	position int,
 ) (nc Chain) {
-	assert.D.True(invitersKey.PubKeyEqual(c.LeafPubKey()))
+	assert.D.True(c.isLeaf(invitersKey), "only left can ")
 
 	newBlock := Block{
 		HashToPrev:    c.hashToLeaf(),
@@ -142,6 +142,10 @@ func (c Chain) Invite(
 	nc = c.Clone()
 	nc.Blocks = append(nc.Blocks, newBlock)
 	return nc
+}
+
+func (c Chain) isLeaf(invitersKey crypto.Key) bool {
+	return invitersKey.PubKeyEqual(c.LeafPubKey())
 }
 
 func (c Chain) LeafPubKey() crypto.PubKey {

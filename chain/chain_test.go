@@ -10,11 +10,11 @@ import (
 
 var (
 	root, alice, bob struct {
-		*crypto.Key
+		crypto.Key
 		Chain
 	}
 	c                   Chain
-	rootKey, inviteeKey *crypto.Key
+	rootKey, inviteeKey crypto.Key
 )
 
 func TestMain(m *testing.M) {
@@ -87,7 +87,7 @@ func TestInvitation(t *testing.T) {
 	assert.True(t, bob.Verify())
 
 	cecilia := struct {
-		*crypto.Key
+		crypto.Key
 		Chain
 	}{
 		Key: crypto.NewKey(),
@@ -105,7 +105,7 @@ func TestInvitation(t *testing.T) {
 func TestCommonInviter(t *testing.T) {
 	// alice and bod have common root
 	cecilia := struct {
-		*crypto.Key
+		crypto.Key
 		Chain
 	}{
 		Key: crypto.NewKey(),
@@ -116,7 +116,7 @@ func TestCommonInviter(t *testing.T) {
 	assert.True(t, cecilia.Verify())
 
 	david := struct {
-		*crypto.Key
+		crypto.Key
 		Chain
 	}{
 		Key: crypto.NewKey(),
@@ -127,7 +127,7 @@ func TestCommonInviter(t *testing.T) {
 	assert.Equal(t, 0, CommonInviter(cecilia.Chain, david.Chain),
 		"cecilia and david have only common root")
 	edvin := struct {
-		*crypto.Key
+		crypto.Key
 		Chain
 	}{
 		Key: crypto.NewKey(),
@@ -152,7 +152,7 @@ func TestSameInviter(t *testing.T) {
 	assert.False(t, SameInviter(c, bob.Chain))
 
 	cecilia := struct {
-		*crypto.Key
+		crypto.Key
 		Chain
 	}{
 		Key: crypto.NewKey(),

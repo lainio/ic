@@ -22,10 +22,10 @@ type Key struct {
 	PubKey
 }
 
-func NewKey() *Key {
+func NewKey() Key {
 	pub, priv, err := ed25519.GenerateKey(nil)
 	err2.Check(err)
-	return &Key{PrivKey: priv, PubKey: pub}
+	return Key{PrivKey: priv, PubKey: pub}
 }
 
 func (k Key) PubKeyEqual(pubKey PubKey) bool {
