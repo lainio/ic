@@ -172,6 +172,7 @@ func TestChallengeInvitee(t *testing.T) {
 			return alice.Sign(d)
 		},
 	))
+	// Test that if alice tries to sign bob's challenge it won't work.
 	assert.False(t, bob.Challenge(
 		func(d []byte) crypto.Signature {
 			return alice.Sign(d)

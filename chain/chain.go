@@ -125,6 +125,9 @@ func (c Chain) Bytes() []byte {
 	return buf.Bytes()
 }
 
+// Invite is called for the intiter's chain. Inviter's key is needed for signing
+// the new link/block which includes inviteesPubKey and position in the chain.
+// A new chain is returned. The chain will be given for the invitee.
 func (c Chain) Invite(
 	invitersKey crypto.Key,
 	inviteesPubKey crypto.PubKey,
