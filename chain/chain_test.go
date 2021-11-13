@@ -9,13 +9,15 @@ import (
 )
 
 var (
-	root, alice, bob struct {
-		crypto.Key
-		Chain
-	}
+	root, alice, bob    entity
 	c                   Chain
 	rootKey, inviteeKey crypto.Key
 )
+
+type entity struct {
+	crypto.Key
+	Chain
+}
 
 func TestMain(m *testing.M) {
 	setup()
@@ -86,10 +88,7 @@ func TestInvitation(t *testing.T) {
 	assert.Len(t, bob.Blocks, 2)
 	assert.True(t, bob.Verify())
 
-	cecilia := struct {
-		crypto.Key
-		Chain
-	}{
+	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
 	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
@@ -104,10 +103,7 @@ func TestInvitation(t *testing.T) {
 // TestCommonInviter tests that Chain owners have one common inviter
 func TestCommonInviter(t *testing.T) {
 	// alice and bod have common root
-	cecilia := struct {
-		crypto.Key
-		Chain
-	}{
+	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
 	// bob intives cecilia
@@ -115,10 +111,7 @@ func TestCommonInviter(t *testing.T) {
 	assert.Len(t, cecilia.Blocks, 3)
 	assert.True(t, cecilia.Verify())
 
-	david := struct {
-		crypto.Key
-		Chain
-	}{
+	david := entity{
 		Key: crypto.NewKey(),
 	}
 	// alice invites david
@@ -126,10 +119,7 @@ func TestCommonInviter(t *testing.T) {
 
 	assert.Equal(t, 0, CommonInviter(cecilia.Chain, david.Chain),
 		"cecilia and david have only common root")
-	edvin := struct {
-		crypto.Key
-		Chain
-	}{
+	edvin := entity{
 		Key: crypto.NewKey(),
 	}
 	edvin.Chain = alice.Invite(alice.Key, edvin.Key.PubKey, 1)
@@ -151,10 +141,7 @@ func TestSameInviter(t *testing.T) {
 	assert.True(t, SameInviter(alice.Chain, bob.Chain))
 	assert.False(t, SameInviter(c, bob.Chain))
 
-	cecilia := struct {
-		crypto.Key
-		Chain
-	}{
+	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
 	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
