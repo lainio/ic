@@ -167,7 +167,7 @@ func TestChallengeInvitee(t *testing.T) {
 	// method for Alice's Chain to let Alice proof that she controls the chain
 	assert.True(t, alice.Challenge(
 		func(d []byte) crypto.Signature {
-			// In realtime usage here we would send the d for Alice's signing
+			// In real world usage here we would send the d for Alice's signing
 			// over the network.
 			return alice.Sign(d)
 		},
