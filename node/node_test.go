@@ -52,77 +52,74 @@ func TestNewNode(t *testing.T) {
 }
 
 func TestInvite(t *testing.T) {
-	// root1 chains start here:
+	// Root1 chains start here:
 	alice.Node = root1.Invite(alice.Node, root1.Key, alice.PubKey, 1)
 	assert.Len(t, alice.Node.Chains, 1)
-	for {
+	{
 		c := alice.Node.Chains[0]
 		assert.Len(t, c.Blocks, 2)
 		assert.True(t, c.Verify())
-		break
 	}
 
 	bob.Node = alice.Invite(bob.Node, alice.Key, bob.PubKey, 1)
 	assert.Len(t, bob.Node.Chains, 1)
-	for {
+	{
 		c := bob.Node.Chains[0]
-		assert.Len(t, c.Blocks, 3)
+		assert.Len(t, c.Blocks, 3) // we know how long the chain is now
 		assert.True(t, c.Verify())
-		break
 	}
 
+	// Bob and Alice share same chain root == Root1
 	common := alice.CommonChain(bob.Node)
 	assert.NotNil(t, common.Blocks)
 
-	// root2 invites carol here
+	// Root2 invites Carol here
 	carol.Node = root2.Invite(carol.Node, root2.Key, carol.PubKey, 1)
 	assert.Len(t, carol.Node.Chains, 1)
-	for {
+	{
 		c := carol.Node.Chains[0]
 		assert.Len(t, c.Blocks, 2)
 		assert.True(t, c.Verify())
-		break
 	}
 
-	// alice is root1 and carol root2 chain, so no common ground.
+	// Alice is in Root1 chain and Carol in Root2 chain, so no common ground.
 	common = alice.CommonChain(carol.Node)
 	assert.Nil(t, common.Blocks)
 
-	// dave is one of the roots as well and we build it here:
+	// Dave is one of the roots as well and we build it here:
 	dave.Node = NewRootNode(dave.PubKey)
 	eve.Node = dave.Invite(eve.Node, dave.Key, eve.PubKey, 1)
 	assert.Len(t, eve.Node.Chains, 1)
-	for {
+	{
 		c := eve.Node.Chains[0]
 		assert.Len(t, c.Blocks, 2)
 		assert.True(t, c.Verify())
-		break
 	}
 
+	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
+	// Eve!
 	dave.Node = root2.Invite(dave.Node, root2.Key, dave.PubKey, 1)
 	assert.Len(t, dave.Node.Chains, 2)
-	for {
+	{
 		c := dave.Node.Chains[1]
 		assert.Len(t, c.Blocks, 2)
 		assert.True(t, c.Verify())
-		break
 	}
-	// dave joins to root2 but until now, that's why eve is not member of root2
+	// Dave joins to Root2 but until now, that's why Eve is not member of Root2
 	common = root2.CommonChain(eve.Node)
 	assert.Nil(t, common.Blocks)
 
-	// carol and eve doesn't have common chains
+	// Carol and Eve doesn't have common chains _yet_
 	common = carol.CommonChain(eve.Node)
 	assert.Nil(t, common.Blocks)
 
-	// .. so carol can invite eve
+	// .. so Carol can invite Eve
 	eve.Node = carol.Invite(eve.Node, carol.Key, eve.PubKey, 1)
 	assert.Len(t, eve.Node.Chains, 2)
 
-	// now eve has common chain with root1 as well
+	// now Eve has common chain with Root1 as well
 	common = eve.CommonChain(root2.Node)
 	assert.NotNil(t, common.Blocks)
-	
 }
 
 // func TestXXX(t *testing.T) {
