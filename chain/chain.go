@@ -13,57 +13,12 @@ import (
 	"github.com/lainio/err2/assert"
 )
 
-type Block struct {
-	HashToPrev        []byte           // check the size later
-	InviteePubKey     crypto.PubKey    // TODO: check the type later?
-	InvitersSignature crypto.Signature // TODO: check the type
-	Position          int
-}
-
-// NewVerifyBlock returns new randomized Block that can be used for verification
-// or challenges, etc.
-func NewVerifyBlock() Block {
-	return Block{
-		HashToPrev:    crypto.RandSlice(32),
-		InviteePubKey: crypto.RandSlice(32),
-	}
-}
-
-func (b Block) Bytes() []byte {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err2.Check(enc.Encode(b))
-	return buf.Bytes()
-}
-
-func (b Block) ExludeSign() Block {
-	newBlock := Block{
-		HashToPrev:    b.HashToPrev,
-		InviteePubKey: b.InviteePubKey,
-		Position:      b.Position,
-	}
-	return newBlock
-}
-
-func EqualBlocks(b1, b2 Block) bool {
-	return crypto.EqualBytes(b1.HashToPrev, b2.HashToPrev) &&
-		crypto.EqualBytes(b1.InviteePubKey, b2.InviteePubKey) &&
-		crypto.EqualBytes(b1.InvitersSignature, b2.InvitersSignature) &&
-		b1.Position == b2.Position
-}
-
-func (b Block) VerifySign(invitersPubKey crypto.PubKey) bool {
-	return crypto.VerifySign(
-		invitersPubKey,
-		b.ExludeSign().Bytes(),
-		b.InvitersSignature,
-	)
-}
-
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey
 type Chain struct {
 	Blocks []Block // Blocks is exported variable for serialization
 }
+
+var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
 	if !c1.Verify() || !c2.Verify() {
@@ -101,7 +56,7 @@ func CommonInviter(c1, c2 Chain) (level int) {
 	return level
 }
 
-func NewChain(rootPubKey crypto.PubKey) Chain {
+func NewRootChain(rootPubKey crypto.PubKey) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
 		HashToPrev:        nil,
@@ -116,6 +71,10 @@ func NewChainFromData(d []byte) (c Chain) {
 	dec := gob.NewDecoder(r)
 	err2.Check(dec.Decode(&c))
 	return c
+}
+
+func (c Chain) IsNil() bool {
+	return c.Blocks == nil
 }
 
 func (c Chain) Bytes() []byte {
@@ -166,7 +125,9 @@ func (c Chain) hashToLeaf() []byte {
 }
 
 func (c Chain) Verify() bool {
-	assert.D.True(len(c.Blocks) > 1, "cannot verify empty chain")
+	if len(c.Blocks) == 1 {
+		return true // root block is valid always
+	}
 
 	var invitersPubKey crypto.PubKey
 	// start with the root key

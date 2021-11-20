@@ -32,7 +32,7 @@ func teardown() {
 func setup() {
 	// general chain for tests
 	rootKey = crypto.NewKey()
-	c = NewChain(rootKey.PubKey)
+	c = NewRootChain(rootKey.PubKey)
 	inviteeKey = crypto.NewKey()
 	level := 1
 	c = c.Invite(rootKey, inviteeKey.PubKey, level)
@@ -42,15 +42,16 @@ func setup() {
 	alice.Key = crypto.NewKey()
 	bob.Key = crypto.NewKey()
 
-	root.Chain = NewChain(root.Key.PubKey)
+	root.Chain = NewRootChain(root.Key.PubKey)
 
-	// root invites alice and bod but the have no invitation between
+	// root invites alice and bod but they have no invitation between
 	alice.Chain = root.Invite(root.Key, alice.Key.PubKey, 1)
 	bob.Chain = root.Invite(root.Key, bob.Key.PubKey, 1)
 }
 
 func TestNewChain(t *testing.T) {
-	assert.Len(t, c.Blocks, 2)
+	c := NewRootChain(crypto.NewKey().PubKey)
+	assert.Len(t, c.Blocks, 1)
 }
 
 func TestRead(t *testing.T) {
