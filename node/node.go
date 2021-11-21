@@ -9,6 +9,12 @@ type Node struct {
 	Chains []chain.Chain
 }
 
+type WebOfTrust struct {
+	Hops     int
+	FromRoot int
+	Position int
+}
+
 func NewRootNode(pubKey crypto.PubKey) Node {
 	n := Node{Chains: make([]chain.Chain, 1, 12)}
 	n.Chains[0] = chain.NewRootChain(pubKey)
@@ -48,14 +54,35 @@ func (n Node) Invite(
 	return rn
 }
 
-func (n Node) CommonChains(their Node) []chain.Chain {
-	common := make([]chain.Chain, 0, len(n.Chains))
+func (n Node) CommonChains(their Node) []chain.Pair {
+	common := make([]chain.Pair, 0, len(n.Chains))
 	for _, my := range n.Chains {
-		if their.sharedRoot(my) {
-			common = append(common, my)
+		p := their.shared(my)
+		isPair := !p.Chain1.IsNil() && !p.Chain2.IsNil()
+		if isPair {
+			common = append(common, p)
 		}
 	}
 	return common
+}
+
+func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
+	chainPairs := n.CommonChains(their)
+
+	hops := -1
+	fromRoot := -1
+
+	for _, pair := range chainPairs {
+		h := pair.Hops()
+		if hops == -1 || h < hops {
+			hops = h
+		}
+		f := pair.CommonInviter()
+		if fromRoot == -1 || f < fromRoot {
+			fromRoot = f
+		}
+	}
+	return WebOfTrust{Hops:hops, FromRoot: fromRoot}
 }
 
 func (n Node) CommonChain(their Node) chain.Chain {
@@ -74,4 +101,13 @@ func (n Node) sharedRoot(their chain.Chain) bool {
 		}
 	}
 	return false
+}
+
+func (n Node) shared(their chain.Chain) chain.Pair {
+	for _, my := range n.Chains {
+		if chain.SameRoot(their, my) {
+			return chain.Pair{their, my}
+		}
+	}
+	return chain.Pair{}
 }

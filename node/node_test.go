@@ -130,3 +130,12 @@ func TestCommonChains(t *testing.T) {
 	common := dave.CommonChains(eve.Node)
 	assert.Len(t, common, 2)
 }
+
+func TestWebOfTrustInfo(t *testing.T) {
+	common := dave.CommonChains(eve.Node)
+	assert.Len(t, common, 2)
+
+	wot:= dave.WebOfTrustInfo(eve.Node)
+	assert.Equal(t, 0, wot.FromRoot)
+	assert.Equal(t, 1, wot.Hops)
+}
