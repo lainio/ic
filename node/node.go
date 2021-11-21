@@ -48,18 +48,28 @@ func (n Node) Invite(
 	return rn
 }
 
-func (n Node) CommonChain(rhs Node) chain.Chain {
-	for _, c := range n.Chains {
-		if rhs.sharedRoot(c) {
-			return c
+func (n Node) CommonChains(their Node) []chain.Chain {
+	common := make([]chain.Chain, 0, len(n.Chains))
+	for _, my := range n.Chains {
+		if their.sharedRoot(my) {
+			common = append(common, my)
+		}
+	}
+	return common
+}
+
+func (n Node) CommonChain(their Node) chain.Chain {
+	for _, my := range n.Chains {
+		if their.sharedRoot(my) {
+			return my
 		}
 	}
 	return chain.Nil
 }
 
-func (n Node) sharedRoot(c chain.Chain) bool {
-	for _, myChain := range n.Chains {
-		if chain.SameRoot(c, myChain) {
+func (n Node) sharedRoot(their chain.Chain) bool {
+	for _, my := range n.Chains {
+		if chain.SameRoot(their, my) {
 			return true
 		}
 	}

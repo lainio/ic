@@ -9,8 +9,12 @@ import (
 )
 
 var (
+	// root1 -> alice, alice -> bob, root2 -> carol
 	root1, alice, bob, carol,
+
+	// dave (new root) -> eve, root2 -> dave, carol -> eve (now root2 member)
 	root2, dave, eve entity
+	// frank, grace, heidi entity
 )
 
 type entity struct {
@@ -42,7 +46,7 @@ func setup() {
 	root2.Node = NewRootNode(root2.PubKey)
 }
 
-func TestNewNode(t *testing.T) {
+func TestNewRootNode(t *testing.T) {
 	aliceNode := NewRootNode(alice.PubKey)
 	assert.Len(t, aliceNode.Chains, 1)
 	assert.Len(t, aliceNode.Chains[0].Blocks, 1)
@@ -122,6 +126,7 @@ func TestInvite(t *testing.T) {
 	assert.NotNil(t, common.Blocks)
 }
 
-// func TestXXX(t *testing.T) {
-// 	assert.True(t, false, "not implemented")
-// }
+func TestCommonChains(t *testing.T) {
+	common := dave.CommonChains(eve.Node)
+	assert.Len(t, common, 2)
+}
