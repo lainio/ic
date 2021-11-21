@@ -14,7 +14,9 @@ var (
 
 	// dave (new root) -> eve, root2 -> dave, carol -> eve (now root2 member)
 	root2, dave, eve entity
-	// frank, grace, heidi entity
+
+	// alice -> frank, bob -> grace
+	frank, grace entity
 )
 
 type entity struct {
@@ -58,7 +60,7 @@ func TestNewRootNode(t *testing.T) {
 func TestInvite(t *testing.T) {
 	// Root1 chains start here:
 	alice.Node = root1.Invite(alice.Node, root1.Key, alice.PubKey, 1)
-	assert.Len(t, alice.Node.Chains, 1)
+	assert.Equal(t, alice.Len(), 1)
 	{
 		c := alice.Node.Chains[0]
 		assert.Len(t, c.Blocks, 2)
@@ -66,7 +68,7 @@ func TestInvite(t *testing.T) {
 	}
 
 	bob.Node = alice.Invite(bob.Node, alice.Key, bob.PubKey, 1)
-	assert.Len(t, bob.Node.Chains, 1)
+	assert.Equal(t, bob.Len(), 1)
 	{
 		c := bob.Node.Chains[0]
 		assert.Len(t, c.Blocks, 3) // we know how long the chain is now
@@ -79,7 +81,7 @@ func TestInvite(t *testing.T) {
 
 	// Root2 invites Carol here
 	carol.Node = root2.Invite(carol.Node, root2.Key, carol.PubKey, 1)
-	assert.Len(t, carol.Node.Chains, 1)
+	assert.Equal(t, carol.Len(), 1)
 	{
 		c := carol.Node.Chains[0]
 		assert.Len(t, c.Blocks, 2)
@@ -93,7 +95,7 @@ func TestInvite(t *testing.T) {
 	// Dave is one of the roots as well and we build it here:
 	dave.Node = NewRootNode(dave.PubKey)
 	eve.Node = dave.Invite(eve.Node, dave.Key, eve.PubKey, 1)
-	assert.Len(t, eve.Node.Chains, 1)
+	assert.Equal(t, eve.Len(), 1)
 	{
 		c := eve.Node.Chains[0]
 		assert.Len(t, c.Blocks, 2)
@@ -103,7 +105,7 @@ func TestInvite(t *testing.T) {
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
 	// Eve!
 	dave.Node = root2.Invite(dave.Node, root2.Key, dave.PubKey, 1)
-	assert.Len(t, dave.Node.Chains, 2)
+	assert.Equal(t, dave.Len(), 2)
 	{
 		c := dave.Node.Chains[1]
 		assert.Len(t, c.Blocks, 2)
@@ -119,7 +121,7 @@ func TestInvite(t *testing.T) {
 
 	// .. so Carol can invite Eve
 	eve.Node = carol.Invite(eve.Node, carol.Key, eve.PubKey, 1)
-	assert.Len(t, eve.Node.Chains, 2)
+	assert.Equal(t, eve.Len(), 2)
 
 	// now Eve has common chain with Root1 as well
 	common = eve.CommonChain(root2.Node)
@@ -136,6 +138,41 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Len(t, common, 2)
 
 	wot:= dave.WebOfTrustInfo(eve.Node)
-	assert.Equal(t, 0, wot.FromRoot)
+	assert.Equal(t, 0, wot.CommonInvider)
 	assert.Equal(t, 1, wot.Hops)
+
+	wot = NewWebOfTrust(bob.Node, carol.Node)
+	assert.Equal(t, -1, wot.CommonInvider)
+	assert.Equal(t, -1, wot.Hops)
+
+	frank.Node = alice.Invite(frank.Node, alice.Key, frank.PubKey, 1)
+	assert.Equal(t, frank.Len(), 1)
+	assert.Equal(t, alice.Len(), 1)
+	grace.Node = bob.Invite(grace.Node, bob.Key, grace.PubKey, 1)
+	assert.Equal(t, grace.Len(), 1)
+	assert.Equal(t, bob.Len(), 1)
+
+	common = frank.CommonChains(grace.Node)
+	assert.Len(t, common, 1)
+	common = root1.CommonChains(alice.Node)
+	assert.Len(t, common, 1)
+	h := common[0].Hops()
+	assert.Equal(t, 1, h)
+
+	wot = NewWebOfTrust(frank.Node, grace.Node)
+	assert.Equal(t, 1, wot.CommonInvider)
+	assert.Equal(t, 3, wot.Hops)
+
+	root3 := entity{Key: crypto.NewKey()}
+	root3.Node= NewRootNode(root3.PubKey)
+	heidi := entity{Key: crypto.NewKey()}
+	heidi.Node = root3.Invite(heidi.Node, root3.Key, heidi.PubKey, 1)
+	heidi.Node = eve.Invite(heidi.Node, eve.Key, heidi.PubKey, 1)
+	// next dave's invitation doesn't add any new chains because there is no
+	// new roots in daves chains
+	heidi.Node = dave.Invite(heidi.Node, dave.Key, heidi.PubKey, 1)
+	wot = NewWebOfTrust(heidi.Node, eve.Node)
+	assert.Equal(t, 0, wot.CommonInvider, "common root is dave")
+	assert.Equal(t, 3, wot.Hops, "")
+
 }

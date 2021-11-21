@@ -10,9 +10,16 @@ type Node struct {
 }
 
 type WebOfTrust struct {
-	Hops     int
-	FromRoot int
+	Hops int
+
+	// CommonInviter from root! how far away it's from absolute root
+	CommonInvider int
+
 	Position int
+}
+
+func NewWebOfTrust(n1, n2 Node) WebOfTrust {
+	return n1.WebOfTrustInfo(n2)
 }
 
 func NewRootNode(pubKey crypto.PubKey) Node {
@@ -34,7 +41,7 @@ func (n Node) Invite(
 ) (
 	rn Node,
 ) {
-	rn.Chains = make([]chain.Chain, 0, len(n.Chains)+len(inviteesNode.Chains))
+	rn.Chains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
 
 	// keep all the existing web-of-trust chains
 	rn.Chains = append(rn.Chains, inviteesNode.Chains...)
@@ -55,7 +62,7 @@ func (n Node) Invite(
 }
 
 func (n Node) CommonChains(their Node) []chain.Pair {
-	common := make([]chain.Pair, 0, len(n.Chains))
+	common := make([]chain.Pair, 0, n.Len())
 	for _, my := range n.Chains {
 		p := their.shared(my)
 		isPair := !p.Chain1.IsNil() && !p.Chain2.IsNil()
@@ -82,7 +89,7 @@ func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 			fromRoot = f
 		}
 	}
-	return WebOfTrust{Hops:hops, FromRoot: fromRoot}
+	return WebOfTrust{Hops: hops, CommonInvider: fromRoot}
 }
 
 func (n Node) CommonChain(their Node) chain.Chain {
@@ -92,6 +99,10 @@ func (n Node) CommonChain(their Node) chain.Chain {
 		}
 	}
 	return chain.Nil
+}
+
+func (n Node) Len() int {
+	return len(n.Chains)
 }
 
 func (n Node) sharedRoot(their chain.Chain) bool {
@@ -106,7 +117,7 @@ func (n Node) sharedRoot(their chain.Chain) bool {
 func (n Node) shared(their chain.Chain) chain.Pair {
 	for _, my := range n.Chains {
 		if chain.SameRoot(their, my) {
-			return chain.Pair{their, my}
+			return chain.Pair{Chain1: their, Chain2: my}
 		}
 	}
 	return chain.Pair{}
