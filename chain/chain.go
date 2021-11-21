@@ -37,16 +37,20 @@ func SameInviter(c1, c2 Chain) bool {
 	)
 }
 
-// CommonInviter returns distance (current level) from chain's root if it
-// exists.  If not it returns -1
+// CommonInviter returns inviter's distance (current level) from chain's root if
+// inviter exists.  If not it returns -1
 func CommonInviter(c1, c2 Chain) (level int) {
 	if !SameRoot(c1, c2) {
 		return -1
 	}
+
+	// pickup the shorter of the chains for the compare loop below
 	c := c1
 	if len(c1.Blocks) > len(c2.Blocks) {
 		c = c2
 	}
+
+	// root is the same, start from next until difference is found
 	for i := range c.Blocks[1:] {
 		if !EqualBlocks(c1.Blocks[i], c2.Blocks[i]) {
 			return i - 1
@@ -84,7 +88,7 @@ func (c Chain) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// Invite is called for the intiter's chain. Inviter's key is needed for signing
+// Invite is called for the inviter's chain. Inviter's key is needed for signing
 // the new link/block which includes inviteesPubKey and position in the chain.
 // A new chain is returned. The chain will be given for the invitee.
 func (c Chain) Invite(
