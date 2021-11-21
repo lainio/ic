@@ -9,8 +9,11 @@ import (
 )
 
 var (
-	root, alice, bob    entity
-	c                   Chain
+	// root -> alice, root -> bob
+	root, alice, bob entity
+
+	//  first chain for generic chain tests
+	testChain           Chain
 	rootKey, inviteeKey crypto.Key
 )
 
@@ -32,21 +35,21 @@ func teardown() {
 func setup() {
 	// general chain for tests
 	rootKey = crypto.NewKey()
-	c = NewRootChain(rootKey.PubKey)
+	testChain = NewRootChain(rootKey.PubKey)
 	inviteeKey = crypto.NewKey()
 	level := 1
-	c = c.Invite(rootKey, inviteeKey.PubKey, level)
+	testChain = testChain.Invite(rootKey, inviteeKey.PubKey, level)
 
 	// root, alice, bob setup
 	root.Key = crypto.NewKey()
 	alice.Key = crypto.NewKey()
 	bob.Key = crypto.NewKey()
 
-	root.Chain = NewRootChain(root.Key.PubKey)
+	root.Chain = NewRootChain(root.PubKey)
 
 	// root invites alice and bod but they have no invitation between
-	alice.Chain = root.Invite(root.Key, alice.Key.PubKey, 1)
-	bob.Chain = root.Invite(root.Key, bob.Key.PubKey, 1)
+	alice.Chain = root.Invite(root.Key, alice.PubKey, 1)
+	bob.Chain = root.Invite(root.Key, bob.PubKey, 1)
 }
 
 func TestNewChain(t *testing.T) {
@@ -55,13 +58,13 @@ func TestNewChain(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	c2 := c.Clone()
+	c2 := testChain.Clone()
 	assert.Len(t, c2.Blocks, 2)
 	assert.True(t, c2.Verify())
 }
 
 func TestVerifyChainFail(t *testing.T) {
-	c2 := c.Clone()
+	c2 := testChain.Clone()
 	assert.Len(t, c2.Blocks, 2)
 	assert.True(t, c2.Verify())
 
@@ -72,15 +75,15 @@ func TestVerifyChainFail(t *testing.T) {
 }
 
 func TestVerifyChain(t *testing.T) {
-	assert.Len(t, c.Blocks, 2)
-	assert.True(t, c.Verify())
+	assert.Len(t, testChain.Blocks, 2)
+	assert.True(t, testChain.Verify())
 
 	newInvitee := crypto.NewKey()
 	level := 3
-	c = c.Invite(inviteeKey, newInvitee.PubKey, level)
+	testChain = testChain.Invite(inviteeKey, newInvitee.PubKey, level)
 
-	assert.Len(t, c.Blocks, 3)
-	assert.True(t, c.Verify())
+	assert.Len(t, testChain.Blocks, 3)
+	assert.True(t, testChain.Verify())
 }
 
 func TestInvitation(t *testing.T) {
@@ -92,10 +95,10 @@ func TestInvitation(t *testing.T) {
 	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
 	assert.Len(t, cecilia.Blocks, 3)
 	assert.True(t, cecilia.Verify())
-	assert.False(t, SameRoot(c, cecilia.Chain), "we have two different roots")
+	assert.False(t, SameRoot(testChain, cecilia.Chain), "we have two different roots")
 	assert.True(t, SameRoot(alice.Chain, cecilia.Chain))
 }
 
@@ -108,7 +111,7 @@ func TestCommonInviter(t *testing.T) {
 		Key: crypto.NewKey(),
 	}
 	// bob intives cecilia
-	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
 	assert.Len(t, cecilia.Blocks, 3)
 	assert.True(t, cecilia.Verify())
 
@@ -116,14 +119,14 @@ func TestCommonInviter(t *testing.T) {
 		Key: crypto.NewKey(),
 	}
 	// alice invites david
-	david.Chain = alice.Invite(alice.Key, david.Key.PubKey, 1)
+	david.Chain = alice.Invite(alice.Key, david.PubKey, 1)
 
 	assert.Equal(t, 0, CommonInviter(cecilia.Chain, david.Chain),
 		"cecilia and david have only common root")
 	edvin := entity{
 		Key: crypto.NewKey(),
 	}
-	edvin.Chain = alice.Invite(alice.Key, edvin.Key.PubKey, 1)
+	edvin.Chain = alice.Invite(alice.Key, edvin.PubKey, 1)
 	assert.Equal(t, 1, CommonInviter(edvin.Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
@@ -140,16 +143,45 @@ func TestCommonInviter(t *testing.T) {
 // TestSameInviter test that two chain holders have same inviter.
 func TestSameInviter(t *testing.T) {
 	assert.True(t, SameInviter(alice.Chain, bob.Chain))
-	assert.False(t, SameInviter(c, bob.Chain))
+	assert.False(t, SameInviter(testChain, bob.Chain))
 
 	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, cecilia.Key.PubKey, 1)
+	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
 	assert.Len(t, cecilia.Blocks, 3)
 	assert.True(t, cecilia.Verify())
 	assert.True(t, bob.IsInviterFor(cecilia.Chain))
 	assert.False(t, alice.IsInviterFor(cecilia.Chain))
+}
+
+func TestHops(t *testing.T) {
+	h := alice.Hops(bob.Chain)
+	assert.Equal(t, 2, h)
+
+	cecilia := entity{
+		Key: crypto.NewKey(),
+	}
+	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
+	h = alice.Hops(cecilia.Chain)
+	assert.Equal(t, 3, h)
+
+	david := entity{
+		Key: crypto.NewKey(),
+	}
+	david.Chain = bob.Invite(bob.Key, david.PubKey, 1)
+	h = david.Hops(cecilia.Chain)
+	assert.Equal(t, 2, h)
+
+	edvin := entity{
+		Key: crypto.NewKey(),
+	}
+	edvin.Chain = david.Invite(david.Key, edvin.PubKey, 1)
+	h = edvin.Hops(cecilia.Chain)
+	assert.Equal(t, 3, h)
+	
+	h = Hops(alice.Chain, edvin.Chain)
+	assert.Equal(t, 4, h)
 }
 
 // TestChallengeInvitee test shows how we can challenge the party who presents

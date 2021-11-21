@@ -18,6 +18,19 @@ type Chain struct {
 	Blocks []Block // Blocks is exported variable for serialization
 }
 
+type Pair struct {
+	Chain1, Chain2 Chain
+}
+
+func (p Pair) Hops() int {
+	return Hops(p.Chain1, p.Chain2)
+}
+
+// CommonInviter TODO: this could be done together with Hops
+func (p Pair) CommonInviter() int {
+	return CommonInviter(p.Chain1, p.Chain2)
+}
+
 var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
@@ -46,7 +59,7 @@ func CommonInviter(c1, c2 Chain) (level int) {
 
 	// pickup the shorter of the chains for the compare loop below
 	c := c1
-	if len(c1.Blocks) > len(c2.Blocks) {
+	if c1.Len() > c2.Len() {
 		c = c2
 	}
 
@@ -58,6 +71,10 @@ func CommonInviter(c1, c2 Chain) (level int) {
 		level = i
 	}
 	return level
+}
+
+func Hops(lhs, rhs Chain) int {
+	return lhs.Hops(rhs)
 }
 
 func NewRootChain(rootPubKey crypto.PubKey) Chain {
@@ -110,12 +127,26 @@ func (c Chain) Invite(
 	return nc
 }
 
+func (c Chain) Hops(their Chain) int {
+	common := CommonInviter(c, their)
+	if common == -1 {
+		return -1
+	}
+
+	// both chain lengths without self node minus "tail" to common inviter
+	return c.Len() - 1 + their.Len() - 1 - 2*common
+}
+
+func (c Chain) Len() int {
+	return len(c.Blocks)
+}
+
 func (c Chain) isLeaf(invitersKey crypto.Key) bool {
 	return invitersKey.PubKeyEqual(c.LeafPubKey())
 }
 
 func (c Chain) LeafPubKey() crypto.PubKey {
-	assert.D.True(len(c.Blocks) > 0)
+	assert.D.True(c.Len() > 0)
 
 	return c.lastBlock().InviteePubKey
 }
@@ -129,7 +160,7 @@ func (c Chain) hashToLeaf() []byte {
 }
 
 func (c Chain) Verify() bool {
-	if len(c.Blocks) == 1 {
+	if c.Len() == 1 {
 		return true // root block is valid always
 	}
 
