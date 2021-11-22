@@ -10,11 +10,14 @@ type Node struct {
 }
 
 type WebOfTrust struct {
+	// Hops tells how far the the other end is when traversing thru the
+	// CommonInvider
 	Hops int
 
-	// CommonInviter from root! how far away it's from absolute root
+	// CommonInviter from root, i.e. how far away it's from absolute root
 	CommonInvider int
 
+	// Position of the CommonInvider.
 	Position int
 }
 
@@ -73,6 +76,8 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 	return common
 }
 
+// WebOfTrustInfo returns web-of-trust information of two nodes if they share a
+// trust chain. If not the Hops field is -1.
 func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 	chainPairs := n.CommonChains(their)
 
@@ -80,16 +85,39 @@ func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 	fromRoot := -1
 
 	for _, pair := range chainPairs {
-		h := pair.Hops()
+		h, f := pair.Hops()
+
 		if hops == -1 || h < hops {
 			hops = h
-		}
-		f := pair.CommonInviter()
-		if fromRoot == -1 || f < fromRoot {
-			fromRoot = f
+
+			if fromRoot == -1 || f < fromRoot {
+				fromRoot = f
+			}
 		}
 	}
 	return WebOfTrust{Hops: hops, CommonInvider: fromRoot}
+}
+
+func (n Node) IsInviterFor(their Node) bool {
+	chainPairs := n.CommonChains(their)
+
+	for _, pair := range chainPairs {
+		if pair.Chain1.IsInviterFor(pair.Chain2) {
+			return true
+		}
+	}
+	return false
+}
+
+func (n Node) OneHop(their Node) bool {
+	chainPairs := n.CommonChains(their)
+
+	for _, pair := range chainPairs {
+		if pair.OneHop() {
+			return true
+		}
+	}
+	return false
 }
 
 func (n Node) CommonChain(their Node) chain.Chain {

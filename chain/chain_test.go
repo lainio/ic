@@ -156,32 +156,37 @@ func TestSameInviter(t *testing.T) {
 }
 
 func TestHops(t *testing.T) {
-	h := alice.Hops(bob.Chain)
+	h, cLevel := alice.Hops(bob.Chain)
 	assert.Equal(t, 2, h)
+	assert.Equal(t, 0, cLevel)
 
 	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
 	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
-	h = alice.Hops(cecilia.Chain)
+	h, cLevel = alice.Hops(cecilia.Chain)
 	assert.Equal(t, 3, h)
+	assert.Equal(t, 0, cLevel)
 
 	david := entity{
 		Key: crypto.NewKey(),
 	}
 	david.Chain = bob.Invite(bob.Key, david.PubKey, 1)
-	h = david.Hops(cecilia.Chain)
+	h, cLevel = david.Hops(cecilia.Chain)
 	assert.Equal(t, 2, h)
+	assert.Equal(t, 1, cLevel)
 
 	edvin := entity{
 		Key: crypto.NewKey(),
 	}
 	edvin.Chain = david.Invite(david.Key, edvin.PubKey, 1)
-	h = edvin.Hops(cecilia.Chain)
+	h, cLevel = edvin.Hops(cecilia.Chain)
 	assert.Equal(t, 3, h)
+	assert.Equal(t, 1, cLevel)
 	
-	h = Hops(alice.Chain, edvin.Chain)
+	h, cLevel = Hops(alice.Chain, edvin.Chain)
 	assert.Equal(t, 4, h)
+	assert.Equal(t, 0, cLevel)
 }
 
 // TestChallengeInvitee test shows how we can challenge the party who presents

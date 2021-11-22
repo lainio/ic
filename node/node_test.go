@@ -137,7 +137,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	common := dave.CommonChains(eve.Node)
 	assert.Len(t, common, 2)
 
-	wot:= dave.WebOfTrustInfo(eve.Node)
+	wot := dave.WebOfTrustInfo(eve.Node)
 	assert.Equal(t, 0, wot.CommonInvider)
 	assert.Equal(t, 1, wot.Hops)
 
@@ -156,23 +156,34 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Len(t, common, 1)
 	common = root1.CommonChains(alice.Node)
 	assert.Len(t, common, 1)
-	h := common[0].Hops()
+	h, level := common[0].Hops()
 	assert.Equal(t, 1, h)
+	assert.Equal(t, 0, level)
 
 	wot = NewWebOfTrust(frank.Node, grace.Node)
 	assert.Equal(t, 1, wot.CommonInvider)
 	assert.Equal(t, 3, wot.Hops)
 
 	root3 := entity{Key: crypto.NewKey()}
-	root3.Node= NewRootNode(root3.PubKey)
+	root3.Node = NewRootNode(root3.PubKey)
 	heidi := entity{Key: crypto.NewKey()}
 	heidi.Node = root3.Invite(heidi.Node, root3.Key, heidi.PubKey, 1)
+	assert.Len(t, heidi.Node.Chains, 1)
+	assert.Len(t, heidi.Node.Chains[0].Blocks, 2, "root = root3")
+
+	// verify Eve's situation:
+	assert.Len(t, eve.Node.Chains, 2)
+	assert.Len(t, eve.Node.Chains[0].Blocks, 2, "root == dave")
+	assert.Equal(t, 3, len(eve.Node.Chains[1].Blocks), "root is root2")
+
 	heidi.Node = eve.Invite(heidi.Node, eve.Key, heidi.PubKey, 1)
 	// next dave's invitation doesn't add any new chains because there is no
 	// new roots in daves chains
 	heidi.Node = dave.Invite(heidi.Node, dave.Key, heidi.PubKey, 1)
-	wot = NewWebOfTrust(heidi.Node, eve.Node)
-	assert.Equal(t, 0, wot.CommonInvider, "common root is dave")
-	assert.Equal(t, 3, wot.Hops, "")
 
+	wot = NewWebOfTrust(eve.Node, heidi.Node)
+	assert.Equal(t, 0, wot.CommonInvider, "common root is dave")
+	assert.Equal(t, 1, wot.Hops, "dave intives heidi")
+	assert.True(t, eve.IsInviterFor(heidi.Node))
+	assert.True(t, heidi.OneHop(eve.Node))
 }

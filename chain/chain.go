@@ -22,11 +22,15 @@ type Pair struct {
 	Chain1, Chain2 Chain
 }
 
-func (p Pair) Hops() int {
+func (p Pair) Hops() (int, int) {
 	return Hops(p.Chain1, p.Chain2)
 }
 
-// CommonInviter TODO: this could be done together with Hops
+func (p Pair) OneHop() bool {
+	return p.Chain1.IsInviterFor(p.Chain2) ||
+		p.Chain2.IsInviterFor(p.Chain1)
+}
+
 func (p Pair) CommonInviter() int {
 	return CommonInviter(p.Chain1, p.Chain2)
 }
@@ -73,7 +77,7 @@ func CommonInviter(c1, c2 Chain) (level int) {
 	return level
 }
 
-func Hops(lhs, rhs Chain) int {
+func Hops(lhs, rhs Chain) (int, int) {
 	return lhs.Hops(rhs)
 }
 
@@ -127,14 +131,27 @@ func (c Chain) Invite(
 	return nc
 }
 
-func (c Chain) Hops(their Chain) int {
+// Hops returns hops and common inviter's level if that exists. If not both
+// return values are -1.
+func (c Chain) Hops(their Chain) (int, int) {
 	common := CommonInviter(c, their)
 	if common == -1 {
-		return -1
+		return -1, -1
 	}
 
-	// both chain lengths without self node minus "tail" to common inviter
-	return c.Len() - 1 + their.Len() - 1 - 2*common
+	if c.OneHop(their) {
+		return 1, common
+	}
+
+	// both chain lengths without self, minus "tail" to common inviter
+	hops := c.Len() - 1 + their.Len() - 1 - 2*common
+
+	return hops, common
+}
+
+func (c Chain) OneHop(their Chain) bool {
+	return c.IsInviterFor(their) ||
+		their.IsInviterFor(c)
 }
 
 func (c Chain) Len() int {
