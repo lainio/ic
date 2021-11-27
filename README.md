@@ -1,13 +1,13 @@
 ## Invitation Chain
 
-This is the Invitation Chain, which is the Go package and CLI tool for building
+This is the Invitation Chain. It is a Go package and a CLI tool for building
 invitation and reputation chains. Later we might offer gRPC API as well.
 
 ### Design
 
-- use case driven approach.
-- test driven approach
-- algorithm first
-- then input and output 
+1. use case driven approach.
+1. test driven approach
+1. algorithm first (PoC)
+1. then input and output 
   - network transport
-- last the persistence 
+1. last the persistence 
