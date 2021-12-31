@@ -31,7 +31,7 @@ func (b Block) Bytes() []byte {
 	return buf.Bytes()
 }
 
-func (b Block) ExludeSign() Block {
+func (b Block) ExcludeSign() Block {
 	newBlock := Block{
 		HashToPrev:    b.HashToPrev,
 		InviteePubKey: b.InviteePubKey,
@@ -50,7 +50,7 @@ func EqualBlocks(b1, b2 Block) bool {
 func (b Block) VerifySign(invitersPubKey crypto.PubKey) bool {
 	return crypto.VerifySign(
 		invitersPubKey,
-		b.ExludeSign().Bytes(),
+		b.ExcludeSign().Bytes(),
 		b.InvitersSignature,
 	)
 }
