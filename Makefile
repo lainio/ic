@@ -4,8 +4,8 @@ PKGS := ./...
 # PKGS2 := github.com/lainio/ic/node
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 
-# GO := go
-GO := go1.18beta1
+GO := go
+#GO := go1.18beta1
 
 deps:
 	$(GO) get -t ./...
