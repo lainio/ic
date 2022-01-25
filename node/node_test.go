@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/findy-network/ic/crypto"
+	"github.com/lainio/ic/crypto"
 	"github.com/stretchr/testify/assert"
 )
 

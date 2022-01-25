@@ -1,8 +1,8 @@
 package node
 
 import (
-	"github.com/findy-network/ic/chain"
-	"github.com/findy-network/ic/crypto"
+	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/crypto"
 )
 
 type Node struct {
