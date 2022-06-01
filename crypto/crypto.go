@@ -24,8 +24,7 @@ type Key struct {
 }
 
 func NewKey() Key {
-	pub, priv, err := ed25519.GenerateKey(nil)
-	try.To(err)
+	pub, priv := try.To2(ed25519.GenerateKey(nil))
 	return Key{PrivKey: priv, PubKey: pub}
 }
 
