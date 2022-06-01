@@ -1,6 +1,6 @@
 module github.com/findy-network/ic
 
-go 1.16
+go 1.18
 
 require (
 	github.com/google/tink/go v1.6.0 // indirect
