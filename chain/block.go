@@ -5,7 +5,7 @@ import (
 	"encoding/gob"
 
 	"github.com/findy-network/ic/crypto"
-	"github.com/lainio/err2"
+	"github.com/lainio/err2/try"
 )
 
 type Block struct {
@@ -27,7 +27,7 @@ func NewVerifyBlock() Block {
 func (b Block) Bytes() []byte {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err2.Check(enc.Encode(b))
+	try.To(enc.Encode(b))
 	return buf.Bytes()
 }
 

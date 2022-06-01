@@ -9,8 +9,8 @@ import (
 	"encoding/gob"
 
 	"github.com/findy-network/ic/crypto"
-	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 )
 
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey
@@ -94,7 +94,7 @@ func NewRootChain(rootPubKey crypto.PubKey) Chain {
 func NewChainFromData(d []byte) (c Chain) {
 	r := bytes.NewReader(d)
 	dec := gob.NewDecoder(r)
-	err2.Check(dec.Decode(&c))
+	try.To(dec.Decode(&c))
 	return c
 }
 
@@ -105,7 +105,7 @@ func (c Chain) IsNil() bool {
 func (c Chain) Bytes() []byte {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
-	err2.Check(enc.Encode(c))
+	try.To(enc.Encode(c))
 	return buf.Bytes()
 }
 

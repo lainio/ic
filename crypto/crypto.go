@@ -9,6 +9,7 @@ import (
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 )
 
 type PubKey = []byte
@@ -24,7 +25,7 @@ type Key struct {
 
 func NewKey() Key {
 	pub, priv, err := ed25519.GenerateKey(nil)
-	err2.Check(err)
+	try.To(err)
 	return Key{PrivKey: priv, PubKey: pub}
 }
 
