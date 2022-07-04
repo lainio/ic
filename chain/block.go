@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"github.com/lainio/ic/crypto"
 	"github.com/lainio/err2"
+	"github.com/lainio/ic/crypto"
 )
 
 type Block struct {
