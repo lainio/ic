@@ -3,6 +3,7 @@ module github.com/lainio/ic
 go 1.18
 
 require (
+<<<<<<< HEAD
 	github.com/lainio/err2 v0.8.6
 	github.com/stretchr/testify v1.7.1
 )
@@ -17,4 +18,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 	honnef.co/go/tools v0.1.1 // indirect
 	mvdan.cc/unparam v0.0.0-20210104141923-aac4ce9116a7 // indirect
+=======
+	github.com/lainio/err2 v0.8.0
+	github.com/stretchr/testify v1.7.0
+>>>>>>> env-tests
 )

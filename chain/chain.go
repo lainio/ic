@@ -8,9 +8,15 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 
+<<<<<<< HEAD
 	"github.com/lainio/ic/crypto"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+=======
+	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
+	"github.com/lainio/ic/crypto"
+>>>>>>> env-tests
 )
 
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey

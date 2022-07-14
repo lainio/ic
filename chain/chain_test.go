@@ -183,7 +183,7 @@ func TestHops(t *testing.T) {
 	h, cLevel = edvin.Hops(cecilia.Chain)
 	assert.Equal(t, 3, h)
 	assert.Equal(t, 1, cLevel)
-	
+
 	h, cLevel = Hops(alice.Chain, edvin.Chain)
 	assert.Equal(t, 4, h)
 	assert.Equal(t, 0, cLevel)
