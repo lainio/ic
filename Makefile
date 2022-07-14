@@ -1,60 +1,40 @@
 # Original from github.com/lainio/err2
 
-PKGS := ./...
-# PKGS2 := github.com/lainio/ic/node
+PKG1 := github.com/lainio/ic/chain
+PKG2 := github.com/lainio/ic/node
+PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4)
+
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 
 GO := go
 #GO := go1.18beta1
 
-deps:
-	$(GO) get -t ./...
+build:
+	@$(GO) build -o /dev/null $(PKGS)
 
-check: test vet gofmt misspell unconvert staticcheck ineffassign unparam
+deps:
+	@$(GO) get -t ./...
+
+test1:
+	$(GO) test $(PKG1)
+
+test2:
+	$(GO) test $(PKG2)
 
 test:
-	$(GO) test $(PKGS) $(PKGS2)
+	$(GO) test $(PKGS)
 
 bench:
-	$(GO) test -bench=. $(PKGS) $(PKGS2)
+	@$(GO) test -bench=. $(PKGS)
 
 bench1:
-	$(GO) test -bench=. $(PKGS)
+	@$(GO) test -bench=. $(PKG1)
 
 bench2:
-	$(GO) test -bench=. $(PKGS2)
+	@$(GO) test -bench=. $(PKG2)
 
 vet: | test
-	$(GO) vet $(PKGS) $(PKGS2)
-
-staticcheck:
-	$(GO) get honnef.co/go/tools/cmd/staticcheck
-	staticcheck -checks all $(PKGS) $(PKGS2)
-
-misspell:
-	$(GO) get github.com/client9/misspell/cmd/misspell
-	misspell \
-		-locale GB \
-		-error \
-		*.md *.go
-
-unconvert:
-	$(GO) get github.com/mdempsky/unconvert
-	unconvert -v $(PKGS)
-
-ineffassign:
-	$(GO) get github.com/gordonklaus/ineffassign
-	find $(SRCDIRS) -name '*.go' | xargs ineffassign
-
-pedantic: check errcheck
-
-unparam:
-	$(GO) get mvdan.cc/unparam
-	unparam ./...
-
-errcheck:
-	$(GO) get github.com/kisielk/errcheck
-	errcheck $(PKGS)
+	@$(GO) vet $(PKGS)
 
 gofmt:
 	@echo Checking code is gofmted
