@@ -1,4 +1,4 @@
-module github.com/findy-network/ic
+module github.com/lainio/ic
 
 go 1.18
 

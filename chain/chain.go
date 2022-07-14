@@ -8,7 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 
-	"github.com/findy-network/ic/crypto"
+	"github.com/lainio/ic/crypto"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 )

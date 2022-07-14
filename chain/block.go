@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"github.com/findy-network/ic/crypto"
+	"github.com/lainio/ic/crypto"
 	"github.com/lainio/err2/try"
 )
 
