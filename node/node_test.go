@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/lainio/ic/crypto"
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/ic/crypto"
 )
 
 var (
@@ -35,7 +35,6 @@ func teardown() {
 }
 
 func setup() {
-	assert.DefaultAsserter = assert.AsserterUnitTesting
 	// root, alice, bob setup
 	root1.Key = crypto.NewKey()
 	root2.Key = crypto.NewKey()
@@ -50,7 +49,8 @@ func setup() {
 }
 
 func TestNewRootNode(t *testing.T) {
-	assert.Tester = t
+	assert.PushTester(t)
+	defer assert.PopTester()
 
 	aliceNode := NewRootNode(alice.PubKey)
 	assert.SLen(aliceNode.Chains, 1)
@@ -61,7 +61,8 @@ func TestNewRootNode(t *testing.T) {
 }
 
 func TestInvite(t *testing.T) {
-	assert.Tester = t
+	assert.PushTester(t)
+	defer assert.PopTester()
 
 	// Root1 chains start here:
 	alice.Node = root1.Invite(alice.Node, root1.Key, alice.PubKey, 1)
@@ -134,14 +135,16 @@ func TestInvite(t *testing.T) {
 }
 
 func TestCommonChains(t *testing.T) {
-	assert.Tester = t
+	assert.PushTester(t)
+	defer assert.PopTester()
 
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)
 }
 
 func TestWebOfTrustInfo(t *testing.T) {
-	assert.Tester = t
+	assert.PushTester(t)
+	defer assert.PopTester()
 
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)

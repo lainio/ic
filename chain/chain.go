@@ -117,7 +117,7 @@ func (c Chain) Invite(
 	inviteesPubKey crypto.PubKey,
 	position int,
 ) (nc Chain) {
-	assert.D.True(c.isLeaf(invitersKey), "only left can ")
+	assert.That(c.isLeaf(invitersKey), "only leaf can invite")
 
 	newBlock := Block{
 		HashToPrev:    c.hashToLeaf(),
@@ -163,7 +163,7 @@ func (c Chain) isLeaf(invitersKey crypto.Key) bool {
 }
 
 func (c Chain) LeafPubKey() crypto.PubKey {
-	assert.D.True(c.Len() > 0)
+	assert.That(c.Len() > 0, "chain cannot be empty")
 
 	return c.lastBlock().InviteePubKey
 }

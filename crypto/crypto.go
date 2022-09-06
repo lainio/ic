@@ -1,4 +1,4 @@
-// package crypto implements neeed helpers for invitation chain use. We haven't
+// Package crypto implements neeed helpers for invitation chain use. We haven't
 // yet thought about interfase or other stuff. We just build the minimum for the
 // PoC.
 package crypto
@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 
-	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 )
@@ -42,7 +41,7 @@ func (k Key) VerifySign(msg []byte, sig Signature) bool {
 
 func RandSlice(n int) []byte {
 	b := make([]byte, n)
-	r := err2.Int.Try(rand.Read(b))
+	r := try.To1(rand.Read(b))
 	assert.P.True(r == n)
 	return b
 }
