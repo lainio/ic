@@ -207,7 +207,7 @@ func TestHops(t *testing.T) {
 }
 
 // TestChallengeInvitee test shows how we can challenge the party who presents
-// us the chain. Chains are present as full! At least for now. They don't
+// us a chain. Chains are presentad as full! At least for now. They don't
 // include any personal data, and we try to make sure that they won't include
 // any data which could be used to correlate the use of the chain. Chain is only
 // for the proofing the position in the Invitation Chain.
@@ -222,21 +222,41 @@ func TestChallengeInvitee(t *testing.T) {
 
 	// When let's say Bob have received Alice's chain he can use Challenge
 	// method for Alice's Chain to let Alice proof that she controls the chain
-	assert.That(alice.Challenge(
+	pinCode := 1234
+	assert.That(alice.Challenge(pinCode,
 		func(d []byte) crypto.Signature {
 			// In real world usage here we would send the d for Alice's signing
 			// over the network.
+			b := NewBlockFromData(d)
+			b.Position = pinCode
+			d = b.Bytes()
 			return alice.Sign(d)
+		},
+	))
+	assert.That(bob.Challenge(pinCode,
+		func(d []byte) crypto.Signature {
+			b := NewBlockFromData(d)
+			b.Position = pinCode
+			d = b.Bytes()
+			return bob.Sign(d)
 		},
 	))
 	// Test that if alice tries to sign bob's challenge it won't work.
-	assert.That(!bob.Challenge(
+	assert.ThatNot(bob.Challenge(pinCode,
 		func(d []byte) crypto.Signature {
+			b := NewBlockFromData(d)
+			b.Position = pinCode
+			d = b.Bytes()
+			// NOTE Alice canot sign bob's challenge
 			return alice.Sign(d)
 		},
 	))
-	assert.That(bob.Challenge(
+	// Wrong pinCode
+	assert.ThatNot(bob.Challenge(pinCode+1,
 		func(d []byte) crypto.Signature {
+			b := NewBlockFromData(d)
+			b.Position = pinCode
+			d = b.Bytes()
 			return bob.Sign(d)
 		},
 	))
@@ -249,3 +269,8 @@ func TestChallengeInvitee(t *testing.T) {
 // DIDDoc concept. How about if chain holder creates new sub chains just to hide
 // it's actual identity?
 // For what purpose we could use them?
+// My current opinion is that this is not a big problem. At least we know that
+// we can get rid of it if we want.
+
+// Other poptential problem is key rotation. It isn't so big problem when we
+// have a network in the came. Invitation Chain IDs aren

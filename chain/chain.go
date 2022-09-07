@@ -13,11 +13,17 @@ import (
 	"github.com/lainio/err2/try"
 )
 
+// NotConnected tells that chains aren't connected at all, i.e. we don't have
+// any route to other.
+const NotConnected = -1
+
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey
 type Chain struct {
 	Blocks []Block // Blocks is exported variable for serialization
 }
 
+// Pair is helper struct to handle chain pairs. It offers helper methods to
+// calculate hops between two chains. Pair and Chain are summetric.
 type Pair struct {
 	Chain1, Chain2 Chain
 }
@@ -55,10 +61,10 @@ func SameInviter(c1, c2 Chain) bool {
 }
 
 // CommonInviter returns inviter's distance (current level) from chain's root if
-// inviter exists.  If not it returns -1
+// inviter exists.  If not it returns NotConnected
 func CommonInviter(c1, c2 Chain) (level int) {
 	if !SameRoot(c1, c2) {
-		return -1
+		return NotConnected
 	}
 
 	// pickup the shorter of the chains for the compare loop below
@@ -132,11 +138,11 @@ func (c Chain) Invite(
 }
 
 // Hops returns hops and common inviter's level if that exists. If not both
-// return values are -1.
+// return values are NotConnected.
 func (c Chain) Hops(their Chain) (int, int) {
 	common := CommonInviter(c, their)
-	if common == -1 {
-		return -1, -1
+	if common == NotConnected {
+		return NotConnected, NotConnected
 	}
 
 	if c.OneHop(their) {
@@ -210,15 +216,15 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 	)
 }
 
-// Challenge offers a method and placeholder for challenging leaf holder. Most
-// common cases is that caller of the function implements the closure where it
-// calls other party over the network to sign the challenge which is readily
+// Challenge offers a method and placeholder for challenging other chain holder.
+// Most common cases is that caller of the function implements the closure where
+// it calls other party over the network to sign the challenge which is readily
 // build and randomized.
-func (c Chain) Challenge(f func(d []byte) crypto.Signature) bool {
+func (c Chain) Challenge(pinCode int, f func(d []byte) crypto.Signature) bool {
 	pubKey := c.lastBlock().InviteePubKey
-	cb := NewVerifyBlock().Bytes()
-	sig := f(cb)
-	return crypto.VerifySign(pubKey, cb, sig)
+	challengeBlock, sigBlock  := NewVerifyBlock(pinCode)
+	sig := f(challengeBlock.Bytes())
+	return crypto.VerifySign(pubKey, sigBlock.Bytes(), sig)
 }
 
 func (c Chain) firstBlock() Block {

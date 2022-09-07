@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"github.com/lainio/ic/crypto"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/crypto"
 )
 
 type Block struct {
@@ -15,13 +15,27 @@ type Block struct {
 	Position          int
 }
 
-// NewVerifyBlock returns new randomized Block that can be used for verification
-// or challenges, etc.
-func NewVerifyBlock() Block {
-	return Block{
+// NewVerifyBlock returns two randomized Blocks that can be used for
+// verification or challenges, etc. First block is for challenge, i.e. pinCode
+// is unknown aka 0, and second block is for actual signing where pincode is set
+// to Position field. By this we can send pincode by other, safe channel.
+func NewVerifyBlock(pinCode int) (Block, Block) {
+	challengeBlock := Block{
 		HashToPrev:    crypto.RandSlice(32),
 		InviteePubKey: crypto.RandSlice(32),
 	}
+	return challengeBlock, Block{
+		HashToPrev:    challengeBlock.HashToPrev,
+		InviteePubKey: challengeBlock.InviteePubKey,
+		Position:      pinCode,
+	}
+}
+
+func NewBlockFromData(d []byte) (b Block) {
+	r := bytes.NewReader(d)
+	dec := gob.NewDecoder(r)
+	try.To(dec.Decode(&b))
+	return b
 }
 
 func (b Block) Bytes() []byte {
