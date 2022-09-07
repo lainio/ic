@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/crypto"
 )
 
@@ -154,8 +155,8 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(1, wot.Hops)
 
 	wot = NewWebOfTrust(bob.Node, carol.Node)
-	assert.Equal(-1, wot.CommonInvider)
-	assert.Equal(-1, wot.Hops)
+	assert.Equal(chain.NotConnected, wot.CommonInvider)
+	assert.Equal(chain.NotConnected, wot.Hops)
 
 	frank.Node = alice.Invite(frank.Node, alice.Key, frank.PubKey, 1)
 	assert.Equal(frank.Len(), 1)

@@ -21,6 +21,8 @@ type WebOfTrust struct {
 	Position int
 }
 
+// NewWebOfTrust returns web-of-trust information of two nodes if they share a
+// trust chain. If not the Hops field is chain.NotConnected.
 func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 	return n1.WebOfTrustInfo(n2)
 }
@@ -64,6 +66,8 @@ func (n Node) Invite(
 	return rn
 }
 
+// CommonChains return slice of chain pairs. If no pairs can be found the slice
+// is empty not nil.
 func (n Node) CommonChains(their Node) []chain.Pair {
 	common := make([]chain.Pair, 0, n.Len())
 	for _, my := range n.Chains {
@@ -77,20 +81,20 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 }
 
 // WebOfTrustInfo returns web-of-trust information of two nodes if they share a
-// trust chain. If not the Hops field is -1.
+// trust chain. If not the Hops field is chain.NotConnected.
 func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 	chainPairs := n.CommonChains(their)
 
-	hops := -1
-	fromRoot := -1
+	hops := chain.NotConnected
+	fromRoot := chain.NotConnected
 
 	for _, pair := range chainPairs {
 		h, f := pair.Hops()
 
-		if hops == -1 || h < hops {
+		if hops == chain.NotConnected || h < hops {
 			hops = h
 
-			if fromRoot == -1 || f < fromRoot {
+			if fromRoot == chain.NotConnected || f < fromRoot {
 				fromRoot = f
 			}
 		}
