@@ -2,12 +2,57 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 )
+
+type TestError struct {
+}
+
+func (t *TestError) Error() string {
+	return "this is test error, a own error type"
+}
+
+// CopyFile copies source file to the given destination. If any error occurs it
+// returns error value describing the reason.
+func CopyFile(src, dst string) (err error) {
+	// Add first error handler just to annotate the error properly.
+	defer err2.Returnf(&err, "copy %s %s", src, dst)
+
+	// Try to open the file. If error occurs now, err will be annotated and
+	// returned properly thanks to above err2.Returnf.
+	r := try.To1(os.Open(src))
+	defer r.Close()
+
+	// Try to create a file. If error occurs now, err will be annotated and
+	// returned properly.
+	w := try.To1(os.Create(dst))
+	// Add error handler to clean up the destination file. Place it here that
+	// the next deferred close is called before our Remove call.
+	defer err2.Handle(&err, func() {
+		fmt.Println("cleaning target file")
+		os.Remove(dst)
+		err = new(TestError) // TestError is concrete type
+	})
+	defer w.Close()
+
+	// Try to copy the file. If error occurs now, all previous error handlers
+	// will be called in the reversed order. And final return error is
+	// properly annotated in all the cases.
+	//try.To1(io.Copy(w, r))
+	try.To1(errCopy(w, r))
+
+	// All OK, just return nil.
+	return nil
+}
+
+func errCopy(w io.Writer, r io.Reader) (n int64, err error) {
+	return 0, fmt.Errorf("cannot write file")
+}
 
 func test0() (err error) {
 	//defer err2.Return(&err)
@@ -54,27 +99,9 @@ func ter[T any](b bool, yes, no T) T {
 }
 
 func main() {
-	defer err2.CatchTrace(func(err error) {
+	defer err2.Catch(func(err error) {
 		fmt.Println("ERR:", err)
 	})
-//		defer err2.CatchAll(func(err error) {
-//			fmt.Println("ERR:", err)
-//		}, func(v any) {
-//			fmt.Println("Panic:", v)
-//		})
 
-//	err2.StackStraceWriter = os.Stderr
-
-	for i := 0; i < 2; i++ {
-		fmt.Println("ter:", ter(i == 0, "yes", "no"))
-		fmt.Println("ter:", ter(i == 0, 1, 2))
-		fmt.Println("ter:", ter(i == 0, 1.01, 2.01))
-	}
-
-	//try.To(test1())
-	//err2.Check(test0())
-	//try.To(test0())
-	try.To(test2(nil, nil))
-
-	fmt.Println("done")
+	try.To(CopyFile("main.go", "main.bak2"))
 }
