@@ -20,8 +20,9 @@ func (t *TestError) Error() string {
 // CopyFile copies source file to the given destination. If any error occurs it
 // returns error value describing the reason.
 func CopyFile(src, dst string) (err error) {
-	// Add first error handler just to annotate the error properly.
-	defer err2.Returnf(&err, "copy %s %s", src, dst)
+	// Add first error handler just to annotate the error properly by using new
+	// automatic annotation mechanism.
+	defer err2.Handle(&err)
 
 	// Try to open the file. If error occurs now, err will be annotated and
 	// returned properly thanks to above err2.Returnf.
@@ -30,7 +31,11 @@ func CopyFile(src, dst string) (err error) {
 
 	// Try to create a file. If error occurs now, err will be annotated and
 	// returned properly.
-	w := try.To1(os.Create(dst))
+	//w := try.To1(os.Create(dst))
+	w, err :=os.Create(dst)
+	if err != nil {
+		return fmt.Errorf("TEST: %v", err)
+	}
 	// Add error handler to clean up the destination file. Place it here that
 	// the next deferred close is called before our Remove call.
 	defer err2.Handle(&err, func() {
@@ -56,21 +61,20 @@ func errCopy(w io.Writer, r io.Reader) (n int64, err error) {
 
 func test0() (err error) {
 	//defer err2.Return(&err)
-	defer err2.Annotatew("annnot", &err)
+	defer err2.Returnw(&err, "annnot")
 	//defer err2.Handle(&err, func() {
 	//	fmt.Println("*** ERR:", err)
 	//})
 
 	//f := try.To1(os.Open("tsts"))
 	//defer f.Close()
-	panic("panic!")
 	assert.NotImplemented()
 	return nil
 }
 
 func test1() (err error) {
-	defer err2.Returnw(&err, "test1")
-	//defer err2.Annotate("annnot", &err)
+	defer err2.Returnf(&err, "test1")
+	//defer err2.Returnf(&err, "annnot")
 
 	f := try.To1(os.Open("tsts"))
 	defer f.Close()
@@ -79,7 +83,7 @@ func test1() (err error) {
 
 func test2(p []byte, ptr *int) (err error) {
 	//defer err2.Returnw(&err, "")
-	//defer err2.Annotate("annnot", &err)
+	//defer err2.Returnf(&err, "annnot")
 	defer err2.Handle(&err, func() {
 		fmt.Println("*** ERR:", err)
 	})
@@ -99,9 +103,12 @@ func ter[T any](b bool, yes, no T) T {
 }
 
 func main() {
+	err2.SetErrorTracer(os.Stderr)
+
 	defer err2.Catch(func(err error) {
 		fmt.Println("ERR:", err)
 	})
 
-	try.To(CopyFile("main.go", "main.bak2"))
+	//try.To(CopyFile("main.go", "main.bak2"))
+	try.To(CopyFile("main.go", "/notfound/path/file.bak"))
 }
