@@ -1,5 +1,5 @@
-// Package crypto implements neeed helpers for invitation chain use. We haven't
-// yet thought about interfase or other stuff. We just build the minimum for the
+// Package crypto implements need helpers for invitation chain use. We haven't
+// yet thought about interface or other stuff. We just build the minimum for the
 // PoC.
 package crypto
 
