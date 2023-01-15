@@ -8,9 +8,9 @@ import (
 	"crypto/sha256"
 	"encoding/gob"
 
-	"github.com/lainio/ic/crypto"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/crypto"
 )
 
 // NotConnected tells that chains aren't connected at all, i.e. we don't have
@@ -222,7 +222,7 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 // build and randomized.
 func (c Chain) Challenge(pinCode int, f func(d []byte) crypto.Signature) bool {
 	pubKey := c.lastBlock().InviteePubKey
-	challengeBlock, sigBlock  := NewVerifyBlock(pinCode)
+	challengeBlock, sigBlock := NewVerifyBlock(pinCode)
 	sig := f(challengeBlock.Bytes())
 	return crypto.VerifySign(pubKey, sigBlock.Bytes(), sig)
 }
