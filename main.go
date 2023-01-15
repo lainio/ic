@@ -7,6 +7,7 @@ import (
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/formatter"
 	"github.com/lainio/err2/try"
 )
 
@@ -24,6 +25,9 @@ func CopyFile(src, dst string) (err error) {
 	// automatic annotation mechanism.
 	defer err2.Handle(&err)
 
+	assert.NotEmpty(src)
+	assert.NotEmpty(dst)
+
 	// Try to open the file. If error occurs now, err will be annotated and
 	// returned properly thanks to above err2.Returnf.
 	r := try.To1(os.Open(src))
@@ -32,7 +36,7 @@ func CopyFile(src, dst string) (err error) {
 	// Try to create a file. If error occurs now, err will be annotated and
 	// returned properly.
 	//w := try.To1(os.Create(dst))
-	w, err :=os.Create(dst)
+	w, err := os.Create(dst)
 	if err != nil {
 		return fmt.Errorf("TEST: %v", err)
 	}
@@ -60,21 +64,16 @@ func errCopy(w io.Writer, r io.Reader) (n int64, err error) {
 }
 
 func test0() (err error) {
-	//defer err2.Return(&err)
-	defer err2.Returnw(&err, "annnot")
-	//defer err2.Handle(&err, func() {
-	//	fmt.Println("*** ERR:", err)
-	//})
+	defer err2.Handle(&err, func() {
+		fmt.Println("*** ERR:", err)
+	})
 
-	//f := try.To1(os.Open("tsts"))
-	//defer f.Close()
 	assert.NotImplemented()
 	return nil
 }
 
 func test1() (err error) {
-	defer err2.Returnf(&err, "test1")
-	//defer err2.Returnf(&err, "annnot")
+	defer err2.Handle(&err, "test1")
 
 	f := try.To1(os.Open("tsts"))
 	defer f.Close()
@@ -82,8 +81,6 @@ func test1() (err error) {
 }
 
 func test2(p []byte, ptr *int) (err error) {
-	//defer err2.Returnw(&err, "")
-	//defer err2.Returnf(&err, "annnot")
 	defer err2.Handle(&err, func() {
 		fmt.Println("*** ERR:", err)
 	})
@@ -103,12 +100,21 @@ func ter[T any](b bool, yes, no T) T {
 }
 
 func main() {
+	assert.DefaultAsserter = assert.AsserterToError
 	err2.SetErrorTracer(os.Stderr)
+	//	err2.SetPanicTracer(os.Stderr)
 
-	defer err2.Catch(func(err error) {
-		fmt.Println("ERR:", err)
+	err2.SetFormatter(&formatter.Formatter{
+		DoFmt: func(raw string) string {
+			return "my ERROR: " + raw
+		},
+	})
+	err2.SetFormatter(formatter.Decamel)
+
+	defer err2.CatchTrace(func(err error) {
+		fmt.Println("HERE we are:", err)
 	})
 
-	//try.To(CopyFile("main.go", "main.bak2"))
-	try.To(CopyFile("main.go", "/notfound/path/file.bak"))
+	try.To(CopyFile("main.go", ""))
+	//try.To(CopyFile("main.go", "/notfound/path/file.bak"))
 }
