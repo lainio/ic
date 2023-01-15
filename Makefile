@@ -39,3 +39,7 @@ vet: | test
 gofmt:
 	@echo Checking code is gofmted
 	@test -z "$(shell gofmt -s -l -d -e $(SRCDIRS) | tee /dev/stderr)"
+
+lint:
+	@golangci-lint run
+
