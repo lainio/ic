@@ -77,7 +77,7 @@ linters:
     - whitespace
     - asciicheck
     - gocognit
-    - godox
+      # - godox TODOs are needed
     - nestif
     - prealloc
 issues:
