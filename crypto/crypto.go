@@ -17,6 +17,9 @@ func VerifySign(pubKey PubKey, msg []byte, sig Signature) bool {
 	return ed25519.Verify(pubKey, msg, sig)
 }
 
+// TODO: we need a KeyHandle
+
+// Key is a struct for full key.
 type Key struct {
 	PrivKey []byte
 	PubKey
@@ -42,7 +45,7 @@ func (k Key) VerifySign(msg []byte, sig Signature) bool {
 func RandSlice(n int) []byte {
 	b := make([]byte, n)
 	r := try.To1(rand.Read(b))
-	assert.P.True(r == n)
+	assert.Equal(r, n)
 	return b
 }
 
