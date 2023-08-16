@@ -24,6 +24,12 @@ test2:
 test:
 	$(GO) test $(PKGS)
 
+testv:
+	$(GO) test $(PKGS) -v
+
+testj:
+	$(GO) test $(PKGS) -json
+
 bench:
 	@$(GO) test -bench=. $(PKGS)
 
