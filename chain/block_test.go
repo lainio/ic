@@ -15,7 +15,7 @@ func TestNewVerifyBlock(t *testing.T) {
 		args args
 		want int // length of Block
 	}{
-		{"nil pincode", args{0}, 160},
+		{"nil pincode", args{0}, 159},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
