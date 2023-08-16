@@ -1,7 +1,6 @@
 package node
 
 import (
-	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/crypto"
 )
@@ -25,7 +24,7 @@ type WebOfTrust struct {
 // NewWebOfTrust returns web-of-trust information of two nodes if they share a
 // trust chain. If not the Hops field is chain.NotConnected.
 func NewWebOfTrust(n1, n2 Node) WebOfTrust {
-	assert.NotImplemented()
+	//assert.NotImplemented()
 	return n1.WebOfTrustInfo(n2)
 }
 
