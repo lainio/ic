@@ -84,7 +84,6 @@ func CommonInviter(c1, c2 Chain) (level int) {
 }
 
 func Hops(lhs, rhs Chain) (int, int) {
-	assert.NotImplemented()
 	return lhs.Hops(rhs)
 }
 
