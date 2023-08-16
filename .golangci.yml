@@ -1,6 +1,13 @@
 linters-settings:
   dupl:
     threshold: 200
+  godox:
+    # Report any comments starting with keywords, this is useful for TODO or FIXME comments that
+    # might be left in the code accidentally and should be resolved before merging.
+    # Default: ["TODO", "BUG", "FIXME"]
+    keywords:
+      - OPTIMIZE # marks code that should be optimized before merging
+      - HACK # marks hack-around that should be removed before merging
   depguard:
     rules:
       main:
@@ -83,7 +90,7 @@ linters:
     - whitespace
     - asciicheck
     - gocognit
-      # - godox TODOs are needed
+    - godox
     - nestif
     - prealloc
 issues:
