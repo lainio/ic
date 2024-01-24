@@ -50,8 +50,7 @@ func setup() {
 }
 
 func TestNewRootNode(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
 
 	aliceNode := NewRootNode(alice.PubKey)
 	assert.SLen(aliceNode.Chains, 1)
@@ -62,8 +61,7 @@ func TestNewRootNode(t *testing.T) {
 }
 
 func TestInvite(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
 	alice.Node = root1.Invite(alice.Node, root1.Key, alice.PubKey, 1)
@@ -136,16 +134,14 @@ func TestInvite(t *testing.T) {
 }
 
 func TestCommonChains(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
 
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)
 }
 
 func TestWebOfTrustInfo(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
 
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)

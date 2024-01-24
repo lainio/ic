@@ -19,8 +19,7 @@ func TestNewVerifyBlock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.PushTester(t)
-			defer assert.PopTester()
+			defer assert.PushTester(t)()
 
 			cb, _ := NewVerifyBlock(tt.args.pinCode)
 			assert.SLen(cb.Bytes(), tt.want)

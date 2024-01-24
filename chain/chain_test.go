@@ -53,24 +53,24 @@ func setup() {
 }
 
 func TestNewChain(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	c := NewRootChain(crypto.NewKey().PubKey)
 	//new(Chain).LeafPubKey()
 	assert.SLen(c.Blocks, 1)
 }
 
 func TestRead(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	c2 := testChain.Clone()
 	assert.SLen(c2.Blocks, 2)
 	assert.That(c2.Verify())
 }
 
 func TestVerifyChainFail(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	c2 := testChain.Clone()
 	assert.SLen(c2.Blocks, 2)
 	assert.That(c2.Verify())
@@ -82,8 +82,8 @@ func TestVerifyChainFail(t *testing.T) {
 }
 
 func TestVerifyChain(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	assert.SLen(testChain.Blocks, 2)
 	assert.That(testChain.Verify())
 
@@ -96,8 +96,8 @@ func TestVerifyChain(t *testing.T) {
 }
 
 func TestInvitation(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	assert.SLen(alice.Blocks, 2)
 	assert.That(alice.Verify())
 	assert.SLen(bob.Blocks, 2)
@@ -117,8 +117,8 @@ func TestInvitation(t *testing.T) {
 
 // TestCommonInviter tests that Chain owners have one common inviter
 func TestCommonInviter(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	// alice and bod have common root
 	cecilia := entity{
 		Key: crypto.NewKey(),
@@ -155,8 +155,8 @@ func TestCommonInviter(t *testing.T) {
 
 // TestSameInviter test that two chain holders have same inviter.
 func TestSameInviter(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	assert.That(SameInviter(alice.Chain, bob.Chain))
 	assert.That(!SameInviter(testChain, bob.Chain))
 
@@ -171,8 +171,8 @@ func TestSameInviter(t *testing.T) {
 }
 
 func TestHops(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	h, cLevel := alice.Hops(bob.Chain)
 	assert.Equal(2, h)
 	assert.Equal(0, cLevel)
@@ -212,8 +212,8 @@ func TestHops(t *testing.T) {
 // any data which could be used to correlate the use of the chain. Chain is only
 // for the proofing the position in the Invitation Chain.
 func TestChallengeInvitee(t *testing.T) {
-	assert.PushTester(t)
-	defer assert.PopTester()
+	defer assert.PushTester(t)()
+
 	// chain leaf is the only part who has the private key for the leaf, so
 	// it can response the challenge properly.
 
