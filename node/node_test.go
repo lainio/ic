@@ -67,7 +67,7 @@ func TestInvite(t *testing.T) {
 	alice.Node = root1.Invite(alice.Node, root1.Key, alice.PubKey, 1)
 	assert.Equal(alice.Len(), 1)
 	{
-		c := alice.Node.Chains[0]
+		c := alice.Chains[0]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.Verify())
 	}
@@ -75,7 +75,7 @@ func TestInvite(t *testing.T) {
 	bob.Node = alice.Invite(bob.Node, alice.Key, bob.PubKey, 1)
 	assert.Equal(bob.Len(), 1)
 	{
-		c := bob.Node.Chains[0]
+		c := bob.Chains[0]
 		assert.SLen(c.Blocks, 3) // we know how long the chain is now
 		assert.That(c.Verify())
 	}
@@ -88,7 +88,7 @@ func TestInvite(t *testing.T) {
 	carol.Node = root2.Invite(carol.Node, root2.Key, carol.PubKey, 1)
 	assert.Equal(carol.Len(), 1)
 	{
-		c := carol.Node.Chains[0]
+		c := carol.Chains[0]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.Verify())
 	}
@@ -102,7 +102,7 @@ func TestInvite(t *testing.T) {
 	eve.Node = dave.Invite(eve.Node, dave.Key, eve.PubKey, 1)
 	assert.Equal(eve.Len(), 1)
 	{
-		c := eve.Node.Chains[0]
+		c := eve.Chains[0]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.Verify())
 	}
@@ -112,7 +112,7 @@ func TestInvite(t *testing.T) {
 	dave.Node = root2.Invite(dave.Node, root2.Key, dave.PubKey, 1)
 	assert.Equal(dave.Len(), 2)
 	{
-		c := dave.Node.Chains[1]
+		c := dave.Chains[1]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.Verify())
 	}
@@ -177,13 +177,13 @@ func TestWebOfTrustInfo(t *testing.T) {
 	root3.Node = NewRootNode(root3.PubKey)
 	heidi := entity{Key: crypto.NewKey()}
 	heidi.Node = root3.Invite(heidi.Node, root3.Key, heidi.PubKey, 1)
-	assert.SLen(heidi.Node.Chains, 1)
-	assert.SLen(heidi.Node.Chains[0].Blocks, 2, "root = root3")
+	assert.SLen(heidi.Chains, 1)
+	assert.SLen(heidi.Chains[0].Blocks, 2, "root = root3")
 
 	// verify Eve's situation:
-	assert.SLen(eve.Node.Chains, 2)
-	assert.SLen(eve.Node.Chains[0].Blocks, 2, "root == dave")
-	assert.Equal(3, len(eve.Node.Chains[1].Blocks), "root is root2")
+	assert.SLen(eve.Chains, 2)
+	assert.SLen(eve.Chains[0].Blocks, 2, "root == dave")
+	assert.Equal(3, len(eve.Chains[1].Blocks), "root is root2")
 
 	heidi.Node = eve.Invite(heidi.Node, eve.Key, heidi.PubKey, 1)
 	// next dave's invitation doesn't add any new chains because there is no
