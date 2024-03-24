@@ -6,7 +6,6 @@ package crypto
 import (
 	"crypto"
 	"crypto/ecdsa"
-	"crypto/ed25519"
 	"crypto/elliptic"
 	"crypto/rand"
 	"math/big"
@@ -18,9 +17,11 @@ import (
 	"github.com/lainio/err2/try"
 )
 
-var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50ac2f32856844") // TODO: from where we get the key!
+// TODO: from where we get the key!
+var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50ac2f32856844")
 
 type PubKey = []byte
+type ID = []byte
 
 func VerifySign(pubKey PubKey, msg []byte, sig Signature) bool {
 	var pubK webauthncose.EC2PublicKeyData
@@ -36,40 +37,12 @@ func VerifySign(pubKey PubKey, msg []byte, sig Signature) bool {
 	}
 
 	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)
-	//return ed25519.Verify(pubK, msg, sig)
 }
 
-// TODO: we need a KeyHandle
-// TODO: this is a problem now. We need a design to separate Priv and PubKeys:
-// - let's try to find where privkey is in use and just separate them to API
-// -
 type Key = enclave.KeyHandle
 
 func NewKey() Key {
 	return try.To1(myStore.NewKeyHandle())
-}
-
-// KeyOld is a struct for full key.
-type KeyOld struct {
-	PrivKey []byte
-	PubKey
-}
-
-func NewKeyB() KeyOld {
-	pub, priv := try.To2(ed25519.GenerateKey(nil))
-	return KeyOld{PrivKey: priv, PubKey: pub}
-}
-
-func (k KeyOld) PubKeyEqual(pubKey PubKey) bool {
-	return EqualBytes(k.PubKey, pubKey)
-}
-
-func (k KeyOld) Sign(h []byte) Signature {
-	return ed25519.Sign(k.PrivKey, h)
-}
-
-func (k KeyOld) VerifySign(msg []byte, sig Signature) bool {
-	return VerifySign(k.PubKey, msg, sig)
 }
 
 func RandSlice(n int) []byte {
