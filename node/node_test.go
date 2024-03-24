@@ -45,6 +45,7 @@ func setup() {
 	carol.Key = crypto.NewKey()
 	dave.Key = crypto.NewKey()
 	eve.Key = crypto.NewKey()
+	// TODO: comment frank init out to test err2
 	frank.Key = crypto.NewKey()
 	grace.Key = crypto.NewKey()
 
@@ -146,6 +147,9 @@ func TestCommonChains(t *testing.T) {
 func TestWebOfTrustInfo(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	//assert.That(false)
+	//panic(1)
+	//_, _ = frank.CBORPublicKey()
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)
 

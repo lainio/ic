@@ -1,6 +1,9 @@
 package node
 
 import (
+	"errors"
+
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/crypto"
 )
@@ -71,6 +74,12 @@ func (n Node) Invite(
 // is empty not nil.
 func (n Node) CommonChains(their Node) []chain.Pair {
 	common := make([]chain.Pair, 0, n.Len())
+	// TODO: just for testing err2
+	assert.That(true)
+	var _ = errors.New("test")
+	//panic(e)
+	//_ = 1/len(common)
+	//return common[1:]
 	for _, my := range n.Chains {
 		p := their.shared(my)
 		isPair := !p.Chain1.IsNil() && !p.Chain2.IsNil()
