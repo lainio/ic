@@ -10,7 +10,7 @@ import (
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
-	"github.com/lainio/ic/crypto"
+	"github.com/lainio/ic/key"
 )
 
 // NotConnected tells that chains aren't connected at all, i.e. we don't have
@@ -87,7 +87,9 @@ func Hops(lhs, rhs Chain) (int, int) {
 	return lhs.Hops(rhs)
 }
 
-func NewRootChain(rootPubKey crypto.PubKey) Chain {
+// NewRootChain construts a new root chain.
+// TODO: use Key Handle?
+func NewRootChain(rootPubKey key.Public) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
 		HashToPrev:        nil,
@@ -119,8 +121,8 @@ func (c Chain) Bytes() []byte {
 // the new link/block which includes inviteesPubKey and position in the chain.
 // A new chain is returned. The chain will be given for the invitee.
 func (c Chain) Invite(
-	invitersKey crypto.Key,
-	inviteesPubKey crypto.PubKey,
+	invitersKey key.Handle,
+	inviteesPubKey key.Public,
 	position int,
 ) (nc Chain) {
 	assert.That(c.isLeaf(invitersKey), "only leaf can invite")
@@ -164,11 +166,11 @@ func (c Chain) Len() int {
 	return len(c.Blocks)
 }
 
-func (c Chain) isLeaf(invitersKey crypto.Key) bool {
-	return crypto.EqualBytes(c.LeafPubKey(), try.To1(invitersKey.CBORPublicKey()))
+func (c Chain) isLeaf(invitersKey key.Handle) bool {
+	return key.EqualBytes(c.LeafPubKey(), try.To1(invitersKey.CBORPublicKey()))
 }
 
-func (c Chain) LeafPubKey() crypto.PubKey {
+func (c Chain) LeafPubKey() key.Public {
 	assert.That(c.Len() > 0, "chain cannot be empty")
 
 	return c.lastBlock().InviteePubKey
@@ -187,7 +189,7 @@ func (c Chain) Verify() bool {
 		return true // root block is valid always
 	}
 
-	var invitersPubKey crypto.PubKey
+	var invitersPubKey key.Public
 	// start with the root key
 	invitersPubKey = c.firstBlock().InviteePubKey
 
@@ -220,11 +222,11 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 // Most common cases is that caller of the function implements the closure where
 // it calls other party over the network to sign the challenge which is readily
 // build and randomized.
-func (c Chain) Challenge(pinCode int, f func(d []byte) crypto.Signature) bool {
+func (c Chain) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
 	pubKey := c.lastBlock().InviteePubKey
 	challengeBlock, sigBlock := NewVerifyBlock(pinCode)
 	sig := f(challengeBlock.Bytes())
-	return crypto.VerifySign(pubKey, sigBlock.Bytes(), sig)
+	return key.VerifySign(pubKey, sigBlock.Bytes(), sig)
 }
 
 func (c Chain) firstBlock() Block {

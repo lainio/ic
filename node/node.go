@@ -5,7 +5,7 @@ import (
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/chain"
-	"github.com/lainio/ic/crypto"
+	"github.com/lainio/ic/key"
 )
 
 type Node struct {
@@ -31,7 +31,9 @@ func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 	return n1.WebOfTrustInfo(n2)
 }
 
-func NewRootNode(pubKey crypto.PubKey) Node {
+// NewRootNode constructs a new rot node.
+// TODO: start using KeyHandle.
+func NewRootNode(pubKey key.Public) Node {
 	n := Node{Chains: make([]chain.Chain, 1, 12)}
 	n.Chains[0] = chain.NewRootChain(pubKey)
 	return n
@@ -44,8 +46,8 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 
 func (n Node) Invite(
 	inviteesNode Node,
-	invitersKey crypto.Key,
-	inviteesPubKey crypto.PubKey,
+	invitersKey key.Handle,
+	inviteesPubKey key.Public,
 	position int,
 ) (
 	rn Node,

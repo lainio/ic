@@ -6,7 +6,7 @@ import (
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
-	"github.com/lainio/ic/crypto"
+	"github.com/lainio/ic/key"
 )
 
 var (
@@ -15,11 +15,11 @@ var (
 
 	//  first chain for generic chain tests
 	testChain           Chain
-	rootKey, inviteeKey crypto.Key
+	rootKey, inviteeKey key.Handle
 )
 
 type entity struct {
-	crypto.Key
+	key.Handle
 	Chain
 }
 
@@ -34,28 +34,28 @@ func teardown() {}
 
 func setup() {
 	// general chain for tests
-	rootKey = crypto.NewKey()
+	rootKey = key.NewKey()
 	testChain = NewRootChain(try.To1(rootKey.CBORPublicKey()))
-	inviteeKey = crypto.NewKey()
+	inviteeKey = key.NewKey()
 	level := 1
 	testChain = testChain.Invite(rootKey, try.To1(inviteeKey.CBORPublicKey()), level)
 
 	// root, alice, bob setup
-	root.Key = crypto.NewKey()
-	alice.Key = crypto.NewKey()
-	bob.Key = crypto.NewKey()
+	root.Handle = key.NewKey()
+	alice.Handle = key.NewKey()
+	bob.Handle = key.NewKey()
 
 	root.Chain = NewRootChain(try.To1(root.CBORPublicKey()))
 
 	// root invites alice and bod but they have no invitation between
-	alice.Chain = root.Invite(root.Key, try.To1(alice.CBORPublicKey()), 1)
-	bob.Chain = root.Invite(root.Key, try.To1(bob.CBORPublicKey()), 1)
+	alice.Chain = root.Invite(root.Handle, try.To1(alice.CBORPublicKey()), 1)
+	bob.Chain = root.Invite(root.Handle, try.To1(bob.CBORPublicKey()), 1)
 }
 
 func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	c := NewRootChain(try.To1(crypto.NewKey().CBORPublicKey()))
+	c := NewRootChain(try.To1(key.NewKey().CBORPublicKey()))
 	//new(Chain).LeafPubKey()
 	assert.SLen(c.Blocks, 1)
 }
@@ -87,7 +87,7 @@ func TestVerifyChain(t *testing.T) {
 	assert.SLen(testChain.Blocks, 2)
 	assert.That(testChain.Verify())
 
-	newInvitee := crypto.NewKey()
+	newInvitee := key.NewKey()
 	level := 3
 	testChain = testChain.Invite(inviteeKey, try.To1(newInvitee.CBORPublicKey()), level)
 
@@ -104,9 +104,9 @@ func TestInvitation(t *testing.T) {
 	assert.That(bob.Chain.Verify())
 
 	cecilia := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
 	assert.That(cecilia.Chain.Verify())
 	assert.That(!SameRoot(testChain, cecilia.Chain), "we have two different roots")
@@ -121,34 +121,34 @@ func TestCommonInviter(t *testing.T) {
 
 	// alice and bod have common root
 	cecilia := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
 	// bob intives cecilia
-	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
 	assert.That(cecilia.Chain.Verify())
 
 	david := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
 	// alice invites david
-	david.Chain = alice.Invite(alice.Key, try.To1(david.CBORPublicKey()), 1)
+	david.Chain = alice.Invite(alice.Handle, try.To1(david.CBORPublicKey()), 1)
 
 	assert.Equal(0, CommonInviter(cecilia.Chain, david.Chain),
 		"cecilia and david have only common root")
 	edvin := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
-	edvin.Chain = alice.Invite(alice.Key, try.To1(edvin.CBORPublicKey()), 1)
+	edvin.Chain = alice.Invite(alice.Handle, try.To1(edvin.CBORPublicKey()), 1)
 	assert.Equal(1, CommonInviter(edvin.Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
-	edvin2Chain := alice.Chain.Invite(alice.Key, try.To1(crypto.NewKey().CBORPublicKey()), 1)
+	edvin2Chain := alice.Chain.Invite(alice.Handle, try.To1(key.NewKey().CBORPublicKey()), 1)
 	assert.Equal(1, CommonInviter(edvin2Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
-	fred1Chain := edvin.Invite(edvin.Key, try.To1(crypto.NewKey().CBORPublicKey()), 1)
-	fred2Chain := edvin.Invite(edvin.Key, try.To1(crypto.NewKey().CBORPublicKey()), 1)
+	fred1Chain := edvin.Invite(edvin.Handle, try.To1(key.NewKey().CBORPublicKey()), 1)
+	fred2Chain := edvin.Invite(edvin.Handle, try.To1(key.NewKey().CBORPublicKey()), 1)
 	assert.Equal(2, CommonInviter(fred2Chain, fred1Chain),
 		"edvin is at level 2")
 }
@@ -161,9 +161,9 @@ func TestSameInviter(t *testing.T) {
 	assert.That(!SameInviter(testChain, bob.Chain))
 
 	cecilia := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
 	assert.That(cecilia.Chain.Verify())
 	assert.That(bob.IsInviterFor(cecilia.Chain))
@@ -178,25 +178,25 @@ func TestHops(t *testing.T) {
 	assert.Equal(0, cLevel)
 
 	cecilia := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, try.To1(cecilia.CBORPublicKey()), 1)
 	h, cLevel = alice.Hops(cecilia.Chain)
 	assert.Equal(3, h)
 	assert.Equal(0, cLevel)
 
 	david := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
-	david.Chain = bob.Invite(bob.Key, try.To1(david.CBORPublicKey()), 1)
+	david.Chain = bob.Invite(bob.Handle, try.To1(david.CBORPublicKey()), 1)
 	h, cLevel = david.Hops(cecilia.Chain)
 	assert.Equal(2, h)
 	assert.Equal(1, cLevel)
 
 	edvin := entity{
-		Key: crypto.NewKey(),
+		Handle: key.NewKey(),
 	}
-	edvin.Chain = david.Invite(david.Key, try.To1(edvin.CBORPublicKey()), 1)
+	edvin.Chain = david.Invite(david.Handle, try.To1(edvin.CBORPublicKey()), 1)
 	h, cLevel = edvin.Hops(cecilia.Chain)
 	assert.Equal(3, h)
 	assert.Equal(1, cLevel)
@@ -224,7 +224,7 @@ func TestChallengeInvitee(t *testing.T) {
 	// method for Alice's Chain to let Alice proof that she controls the chain
 	pinCode := 1234
 	assert.That(alice.Challenge(pinCode,
-		func(d []byte) crypto.Signature {
+		func(d []byte) key.Signature {
 			// In real world usage here we would send the d for Alice's signing
 			// over the network.
 			b := NewBlockFromData(d)
@@ -235,7 +235,7 @@ func TestChallengeInvitee(t *testing.T) {
 		},
 	))
 	assert.That(bob.Challenge(pinCode,
-		func(d []byte) crypto.Signature {
+		func(d []byte) key.Signature {
 			b := NewBlockFromData(d)
 			b.Position = pinCode
 			d = b.Bytes()
@@ -244,7 +244,7 @@ func TestChallengeInvitee(t *testing.T) {
 	))
 	// Test that if alice tries to sign bob's challenge it won't work.
 	assert.ThatNot(bob.Challenge(pinCode,
-		func(d []byte) crypto.Signature {
+		func(d []byte) key.Signature {
 			b := NewBlockFromData(d)
 			b.Position = pinCode
 			d = b.Bytes()
@@ -254,7 +254,7 @@ func TestChallengeInvitee(t *testing.T) {
 	))
 	// Wrong pinCode
 	assert.ThatNot(bob.Challenge(pinCode+1,
-		func(d []byte) crypto.Signature {
+		func(d []byte) key.Signature {
 			b := NewBlockFromData(d)
 			b.Position = pinCode
 			d = b.Bytes()

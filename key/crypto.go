@@ -1,7 +1,7 @@
 // Package crypto implements need helpers for invitation chain use. We haven't
 // yet thought about interface or other stuff. We just build the minimum for the
 // PoC.
-package crypto
+package key
 
 import (
 	"crypto"
@@ -20,10 +20,11 @@ import (
 // TODO: from where we get the key!
 var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50ac2f32856844")
 
-type PubKey = []byte
+type Public = []byte
 type ID = []byte
+type Handle = enclave.KeyHandle
 
-func VerifySign(pubKey PubKey, msg []byte, sig Signature) bool {
+func VerifySign(pubKey Public, msg []byte, sig Signature) bool {
 	var pubK webauthncose.EC2PublicKeyData
 	try.To(cbor.Unmarshal(pubKey, &pubK))
 
@@ -39,9 +40,7 @@ func VerifySign(pubKey PubKey, msg []byte, sig Signature) bool {
 	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)
 }
 
-type Key = enclave.KeyHandle
-
-func NewKey() Key {
+func NewKey() Handle {
 	return try.To1(myStore.NewKeyHandle())
 }
 
