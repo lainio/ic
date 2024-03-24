@@ -42,7 +42,7 @@ func VerifySign(pubKey PubKey, msg []byte, sig Signature) bool {
 // TODO: we need a KeyHandle
 // TODO: this is a problem now. We need a design to separate Priv and PubKeys:
 // - let's try to find where privkey is in use and just separate them to API
-// - 
+// -
 type Key = enclave.KeyHandle
 
 func NewKey() Key {
