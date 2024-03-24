@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/crypto"
 )
 
@@ -35,27 +36,27 @@ func teardown() {
 func setup() {
 	// general chain for tests
 	rootKey = crypto.NewKey()
-	testChain = NewRootChain(rootKey.PubKey)
+	testChain = NewRootChain(try.To1(rootKey.CBORPublicKey()))
 	inviteeKey = crypto.NewKey()
 	level := 1
-	testChain = testChain.Invite(rootKey, inviteeKey.PubKey, level)
+	testChain = testChain.Invite(rootKey, try.To1(inviteeKey.CBORPublicKey()), level)
 
 	// root, alice, bob setup
 	root.Key = crypto.NewKey()
 	alice.Key = crypto.NewKey()
 	bob.Key = crypto.NewKey()
 
-	root.Chain = NewRootChain(root.PubKey)
+	root.Chain = NewRootChain(try.To1(root.CBORPublicKey()))
 
 	// root invites alice and bod but they have no invitation between
-	alice.Chain = root.Invite(root.Key, alice.PubKey, 1)
-	bob.Chain = root.Invite(root.Key, bob.PubKey, 1)
+	alice.Chain = root.Invite(root.Key, try.To1(alice.CBORPublicKey()), 1)
+	bob.Chain = root.Invite(root.Key, try.To1(bob.CBORPublicKey()), 1)
 }
 
 func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	c := NewRootChain(crypto.NewKey().PubKey)
+	c := NewRootChain(try.To1(crypto.NewKey().CBORPublicKey()))
 	//new(Chain).LeafPubKey()
 	assert.SLen(c.Blocks, 1)
 }
@@ -89,7 +90,7 @@ func TestVerifyChain(t *testing.T) {
 
 	newInvitee := crypto.NewKey()
 	level := 3
-	testChain = testChain.Invite(inviteeKey, newInvitee.PubKey, level)
+	testChain = testChain.Invite(inviteeKey, try.To1(newInvitee.CBORPublicKey()), level)
 
 	assert.SLen(testChain.Blocks, 3)
 	assert.That(testChain.Verify())
@@ -99,16 +100,16 @@ func TestInvitation(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(alice.Blocks, 2)
-	assert.That(alice.Verify())
+	assert.That(alice.Chain.Verify())
 	assert.SLen(bob.Blocks, 2)
-	assert.That(bob.Verify())
+	assert.That(bob.Chain.Verify())
 
 	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
+	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
-	assert.That(cecilia.Verify())
+	assert.That(cecilia.Chain.Verify())
 	assert.That(!SameRoot(testChain, cecilia.Chain), "we have two different roots")
 	assert.That(SameRoot(alice.Chain, cecilia.Chain))
 }
@@ -124,31 +125,31 @@ func TestCommonInviter(t *testing.T) {
 		Key: crypto.NewKey(),
 	}
 	// bob intives cecilia
-	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
+	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
-	assert.That(cecilia.Verify())
+	assert.That(cecilia.Chain.Verify())
 
 	david := entity{
 		Key: crypto.NewKey(),
 	}
 	// alice invites david
-	david.Chain = alice.Invite(alice.Key, david.PubKey, 1)
+	david.Chain = alice.Invite(alice.Key, try.To1(david.CBORPublicKey()), 1)
 
 	assert.Equal(0, CommonInviter(cecilia.Chain, david.Chain),
 		"cecilia and david have only common root")
 	edvin := entity{
 		Key: crypto.NewKey(),
 	}
-	edvin.Chain = alice.Invite(alice.Key, edvin.PubKey, 1)
+	edvin.Chain = alice.Invite(alice.Key, try.To1(edvin.CBORPublicKey()), 1)
 	assert.Equal(1, CommonInviter(edvin.Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
-	edvin2Chain := alice.Chain.Invite(alice.Key, crypto.NewKey().PubKey, 1)
+	edvin2Chain := alice.Chain.Invite(alice.Key, try.To1(crypto.NewKey().CBORPublicKey()), 1)
 	assert.Equal(1, CommonInviter(edvin2Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
-	fred1Chain := edvin.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
-	fred2Chain := edvin.Invite(edvin.Key, crypto.NewKey().PubKey, 1)
+	fred1Chain := edvin.Invite(edvin.Key, try.To1(crypto.NewKey().CBORPublicKey()), 1)
+	fred2Chain := edvin.Invite(edvin.Key, try.To1(crypto.NewKey().CBORPublicKey()), 1)
 	assert.Equal(2, CommonInviter(fred2Chain, fred1Chain),
 		"edvin is at level 2")
 }
@@ -163,9 +164,9 @@ func TestSameInviter(t *testing.T) {
 	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
+	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
-	assert.That(cecilia.Verify())
+	assert.That(cecilia.Chain.Verify())
 	assert.That(bob.IsInviterFor(cecilia.Chain))
 	assert.That(!alice.IsInviterFor(cecilia.Chain))
 }
@@ -180,7 +181,7 @@ func TestHops(t *testing.T) {
 	cecilia := entity{
 		Key: crypto.NewKey(),
 	}
-	cecilia.Chain = bob.Invite(bob.Key, cecilia.PubKey, 1)
+	cecilia.Chain = bob.Invite(bob.Key, try.To1(cecilia.CBORPublicKey()), 1)
 	h, cLevel = alice.Hops(cecilia.Chain)
 	assert.Equal(3, h)
 	assert.Equal(0, cLevel)
@@ -188,7 +189,7 @@ func TestHops(t *testing.T) {
 	david := entity{
 		Key: crypto.NewKey(),
 	}
-	david.Chain = bob.Invite(bob.Key, david.PubKey, 1)
+	david.Chain = bob.Invite(bob.Key, try.To1(david.CBORPublicKey()), 1)
 	h, cLevel = david.Hops(cecilia.Chain)
 	assert.Equal(2, h)
 	assert.Equal(1, cLevel)
@@ -196,7 +197,7 @@ func TestHops(t *testing.T) {
 	edvin := entity{
 		Key: crypto.NewKey(),
 	}
-	edvin.Chain = david.Invite(david.Key, edvin.PubKey, 1)
+	edvin.Chain = david.Invite(david.Key, try.To1(edvin.CBORPublicKey()), 1)
 	h, cLevel = edvin.Hops(cecilia.Chain)
 	assert.Equal(3, h)
 	assert.Equal(1, cLevel)
@@ -230,7 +231,7 @@ func TestChallengeInvitee(t *testing.T) {
 			b := NewBlockFromData(d)
 			b.Position = pinCode
 			d = b.Bytes()
-			return alice.Sign(d)
+			return try.To1(alice.Sign(d))
 		},
 	))
 	assert.That(bob.Challenge(pinCode,
@@ -238,7 +239,7 @@ func TestChallengeInvitee(t *testing.T) {
 			b := NewBlockFromData(d)
 			b.Position = pinCode
 			d = b.Bytes()
-			return bob.Sign(d)
+			return try.To1(bob.Sign(d))
 		},
 	))
 	// Test that if alice tries to sign bob's challenge it won't work.
@@ -248,7 +249,7 @@ func TestChallengeInvitee(t *testing.T) {
 			b.Position = pinCode
 			d = b.Bytes()
 			// NOTE Alice canot sign bob's challenge
-			return alice.Sign(d)
+			return try.To1(alice.Sign(d))
 		},
 	))
 	// Wrong pinCode
@@ -257,7 +258,7 @@ func TestChallengeInvitee(t *testing.T) {
 			b := NewBlockFromData(d)
 			b.Position = pinCode
 			d = b.Bytes()
-			return bob.Sign(d)
+			return try.To1(bob.Sign(d))
 		},
 	))
 }

@@ -130,7 +130,7 @@ func (c Chain) Invite(
 		InviteePubKey: inviteesPubKey,
 		Position:      position,
 	}
-	newBlock.InvitersSignature = invitersKey.Sign(newBlock.Bytes())
+	newBlock.InvitersSignature = try.To1(invitersKey.Sign(newBlock.Bytes()))
 
 	nc = c.Clone()
 	nc.Blocks = append(nc.Blocks, newBlock)
@@ -165,7 +165,7 @@ func (c Chain) Len() int {
 }
 
 func (c Chain) isLeaf(invitersKey crypto.Key) bool {
-	return invitersKey.PubKeyEqual(c.LeafPubKey())
+	return crypto.EqualBytes(c.LeafPubKey(), try.To1(invitersKey.CBORPublicKey()))
 }
 
 func (c Chain) LeafPubKey() crypto.PubKey {
