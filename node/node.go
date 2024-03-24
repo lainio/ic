@@ -41,7 +41,7 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 
 func (n Node) Invite(
 	inviteesNode Node,
-	invitersKey crypto.Key, // TODO: KeyHandle to hide KMS
+	invitersKey crypto.Key,
 	inviteesPubKey crypto.PubKey,
 	position int,
 ) (
