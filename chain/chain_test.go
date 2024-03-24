@@ -30,8 +30,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func teardown() {
-}
+func teardown() {}
 
 func setup() {
 	// general chain for tests
@@ -229,6 +228,7 @@ func TestChallengeInvitee(t *testing.T) {
 			// In real world usage here we would send the d for Alice's signing
 			// over the network.
 			b := NewBlockFromData(d)
+			// pinCode is transported out-of-band and entered before signing
 			b.Position = pinCode
 			d = b.Bytes()
 			return try.To1(alice.Sign(d))
