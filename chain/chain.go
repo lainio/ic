@@ -88,7 +88,7 @@ func Hops(lhs, rhs Chain) (int, int) {
 }
 
 // NewRootChain construts a new root chain.
-// TODO: use Key Handle?
+// TODO: use Key Handle? Yes, InviteeID field is missing.
 func NewRootChain(rootPubKey key.Public) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
@@ -184,6 +184,8 @@ func (c Chain) hashToLeaf() []byte {
 	return ha[:]
 }
 
+// Verify verifies chains signatures, from root to the leaf. TODO: maybe rename
+// to VerifySignatures, if we have some other needs to verify?
 func (c Chain) Verify() bool {
 	if c.Len() == 1 {
 		return true // root block is valid always

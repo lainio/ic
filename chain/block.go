@@ -8,6 +8,10 @@ import (
 	"github.com/lainio/ic/key"
 )
 
+// Block is the block in our invitation Chain (IC). Note that InviteeID and
+// InviteePubKey are the important fields, because they must be same at the node
+// level. They verify that otherwise separated ICs belong to the same node.
+// TODO: Should be merge InviteeID&InviteePubKey to same base type like KeyInfo?
 type Block struct {
 	HashToPrev        []byte        // check the size later
 	InviteePubKey     key.Public    // TODO: check the type later?
