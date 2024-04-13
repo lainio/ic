@@ -22,7 +22,22 @@ var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50a
 
 type Public = []byte
 type ID = []byte
+
+// Handle is key.Handle that has secure access to private key as well. But
+// private key is always hided. And that's why we have only Handle to key pair.
 type Handle = enclave.KeyHandle
+
+// Info is key.Info that binds and transport both key's ID and its public key
+// together. TODO: start to use this in Chain?
+type Info struct {
+	ID
+	Public
+}
+
+func InfoFromHandle(h Handle) Info {
+	pubK := try.To1(h.CBORPublicKey())
+	return Info{ID: h.ID(), Public: pubK}
+}
 
 func VerifySign(pubKey Public, msg []byte, sig Signature) bool {
 	var pubK webauthncose.EC2PublicKeyData
