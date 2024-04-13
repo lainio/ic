@@ -65,7 +65,7 @@ func TestRead(t *testing.T) {
 
 	c2 := testChain.Clone()
 	assert.SLen(c2.Blocks, 2)
-	assert.That(c2.Verify())
+	assert.That(c2.VerifySign())
 }
 
 func TestVerifyChainFail(t *testing.T) {
@@ -73,42 +73,42 @@ func TestVerifyChainFail(t *testing.T) {
 
 	c2 := testChain.Clone()
 	assert.SLen(c2.Blocks, 2)
-	assert.That(c2.Verify())
+	assert.That(c2.VerifySign())
 
 	b2 := c2.Blocks[1]
 	b2.InvitersSignature[len(b2.InvitersSignature)-1] += 0x01
 
-	assert.That(!c2.Verify())
+	assert.That(!c2.VerifySign())
 }
 
 func TestVerifyChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(testChain.Blocks, 2)
-	assert.That(testChain.Verify())
+	assert.That(testChain.VerifySign())
 
 	newInvitee := key.NewKey()
 	level := 3
 	testChain = testChain.Invite(inviteeKey, try.To1(newInvitee.CBORPublicKey()), level)
 
 	assert.SLen(testChain.Blocks, 3)
-	assert.That(testChain.Verify())
+	assert.That(testChain.VerifySign())
 }
 
 func TestInvitation(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(alice.Blocks, 2)
-	assert.That(alice.Chain.Verify())
+	assert.That(alice.Chain.VerifySign())
 	assert.SLen(bob.Blocks, 2)
-	assert.That(bob.Chain.Verify())
+	assert.That(bob.Chain.VerifySign())
 
 	cecilia := entity{
 		Handle: key.NewKey(),
 	}
 	cecilia.Chain = bob.Invite(bob.Handle, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
-	assert.That(cecilia.Chain.Verify())
+	assert.That(cecilia.Chain.VerifySign())
 	assert.That(!SameRoot(testChain, cecilia.Chain), "we have two different roots")
 	assert.That(SameRoot(alice.Chain, cecilia.Chain))
 }
@@ -126,7 +126,7 @@ func TestCommonInviter(t *testing.T) {
 	// bob intives cecilia
 	cecilia.Chain = bob.Invite(bob.Handle, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
-	assert.That(cecilia.Chain.Verify())
+	assert.That(cecilia.Chain.VerifySign())
 
 	david := entity{
 		Handle: key.NewKey(),
@@ -165,7 +165,7 @@ func TestSameInviter(t *testing.T) {
 	}
 	cecilia.Chain = bob.Invite(bob.Handle, try.To1(cecilia.CBORPublicKey()), 1)
 	assert.SLen(cecilia.Blocks, 3)
-	assert.That(cecilia.Chain.Verify())
+	assert.That(cecilia.Chain.VerifySign())
 	assert.That(bob.IsInviterFor(cecilia.Chain))
 	assert.That(!alice.IsInviterFor(cecilia.Chain))
 }

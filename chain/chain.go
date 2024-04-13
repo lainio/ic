@@ -44,14 +44,14 @@ func (p Pair) CommonInviter() int {
 var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
-	if !c1.Verify() || !c2.Verify() {
+	if !c1.VerifySign() || !c2.VerifySign() {
 		return false
 	}
 	return EqualBlocks(c1.firstBlock(), c2.firstBlock())
 }
 
 func SameInviter(c1, c2 Chain) bool {
-	if !c1.Verify() || !c2.Verify() {
+	if !c1.VerifySign() || !c2.VerifySign() {
 		return false
 	}
 	return EqualBlocks(
@@ -184,9 +184,8 @@ func (c Chain) hashToLeaf() []byte {
 	return ha[:]
 }
 
-// Verify verifies chains signatures, from root to the leaf. TODO: maybe rename
-// to VerifySignatures, if we have some other needs to verify?
-func (c Chain) Verify() bool {
+// VerifySign verifies chains signatures, from root to the leaf.
+func (c Chain) VerifySign() bool {
 	if c.Len() == 1 {
 		return true // root block is valid always
 	}
@@ -210,7 +209,7 @@ func (c Chain) Clone() Chain {
 }
 
 func (c Chain) IsInviterFor(invitee Chain) bool {
-	if !invitee.Verify() {
+	if !invitee.VerifySign() {
 		return false
 	}
 
