@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/lainio/err2/assert"
-	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/key"
 )
@@ -49,18 +48,18 @@ func setup() {
 	frank.Handle = key.NewKey()
 	grace.Handle = key.NewKey()
 
-	root1.Node = NewRootNode(try.To1(root1.CBORPublicKey()))
-	root2.Node = NewRootNode(try.To1(root2.CBORPublicKey()))
+	root1.Node = NewRootNode(key.InfoFromHandle(root1))
+	root2.Node = NewRootNode(key.InfoFromHandle(root2))
 }
 
 func TestNewRootNode(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	aliceNode := NewRootNode(try.To1(alice.CBORPublicKey()))
+	aliceNode := NewRootNode(key.InfoFromHandle(alice))
 	assert.SLen(aliceNode.Chains, 1)
 	assert.SLen(aliceNode.Chains[0].Blocks, 1)
 
-	bobNode := NewRootNode(try.To1(bob.CBORPublicKey()))
+	bobNode := NewRootNode(key.InfoFromHandle(bob))
 	assert.SLen(bobNode.Chains, 1)
 }
 
@@ -68,7 +67,7 @@ func TestInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
-	alice.Node = root1.Invite(alice.Node, root1.Handle, try.To1(alice.CBORPublicKey()), 1)
+	alice.Node = root1.Invite(alice.Node, root1.Handle, key.InfoFromHandle(alice), 1)
 	assert.Equal(alice.Len(), 1)
 	{
 		c := alice.Chains[0]
@@ -76,7 +75,7 @@ func TestInvite(t *testing.T) {
 		assert.That(c.VerifySign())
 	}
 
-	bob.Node = alice.Invite(bob.Node, alice.Handle, try.To1(bob.CBORPublicKey()), 1)
+	bob.Node = alice.Invite(bob.Node, alice.Handle, key.InfoFromHandle(bob), 1)
 	assert.Equal(bob.Len(), 1)
 	{
 		c := bob.Chains[0]
@@ -89,7 +88,7 @@ func TestInvite(t *testing.T) {
 	assert.SNotNil(common.Blocks)
 
 	// Root2 invites Carol here
-	carol.Node = root2.Invite(carol.Node, root2.Handle, try.To1(carol.CBORPublicKey()), 1)
+	carol.Node = root2.Invite(carol.Node, root2.Handle, key.InfoFromHandle(carol), 1)
 	assert.Equal(carol.Len(), 1)
 	{
 		c := carol.Chains[0]
@@ -102,8 +101,8 @@ func TestInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave.Node = NewRootNode(try.To1(dave.CBORPublicKey()))
-	eve.Node = dave.Invite(eve.Node, dave.Handle, try.To1(eve.CBORPublicKey()), 1)
+	dave.Node = NewRootNode(key.InfoFromHandle(dave))
+	eve.Node = dave.Invite(eve.Node, dave.Handle, key.InfoFromHandle(eve), 1)
 	assert.Equal(eve.Len(), 1)
 	{
 		c := eve.Chains[0]
@@ -113,7 +112,7 @@ func TestInvite(t *testing.T) {
 
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
 	// Eve!
-	dave.Node = root2.Invite(dave.Node, root2.Handle, try.To1(dave.CBORPublicKey()), 1)
+	dave.Node = root2.Invite(dave.Node, root2.Handle, key.InfoFromHandle(dave), 1)
 	assert.Equal(dave.Len(), 2)
 	{
 		c := dave.Chains[1]
@@ -129,7 +128,7 @@ func TestInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// .. so Carol can invite Eve
-	eve.Node = carol.Invite(eve.Node, carol.Handle, try.To1(eve.CBORPublicKey()), 1)
+	eve.Node = carol.Invite(eve.Node, carol.Handle, key.InfoFromHandle(eve), 1)
 	assert.Equal(eve.Len(), 2)
 
 	// now Eve has common chain with Root1 as well
@@ -161,10 +160,10 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(chain.NotConnected, wot.CommonInvider)
 	assert.Equal(chain.NotConnected, wot.Hops)
 
-	frank.Node = alice.Invite(frank.Node, alice.Handle, try.To1(frank.CBORPublicKey()), 1)
+	frank.Node = alice.Invite(frank.Node, alice.Handle, key.InfoFromHandle(frank), 1)
 	assert.Equal(frank.Len(), 1)
 	assert.Equal(alice.Len(), 1)
-	grace.Node = bob.Invite(grace.Node, bob.Handle, try.To1(grace.CBORPublicKey()), 1)
+	grace.Node = bob.Invite(grace.Node, bob.Handle, key.InfoFromHandle(grace), 1)
 	assert.Equal(grace.Len(), 1)
 	assert.Equal(bob.Len(), 1)
 
@@ -181,9 +180,9 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(3, wot.Hops)
 
 	root3 := entity{Handle: key.NewKey()}
-	root3.Node = NewRootNode(try.To1(root3.CBORPublicKey()))
+	root3.Node = NewRootNode(key.InfoFromHandle(root3))
 	heidi := entity{Handle: key.NewKey()}
-	heidi.Node = root3.Invite(heidi.Node, root3.Handle, try.To1(heidi.CBORPublicKey()), 1)
+	heidi.Node = root3.Invite(heidi.Node, root3.Handle, key.InfoFromHandle(heidi), 1)
 	assert.SLen(heidi.Chains, 1)
 	assert.SLen(heidi.Chains[0].Blocks, 2, "root = root3")
 
@@ -192,10 +191,10 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.SLen(eve.Chains[0].Blocks, 2, "root == dave")
 	assert.Equal(3, len(eve.Chains[1].Blocks), "root is root2")
 
-	heidi.Node = eve.Invite(heidi.Node, eve.Handle, try.To1(heidi.CBORPublicKey()), 1)
+	heidi.Node = eve.Invite(heidi.Node, eve.Handle, key.InfoFromHandle(heidi), 1)
 	// next dave's invitation doesn't add any new chains because there is no
 	// new roots in daves chains
-	heidi.Node = dave.Invite(heidi.Node, dave.Handle, try.To1(heidi.CBORPublicKey()), 1)
+	heidi.Node = dave.Invite(heidi.Node, dave.Handle, key.InfoFromHandle(heidi), 1)
 
 	wot = NewWebOfTrust(eve.Node, heidi.Node)
 	assert.Equal(0, wot.CommonInvider, "common root is dave")

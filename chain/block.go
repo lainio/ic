@@ -13,9 +13,11 @@ import (
 // level. They verify that otherwise separated ICs belong to the same node.
 // TODO: Should be merge InviteeID&InviteePubKey to same base type like KeyInfo?
 type Block struct {
-	HashToPrev        []byte        // check the size later
-	InviteePubKey     key.Public    // TODO: check the type later?
-	InviteeID         key.ID        // Makes stateless key management possible
+	HashToPrev []byte // TODO: check the size later => 32
+	Invitee    key.Info
+
+	//InviteeID         key.ID        // Makes stateless key management possible
+
 	InvitersSignature key.Signature // TODO: check the type
 	Position          int
 }
@@ -26,13 +28,13 @@ type Block struct {
 // to Position field. By this we can send pincode by other, safe channel.
 func NewVerifyBlock(pinCode int) (Block, Block) {
 	challengeBlock := Block{
-		HashToPrev:    key.RandSlice(32),
-		InviteePubKey: key.RandSlice(32),
+		HashToPrev: key.RandSlice(32),
+		Invitee:    key.RandInfo(32),
 	}
 	return challengeBlock, Block{
-		HashToPrev:    challengeBlock.HashToPrev,
-		InviteePubKey: challengeBlock.InviteePubKey,
-		Position:      pinCode, // TODO: move to InviteeID
+		HashToPrev: challengeBlock.HashToPrev,
+		Invitee:    challengeBlock.Invitee,
+		Position:   pinCode, // TODO: move to InviteeID
 	}
 }
 
@@ -54,16 +56,17 @@ func (b Block) Bytes() []byte {
 
 func (b Block) ExcludeSign() Block {
 	newBlock := Block{
-		HashToPrev:    b.HashToPrev,
-		InviteePubKey: b.InviteePubKey,
-		Position:      b.Position,
+		HashToPrev: b.HashToPrev,
+		Invitee:    b.Invitee,
+		Position:   b.Position,
 	}
 	return newBlock
 }
 
 func EqualBlocks(b1, b2 Block) bool {
 	return key.EqualBytes(b1.HashToPrev, b2.HashToPrev) &&
-		key.EqualBytes(b1.InviteePubKey, b2.InviteePubKey) &&
+		key.EqualBytes(b1.Invitee.ID, b2.Invitee.ID) &&
+		key.EqualBytes(b1.Invitee.Public, b2.Invitee.Public) &&
 		key.EqualBytes(b1.InvitersSignature, b2.InvitersSignature) &&
 		b1.Position == b2.Position
 }

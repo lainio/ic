@@ -88,12 +88,11 @@ func Hops(lhs, rhs Chain) (int, int) {
 }
 
 // NewRootChain construts a new root chain.
-// TODO: use Key Handle? Yes, InviteeID field is missing.
-func NewRootChain(rootPubKey key.Public) Chain {
+func NewRootChain(rootPubKey key.Info) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
 		HashToPrev:        nil,
-		InviteePubKey:     rootPubKey,
+		Invitee:           rootPubKey,
 		InvitersSignature: nil,
 	}
 	return chain
@@ -122,15 +121,15 @@ func (c Chain) Bytes() []byte {
 // A new chain is returned. The chain will be given for the invitee.
 func (c Chain) Invite(
 	invitersKey key.Handle,
-	inviteesPubKey key.Public,
+	invitee key.Info,
 	position int,
 ) (nc Chain) {
 	assert.That(c.isLeaf(invitersKey), "only leaf can invite")
 
 	newBlock := Block{
-		HashToPrev:    c.hashToLeaf(),
-		InviteePubKey: inviteesPubKey,
-		Position:      position,
+		HashToPrev: c.hashToLeaf(),
+		Invitee:    invitee,
+		Position:   position,
 	}
 	newBlock.InvitersSignature = try.To1(invitersKey.Sign(newBlock.Bytes()))
 
@@ -173,7 +172,7 @@ func (c Chain) isLeaf(invitersKey key.Handle) bool {
 func (c Chain) LeafPubKey() key.Public {
 	assert.That(c.Len() > 0, "chain cannot be empty")
 
-	return c.lastBlock().InviteePubKey
+	return c.lastBlock().Invitee.Public
 }
 
 func (c Chain) hashToLeaf() []byte {
@@ -192,14 +191,14 @@ func (c Chain) VerifySign() bool {
 
 	var invitersPubKey key.Public
 	// start with the root key
-	invitersPubKey = c.firstBlock().InviteePubKey
+	invitersPubKey = c.firstBlock().Invitee.Public
 
 	for _, b := range c.Blocks[1:] {
 		if !b.VerifySign(invitersPubKey) {
 			return false
 		}
 		// the next block is signed with this block's pub key
-		invitersPubKey = b.InviteePubKey
+		invitersPubKey = b.Invitee.Public
 	}
 	return true
 }
@@ -224,7 +223,7 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 // it calls other party over the network to sign the challenge which is readily
 // build and randomized.
 func (c Chain) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
-	pubKey := c.lastBlock().InviteePubKey
+	pubKey := c.lastBlock().Invitee.Public
 	challengeBlock, sigBlock := NewVerifyBlock(pinCode)
 	sig := f(challengeBlock.Bytes())
 	return key.VerifySign(pubKey, sigBlock.Bytes(), sig)

@@ -34,9 +34,7 @@ func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 // NewRootNode constructs a new rot node.
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
-//
-// TODO: start using KeyHandle.
-func NewRootNode(pubKey key.Public) Node {
+func NewRootNode(pubKey key.Info) Node {
 	n := Node{Chains: make([]chain.Chain, 1, 12)}
 	n.Chains[0] = chain.NewRootChain(pubKey)
 	return n
@@ -50,7 +48,7 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 func (n Node) Invite(
 	inviteesNode Node,
 	invitersKey key.Handle,
-	inviteesPubKey key.Public,
+	invitee key.Info,
 	position int,
 ) (
 	rn Node,
@@ -69,7 +67,7 @@ func (n Node) Invite(
 		}
 
 		// inviter (n) has something that invitee dosen't belong yet
-		newChain := c.Invite(invitersKey, inviteesPubKey, position)
+		newChain := c.Invite(invitersKey, invitee, position)
 		rn.Chains = append(rn.Chains, newChain)
 	}
 	return rn

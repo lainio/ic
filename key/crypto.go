@@ -59,6 +59,13 @@ func NewKey() Handle {
 	return try.To1(myStore.NewKeyHandle())
 }
 
+func RandInfo(n int) Info {
+	return Info{
+		ID:     RandSlice(32),
+		Public: RandSlice(32),
+	}
+}
+
 func RandSlice(n int) []byte {
 	b := make([]byte, n)
 	r := try.To1(rand.Read(b))
