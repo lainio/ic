@@ -120,18 +120,18 @@ func (c Chain) Bytes() []byte {
 // the new link/block which includes inviteesPubKey and position in the chain.
 // A new chain is returned. The chain will be given for the invitee.
 func (c Chain) Invite(
-	invitersKey key.Handle,
+	inviter key.Handle,
 	invitee key.Info,
 	position int,
 ) (nc Chain) {
-	assert.That(c.isLeaf(invitersKey), "only leaf can invite")
+	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
 	newBlock := Block{
 		HashToPrev: c.hashToLeaf(),
 		Invitee:    invitee,
 		Position:   position,
 	}
-	newBlock.InvitersSignature = try.To1(invitersKey.Sign(newBlock.Bytes()))
+	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.Bytes()))
 
 	nc = c.Clone()
 	nc.Blocks = append(nc.Blocks, newBlock)
