@@ -32,8 +32,8 @@ func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 }
 
 // NewRootNode constructs a new rot node.
-//  - is this something that happens only once per node? Aka, it means that we
-//  allocate the identity space like wallet?
+//   - is this something that happens only once per node? Aka, it means that we
+//     allocate the identity space like wallet?
 //
 // TODO: start using KeyHandle.
 func NewRootNode(pubKey key.Public) Node {
