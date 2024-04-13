@@ -5,8 +5,10 @@ import (
 	"github.com/lainio/ic/node"
 )
 
+// TODO: how to we add new backup keys to the system?
+
 type Identity struct {
-	node.Node
+	node.Node // these share the same key.ID&Public
 	key.Handle
 }
 
