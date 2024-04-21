@@ -8,17 +8,14 @@ import (
 	"github.com/lainio/ic/key"
 )
 
-// Block is the block in our invitation Chain (IC). Note that InviteeID and
-// InviteePubKey are the important fields, because they must be same at the node
-// level. They verify that otherwise separated ICs belong to the same node.
-// TODO: Should be merge InviteeID&InviteePubKey to same base type like KeyInfo?
+// Block is the block in our invitation Chain (IC). Note that Invitee
+// is an important field, because its data must be same at the node
+// level. They verify that otherwise separated ICs belong to the same node!
 type Block struct {
-	HashToPrev []byte // TODO: check the size later => 32
+	HashToPrev []byte // TODO: check the size later => 32, TODO: make own type
 	Invitee    key.Info
 
-	//InviteeID         key.ID        // Makes stateless key management possible
-
-	InvitersSignature key.Signature // TODO: check the type
+	InvitersSignature key.Signature
 	Position          int
 }
 
@@ -34,7 +31,7 @@ func NewVerifyBlock(pinCode int) (Block, Block) {
 	return challengeBlock, Block{
 		HashToPrev: challengeBlock.HashToPrev,
 		Invitee:    challengeBlock.Invitee,
-		Position:   pinCode, // TODO: move to InviteeID
+		Position:   pinCode, // TODO: move to transport with Invitee key.Info
 	}
 }
 
