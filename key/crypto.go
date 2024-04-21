@@ -74,6 +74,7 @@ func RandSlice(n int) []byte {
 }
 
 type Signature = []byte
+type Hash = []byte // TODO: [32]byte! we are using SHA256
 
 func EqualBytes(a, b []byte) bool {
 	if len(a) != len(b) {
