@@ -198,7 +198,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 
 	wot = NewWebOfTrust(eve.Node, heidi.Node)
 	assert.Equal(0, wot.CommonInvider, "common root is dave")
-	assert.Equal(1, wot.Hops, "dave intives heidi")
+	assert.Equal(1, wot.Hops, "dave invites heidi")
 	assert.That(eve.IsInviterFor(heidi.Node))
 	assert.That(heidi.OneHop(eve.Node))
 }
