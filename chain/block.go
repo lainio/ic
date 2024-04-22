@@ -17,6 +17,9 @@ type Block struct {
 
 	InvitersSignature key.Signature
 	Position          int
+
+	// TODO: where we should put our specific chain types? To keep it simple
+	// this is a good place. However, we have a Chain type as well.
 }
 
 // NewVerifyBlock returns two randomized Blocks that can be used for
