@@ -60,7 +60,7 @@ func (n Node) Invite(
 	rn.Chains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
 
 	// keep all the existing web-of-trust chains if not rotation case
-	if !inviteesNode.RotationChain() {
+	if !inviteesNode.rotationChain() {
 		rn.Chains = append(rn.Chains, inviteesNode.Chains...)
 	}
 
@@ -79,12 +79,11 @@ func (n Node) Invite(
 	return rn
 }
 
-func (n Node) RotationChain() bool {
-	rotation := false
+func (n Node) rotationChain() (yes bool) {
 	if n.Len() == 1 && n.Chains[0].Len() == 1 {
-		rotation = n.Chains[0].Blocks[0].Rotation
+		yes = n.Chains[0].Blocks[0].Rotation
 	}
-	return rotation
+	return yes
 }
 
 // CommonChains return slice of chain pairs. If no pairs can be found the slice
