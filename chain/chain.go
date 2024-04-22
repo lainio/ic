@@ -18,6 +18,9 @@ import (
 const NotConnected = -1
 
 // Chain is the data type for Invitation Chain, it's ID is rootPubKey
+// TODO: should be add some information about chains type? The current
+// imlementation doesn't have specific chains for the ID keys. the key handle is
+// just transported as an argument to the functions like Invite
 type Chain struct {
 	Blocks []Block // Blocks is exported variable for serialization
 }
@@ -189,9 +192,8 @@ func (c Chain) VerifySign() bool {
 		return true // root block is valid always
 	}
 
-	var invitersPubKey key.Public
 	// start with the root key
-	invitersPubKey = c.firstBlock().Invitee.Public
+	invitersPubKey := c.firstBlock().Invitee.Public
 
 	for _, b := range c.Blocks[1:] {
 		if !b.VerifySign(invitersPubKey) {
