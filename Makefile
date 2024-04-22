@@ -2,6 +2,7 @@
 
 PKG1 := github.com/lainio/ic/chain
 PKG2 := github.com/lainio/ic/node
+PKG3 := github.com/lainio/ic/identity
 PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4)
 
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
@@ -21,6 +22,9 @@ test1:
 test2:
 	$(GO) test $(PKG2)
 
+test3:
+	$(GO) test $(PKG3)
+
 test:
 	$(GO) test $(PKGS)
 
@@ -38,6 +42,9 @@ bench1:
 
 bench2:
 	@$(GO) test -bench=. $(PKG2)
+
+bench3:
+	@$(GO) test -bench=. $(PKG3)
 
 vet: | test
 	@$(GO) vet $(PKGS)
