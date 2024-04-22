@@ -43,11 +43,9 @@ func (i Identity) Invite(rhs Identity, position int) Identity {
 }
 
 func (i Identity) RotateKey(newKH key.Handle) Identity {
-	// TODO: 1. build new Identity with new keyHandle
 	rotation := true
 	newInfo := New(newKH, rotation)
-	// TODO: 2. Invite that new identity to all of our existing chains
+
 	newID := i.Invite(newInfo, 0)
-	// TODO: should be march this new chainblock as a key rotation?
 	return newID
 }
