@@ -142,8 +142,8 @@ func TestRotateKey(t *testing.T) {
 
 	// TODO: +1 new chain is added, when doing key rotation we don't want only
 	// one link length new chain. Figure out how to handle that.
-	assert.SLen(eve.Chains, length+1)
-	t.Skip("see TODO")
+	assert.SLen(eve.Chains, length)
+	//t.Skip("see TODO")
 
 	for i, c := range eve.Chains {
 		assert.Equal(c.Len(), lengths[i]+1)

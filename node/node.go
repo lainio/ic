@@ -36,9 +36,9 @@ func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 //     allocate the identity space like wallet?
 //
 // TODO: -> NewRoot
-func NewRoot(pubKey key.Info) Node {
+func NewRoot(pubKey key.Info, flags ...bool) Node {
 	n := Node{Chains: make([]chain.Chain, 1, 12)}
-	n.Chains[0] = chain.NewRootChain(pubKey)
+	n.Chains[0] = chain.NewRoot(pubKey, flags...)
 	return n
 }
 
@@ -59,8 +59,10 @@ func (n Node) Invite(
 ) {
 	rn.Chains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
 
-	// keep all the existing web-of-trust chains
-	rn.Chains = append(rn.Chains, inviteesNode.Chains...)
+	// keep all the existing web-of-trust chains if not rotation case
+	if !inviteesNode.RotationChain() {
+		rn.Chains = append(rn.Chains, inviteesNode.Chains...)
+	}
 
 	// add only those which invitee isn't member already
 	for _, c := range n.Chains {
@@ -75,6 +77,14 @@ func (n Node) Invite(
 		rn.Chains = append(rn.Chains, newChain)
 	}
 	return rn
+}
+
+func (n Node) RotationChain() bool {
+	rotation := false
+	if n.Len() == 1 && n.Chains[0].Len() == 1 {
+		rotation = n.Chains[0].Blocks[0].Rotation
+	}
+	return rotation
 }
 
 // CommonChains return slice of chain pairs. If no pairs can be found the slice

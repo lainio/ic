@@ -35,7 +35,7 @@ func teardown() {}
 func setup() {
 	// general chain for tests
 	rootKey = key.NewKey()
-	testChain = NewRootChain(key.InfoFromHandle(rootKey))
+	testChain = NewRoot(key.InfoFromHandle(rootKey))
 	inviteeKey = key.NewKey()
 	level := 1
 	testChain = testChain.Invite(rootKey, key.InfoFromHandle(inviteeKey), level)
@@ -45,7 +45,7 @@ func setup() {
 	alice.Handle = key.NewKey()
 	bob.Handle = key.NewKey()
 
-	root.Chain = NewRootChain(key.InfoFromHandle(root))
+	root.Chain = NewRoot(key.InfoFromHandle(root))
 
 	// root invites alice and bod but they have no invitation between
 	alice.Chain = root.Invite(root.Handle, key.InfoFromHandle(alice), 1)
@@ -55,7 +55,7 @@ func setup() {
 func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	c := NewRootChain(key.InfoFromHandle(key.NewKey()))
+	c := NewRoot(key.InfoFromHandle(key.NewKey()))
 	//new(Chain).LeafPubKey()
 	assert.SLen(c.Blocks, 1)
 }

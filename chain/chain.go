@@ -90,15 +90,23 @@ func Hops(lhs, rhs Chain) (int, int) {
 	return lhs.Hops(rhs)
 }
 
-// NewRootChain construts a new root chain.
-func NewRootChain(rootPubKey key.Info) Chain {
+// NewRoot construts a new root chain.
+func NewRoot(rootPubKey key.Info, flags ...bool) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
 		HashToPrev:        nil,
 		Invitee:           rootPubKey,
 		InvitersSignature: nil,
+		Rotation:          flagOn(flags),
 	}
 	return chain
+}
+
+func flagOn(flags []bool) bool {
+	if len(flags) > 0 {
+		return flags[0] // TODO: only rotation flag is supported now
+	}
+	return false
 }
 
 func NewChainFromData(d []byte) (c Chain) {

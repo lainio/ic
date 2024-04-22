@@ -31,9 +31,9 @@ type Identity struct {
 	key.Handle
 }
 
-func New(h key.Handle) Identity {
+func New(h key.Handle, flags ...bool) Identity {
 	info := key.InfoFromHandle(h)
-	return Identity{Node: node.NewRoot(info), Handle: h}
+	return Identity{Node: node.NewRoot(info, flags...), Handle: h}
 }
 
 // Invite ivites other identity holder to all (decided later) our ICs.
@@ -44,7 +44,8 @@ func (i Identity) Invite(rhs Identity, position int) Identity {
 
 func (i Identity) RotateKey(newKH key.Handle) Identity {
 	// TODO: 1. build new Identity with new keyHandle
-	newInfo := New(newKH)
+	rotation := true
+	newInfo := New(newKH, rotation)
 	// TODO: 2. Invite that new identity to all of our existing chains
 	newID := i.Invite(newInfo, 0)
 	// TODO: should be march this new chainblock as a key rotation?
