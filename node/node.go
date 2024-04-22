@@ -31,10 +31,12 @@ func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 	return n1.WebOfTrustInfo(n2)
 }
 
-// NewRootNode constructs a new rot node.
+// NewRoot constructs a new rot node.
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
-func NewRootNode(pubKey key.Info) Node {
+//
+// TODO: -> NewRoot
+func NewRoot(pubKey key.Info) Node {
 	n := Node{Chains: make([]chain.Chain, 1, 12)}
 	n.Chains[0] = chain.NewRootChain(pubKey)
 	return n

@@ -21,8 +21,8 @@ var (
 )
 
 type entity struct {
-	key.Handle
 	Node
+	key.Handle
 }
 
 func TestMain(m *testing.M) {
@@ -48,18 +48,18 @@ func setup() {
 	frank.Handle = key.NewKey()
 	grace.Handle = key.NewKey()
 
-	root1.Node = NewRootNode(key.InfoFromHandle(root1))
-	root2.Node = NewRootNode(key.InfoFromHandle(root2))
+	root1.Node = NewRoot(key.InfoFromHandle(root1))
+	root2.Node = NewRoot(key.InfoFromHandle(root2))
 }
 
 func TestNewRootNode(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	aliceNode := NewRootNode(key.InfoFromHandle(alice))
+	aliceNode := NewRoot(key.InfoFromHandle(alice))
 	assert.SLen(aliceNode.Chains, 1)
 	assert.SLen(aliceNode.Chains[0].Blocks, 1)
 
-	bobNode := NewRootNode(key.InfoFromHandle(bob))
+	bobNode := NewRoot(key.InfoFromHandle(bob))
 	assert.SLen(bobNode.Chains, 1)
 }
 
@@ -101,7 +101,7 @@ func TestInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave.Node = NewRootNode(key.InfoFromHandle(dave))
+	dave.Node = NewRoot(key.InfoFromHandle(dave))
 	eve.Node = dave.Invite(eve.Node, dave.Handle, key.InfoFromHandle(eve), 1)
 	assert.Equal(eve.Len(), 1)
 	{
@@ -126,7 +126,6 @@ func TestInvite(t *testing.T) {
 	// Carol and Eve doesn't have common chains _yet_
 	common = carol.CommonChain(eve.Node)
 	assert.SNil(common.Blocks)
-
 	// .. so Carol can invite Eve
 	eve.Node = carol.Invite(eve.Node, carol.Handle, key.InfoFromHandle(eve), 1)
 	assert.Equal(eve.Len(), 2)
@@ -180,7 +179,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(3, wot.Hops)
 
 	root3 := entity{Handle: key.NewKey()}
-	root3.Node = NewRootNode(key.InfoFromHandle(root3))
+	root3.Node = NewRoot(key.InfoFromHandle(root3))
 	heidi := entity{Handle: key.NewKey()}
 	heidi.Node = root3.Invite(heidi.Node, root3.Handle, key.InfoFromHandle(heidi), 1)
 	assert.SLen(heidi.Chains, 1)
