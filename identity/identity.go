@@ -12,17 +12,41 @@ import (
 // could have multiple private keys? How we could do that? If we mark other
 // parents of the IC to control block. This would allow parent keypair to
 // control subkeys, so they could work as an backup keys. But we don't know yet
-// how it would affect to our control algorithms? Now everthing suspects that we
+// how it would affect to our control algorithms? Now everything suspects that we
 // have one identity key.Handle that controls everything we are doing. but how
 // about if we could have multiple key.handles and the control would go thru
 // parent/child thru IC?
+// NOTE: we tried to add new root but of course it failed! It's impossible. It
+// seems that it is very difficult to have multiple key handles registered for
+// the same invitation chain. Second option could be that we have always append
+// our chains by ourselves after whe have been Invited. That woulb give us
+// multiple chain blocks that are fully under our control!
+
+// TODO: Should we mark these 'helper' blocks somehow in the chain. they aren't
+// less important, but maybe it would give opportunities to optimize certain
+// things later?
 
 type Identity struct {
 	node.Node // these share the same key.ID&Public
 	key.Handle
 }
 
-func NewIdentity(h key.Handle) Identity {
+func New(h key.Handle) Identity {
 	info := key.InfoFromHandle(h)
-	return Identity{Node: node.NewRootNode(info), Handle: h}
+	return Identity{Node: node.NewRoot(info), Handle: h}
+}
+
+// Invite ivites other identity holder to all (decided later) our ICs.
+func (i Identity) Invite(rhs Identity, position int) Identity {
+	rhs.Node = i.Node.Invite(rhs.Node, i, key.InfoFromHandle(rhs.Handle), position)
+	return rhs
+}
+
+func (i Identity) RotateKey(newKH key.Handle) Identity {
+	// TODO: 1. build new Identity with new keyHandle
+	newInfo := New(newKH)
+	// TODO: 2. Invite that new identity to all of our existing chains
+	newID := i.Invite(newInfo, 0)
+	// TODO: should be march this new chainblock as a key rotation?
+	return newID
 }
