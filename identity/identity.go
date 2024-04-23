@@ -1,3 +1,4 @@
+// package identity is the API level pkg. TODO: move rest to internal?
 package identity
 
 import (

@@ -49,10 +49,12 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 
 // Invite is method to add invitee's node's invitation chains (IC) to all of
 // those ICs of us (n Node) that invitee doesn't yet belong.
+// NOTE! Use identity.Invite at the API lvl.
 func (n Node) Invite(
+	// TODO: order of the arguments?
 	inviteesNode Node,
-	inviter key.Handle, // TODO: if we save key.Handle to Node => rm this
-	invitee key.Info, // TODO: if we save key.Handle to Node => rm this
+	inviter key.Handle,
+	invitee key.Info,
 	position int,
 ) (
 	rn Node,

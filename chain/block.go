@@ -16,9 +16,9 @@ type Block struct {
 	Invitee    key.Info
 
 	InvitersSignature key.Signature
-	Position          int
 
-	Rotation bool
+	Position int  // TODO: shoud we merge..
+	Rotation bool // these two?
 
 	// TODO: where we should put our specific chain types? To keep it simple
 	// this is a good place. However, we have a Chain type as well.
