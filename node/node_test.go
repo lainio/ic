@@ -37,16 +37,16 @@ func teardown() {
 
 func setup() {
 	// root, alice, bob setup
-	root1.Handle = key.NewKey()
-	root2.Handle = key.NewKey()
-	alice.Handle = key.NewKey()
-	bob.Handle = key.NewKey()
-	carol.Handle = key.NewKey()
-	dave.Handle = key.NewKey()
-	eve.Handle = key.NewKey()
+	root1.Handle = key.New()
+	root2.Handle = key.New()
+	alice.Handle = key.New()
+	bob.Handle = key.New()
+	carol.Handle = key.New()
+	dave.Handle = key.New()
+	eve.Handle = key.New()
 	// TODO: comment frank init out to test err2
-	frank.Handle = key.NewKey()
-	grace.Handle = key.NewKey()
+	frank.Handle = key.New()
+	grace.Handle = key.New()
 
 	root1.Node = NewRoot(key.InfoFromHandle(root1))
 	root2.Node = NewRoot(key.InfoFromHandle(root2))
@@ -178,9 +178,9 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(1, wot.CommonInvider)
 	assert.Equal(3, wot.Hops)
 
-	root3 := entity{Handle: key.NewKey()}
+	root3 := entity{Handle: key.New()}
 	root3.Node = NewRoot(key.InfoFromHandle(root3))
-	heidi := entity{Handle: key.NewKey()}
+	heidi := entity{Handle: key.New()}
 	heidi.Node = root3.Invite(heidi.Node, root3.Handle, key.InfoFromHandle(heidi), 1)
 	assert.SLen(heidi.Chains, 1)
 	assert.SLen(heidi.Chains[0].Blocks, 2, "root = root3")

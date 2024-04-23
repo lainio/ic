@@ -55,7 +55,7 @@ func VerifySign(pubKey Public, msg []byte, sig Signature) bool {
 	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)
 }
 
-func NewKey() Handle {
+func New() Handle {
 	return try.To1(myStore.NewKeyHandle())
 }
 

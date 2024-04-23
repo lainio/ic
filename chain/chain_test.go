@@ -34,16 +34,16 @@ func teardown() {}
 
 func setup() {
 	// general chain for tests
-	rootKey = key.NewKey()
+	rootKey = key.New()
 	testChain = NewRoot(key.InfoFromHandle(rootKey))
-	inviteeKey = key.NewKey()
+	inviteeKey = key.New()
 	level := 1
 	testChain = testChain.Invite(rootKey, key.InfoFromHandle(inviteeKey), level)
 
 	// root, alice, bob setup
-	root.Handle = key.NewKey()
-	alice.Handle = key.NewKey()
-	bob.Handle = key.NewKey()
+	root.Handle = key.New()
+	alice.Handle = key.New()
+	bob.Handle = key.New()
 
 	root.Chain = NewRoot(key.InfoFromHandle(root))
 
@@ -55,7 +55,7 @@ func setup() {
 func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	c := NewRoot(key.InfoFromHandle(key.NewKey()))
+	c := NewRoot(key.InfoFromHandle(key.New()))
 	//new(Chain).LeafPubKey()
 	assert.SLen(c.Blocks, 1)
 }
@@ -87,7 +87,7 @@ func TestVerifyChain(t *testing.T) {
 	assert.SLen(testChain.Blocks, 2)
 	assert.That(testChain.VerifySign())
 
-	newInvitee := key.NewKey()
+	newInvitee := key.New()
 	level := 3
 	testChain = testChain.Invite(inviteeKey, key.InfoFromHandle(newInvitee), level)
 
@@ -104,7 +104,7 @@ func TestInvitation(t *testing.T) {
 	assert.That(bob.Chain.VerifySign())
 
 	cecilia := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
 	assert.SLen(cecilia.Blocks, 3)
@@ -121,7 +121,7 @@ func TestCommonInviter(t *testing.T) {
 
 	// alice and bod have common root
 	cecilia := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	// bob intives cecilia
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
@@ -129,7 +129,7 @@ func TestCommonInviter(t *testing.T) {
 	assert.That(cecilia.Chain.VerifySign())
 
 	david := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	// alice invites david
 	david.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(david), 1)
@@ -137,18 +137,18 @@ func TestCommonInviter(t *testing.T) {
 	assert.Equal(0, CommonInviter(cecilia.Chain, david.Chain),
 		"cecilia and david have only common root")
 	edvin := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	edvin.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(edvin), 1)
 	assert.Equal(1, CommonInviter(edvin.Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
-	edvin2Chain := alice.Chain.Invite(alice.Handle, key.InfoFromHandle(key.NewKey()), 1)
+	edvin2Chain := alice.Chain.Invite(alice.Handle, key.InfoFromHandle(key.New()), 1)
 	assert.Equal(1, CommonInviter(edvin2Chain, david.Chain),
 		"alice is at level 1 and inviter of both")
 
-	fred1Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.NewKey()), 1)
-	fred2Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.NewKey()), 1)
+	fred1Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()), 1)
+	fred2Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()), 1)
 	assert.Equal(2, CommonInviter(fred2Chain, fred1Chain),
 		"edvin is at level 2")
 }
@@ -161,7 +161,7 @@ func TestSameInviter(t *testing.T) {
 	assert.That(!SameInviter(testChain, bob.Chain))
 
 	cecilia := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
 	assert.SLen(cecilia.Blocks, 3)
@@ -178,7 +178,7 @@ func TestHops(t *testing.T) {
 	assert.Equal(0, cLevel)
 
 	cecilia := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
 	h, cLevel = alice.Hops(cecilia.Chain)
@@ -186,7 +186,7 @@ func TestHops(t *testing.T) {
 	assert.Equal(0, cLevel)
 
 	david := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	david.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(david), 1)
 	h, cLevel = david.Hops(cecilia.Chain)
@@ -194,7 +194,7 @@ func TestHops(t *testing.T) {
 	assert.Equal(1, cLevel)
 
 	edvin := entity{
-		Handle: key.NewKey(),
+		Handle: key.New(),
 	}
 	edvin.Chain = david.Invite(david.Handle, key.InfoFromHandle(edvin), 1)
 	h, cLevel = edvin.Hops(cecilia.Chain)

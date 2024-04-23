@@ -31,16 +31,16 @@ func teardown() {
 
 func setup() {
 	// root, alice, bob setup
-	root1.Handle = key.NewKey()
-	root2.Handle = key.NewKey()
-	alice.Handle = key.NewKey()
-	bob.Handle = key.NewKey()
-	carol.Handle = key.NewKey()
-	dave.Handle = key.NewKey()
-	eve.Handle = key.NewKey()
+	root1.Handle = key.New()
+	root2.Handle = key.New()
+	alice.Handle = key.New()
+	bob.Handle = key.New()
+	carol.Handle = key.New()
+	dave.Handle = key.New()
+	eve.Handle = key.New()
 	// TODO: comment frank init out to test err2
-	frank.Handle = key.NewKey()
-	grace.Handle = key.NewKey()
+	frank.Handle = key.New()
+	grace.Handle = key.New()
 
 	root1 = New(root1)
 	root2 = New(root2)
@@ -142,7 +142,7 @@ func TestRotateKey(t *testing.T) {
 		lengths[i] = c.Len()
 	}
 
-	eve = eve.RotateKey(key.NewKey())
+	eve = eve.RotateKey(key.New())
 
 	// TODO: +1 new chain is added, when doing key rotation we don't want only
 	// one link length new chain. Figure out how to handle that.
