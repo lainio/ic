@@ -152,7 +152,7 @@ func (c Chain) Invite(
 		Invitee:    invitee,
 		Position:   position,
 	}
-	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.Bytes()))
+	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.ExcludeBytes()))
 
 	nc = c.Clone()
 	nc.Blocks = append(nc.Blocks, newBlock)
@@ -173,7 +173,7 @@ func (c Chain) rotationInvite(
 		Position:   position,
 		Rotation:   true,
 	}
-	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.Bytes()))
+	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.ExcludeBytes()))
 
 	nc = c.Clone()
 	nc.Blocks = append(nc.Blocks, newBlock)
