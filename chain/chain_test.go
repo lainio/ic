@@ -226,6 +226,10 @@ func TestSameInviter(t *testing.T) {
 	assert.That(!alice.IsInviterFor(cecilia.Chain))
 }
 
+// TestHops test hop counts.
+// TODO: test rotation as well.
+// TODO: remove hand rest form the keyboard!
+// TODO: Aalto project
 func TestHops(t *testing.T) {
 	defer assert.PushTester(t)()
 
@@ -351,7 +355,11 @@ func TestChallengeInvitee(t *testing.T) {
 }
 
 // Issuer adds her own chain to every credential it's issuing, I haven't solved
-// the correlation yet. Is it an issue because chain doesn't include any
+// the correlation yet. Yes we have! We suggest that everyone uses constructs
+// where they start with the master key and then they create as many sub keys as
+// they need to.
+
+// Is it an issue because chain doesn't include any
 // identifiers. PubKey is identifier, if we don't use PubKey as an identifier,
 // it the only option to use some other identifier and behind it similar to
 // DIDDoc concept. How about if chain holder creates new sub chains just to hide
@@ -360,5 +368,8 @@ func TestChallengeInvitee(t *testing.T) {
 // My current opinion is that this is not a big problem. At least we know that
 // we can get rid of it if we want.
 
-// Other poptential problem is key rotation. It isn't so big problem when we
-// have a network in the came. Invitation Chain IDs aren
+// Other potential problem is key rotation. It isn't so big problem when we have
+// a network in the game. Invitation Chain IDs aren't used for encrypting or
+// signing stuff, i.e., there isn't any data where to start brute force breaking
+// then keys. It's similar situation as GPG's master/sub key arrangement, where
+// sub keys are used only and master key is only for rotation!
