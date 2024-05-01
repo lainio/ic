@@ -1,9 +1,6 @@
 package node
 
 import (
-	"errors"
-
-	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/key"
 )
@@ -27,15 +24,12 @@ type WebOfTrust struct {
 // NewWebOfTrust returns web-of-trust information of two nodes if they share a
 // trust chain. If not the Hops field is chain.NotConnected.
 func NewWebOfTrust(n1, n2 Node) WebOfTrust {
-	//assert.NotImplemented()
 	return n1.WebOfTrustInfo(n2)
 }
 
-// NewRoot constructs a new rot node.
+// NewRoot constructs a new root node.
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
-//
-// TODO: -> NewRoot
 func NewRoot(pubKey key.Info, flags ...bool) Node {
 	n := Node{Chains: make([]chain.Chain, 1, 12)}
 	n.Chains[0] = chain.NewRoot(pubKey, flags...)
@@ -92,12 +86,6 @@ func (n Node) rotationChain() (yes bool) {
 // is empty not nil.
 func (n Node) CommonChains(their Node) []chain.Pair {
 	common := make([]chain.Pair, 0, n.Len())
-	// TODO: just for testing err2
-	assert.That(true)
-	var _ = errors.New("test")
-	//panic(e)
-	//_ = 1/len(common)
-	//return common[1:]
 	for _, my := range n.Chains {
 		p := their.shared(my)
 		isPair := !p.Chain1.IsNil() && !p.Chain2.IsNil()
