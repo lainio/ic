@@ -8,9 +8,17 @@ import (
 
 // TODO: How to we add new backup keys to the system? This is the most
 // interesting question of them all. We must have one key pair for everything
-// that we get one ID key, aka Public key. But if we could have multiple SEs
-// where to store our private key? But maybe more interesting would be that we
-// could have multiple private keys? How we could do that? If we mark other
+// that we get one ID key, aka Public key. But if we could have multiple
+// enclaves
+// where to store our private key, the same key? But maybe more interesting would be that we
+// could have multiple private keys? How we could do that?
+//  - Now we have RotateKey which works when we have previouos key available,
+//  only then. If we use RotateKey multiple times we end up having several key
+//  pairs which keys we control. this means that even when we lose some of the
+//  keys we can still control our identity. however, key rotation chain blocks
+//  should not be calculated when web of trust calculations are executed.
+
+// If we mark other
 // parents of the IC to control block. This would allow parent keypair to
 // control subkeys, so they could work as an backup keys. But we don't know yet
 // how it would affect to our control algorithms? Now everything suspects that we
