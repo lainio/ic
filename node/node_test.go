@@ -145,9 +145,6 @@ func TestCommonChains(t *testing.T) {
 func TestWebOfTrustInfo(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	//assert.That(false)
-	//panic(1)
-	//_, _ = frank.CBORPublicKey()
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)
 
