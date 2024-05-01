@@ -25,8 +25,12 @@ type Chain struct {
 	Blocks []Block // Blocks is exported variable for serialization
 }
 
-// Pair is helper struct to handle chain pairs. It offers helper methods to
-// calculate hops between two chains. Pair and Chain are summetric.
+// Pair is helper type to keep two related chains together. Related chains means
+// that two chains have common inviter even the actual chains are different. It
+// also means that chains have some ancestor that they share.
+//
+// Pair type offers helper methods to calculate hops between two chains. Pair
+// and Chain are symmetric.
 type Pair struct {
 	Chain1, Chain2 Chain
 }
@@ -40,8 +44,12 @@ func (p Pair) OneHop() bool {
 		p.Chain2.IsInviterFor(p.Chain1)
 }
 
-func (p Pair) CommonInviter() int {
-	return CommonInviter(p.Chain1, p.Chain2)
+// CommonInviterLevel is stupid helper that's more a precondition than actual method.
+// The implementation asserts that common inviter really exists.
+func (p Pair) CommonInviterLevel() int { // TODO: not used!
+	common := CommonInviterLevel(p.Chain1, p.Chain2)
+	assert.NotEqual(common, NotConnected)
+	return common
 }
 
 var Nil = Chain{Blocks: nil}
@@ -63,9 +71,9 @@ func SameInviter(c1, c2 Chain) bool {
 	)
 }
 
-// CommonInviter returns inviter's distance (current level) from chain's root if
+// CommonInviterLevel returns inviter's distance (current level) from chain's root if
 // inviter exists.  If not it returns NotConnected
-func CommonInviter(c1, c2 Chain) (level int) {
+func CommonInviterLevel(c1, c2 Chain) (level int) {
 	if !SameRoot(c1, c2) {
 		return NotConnected
 	}
@@ -90,7 +98,9 @@ func Hops(lhs, rhs Chain) (int, int) {
 	return lhs.Hops(rhs)
 }
 
-// NewRoot construts a new root chain.
+// NewRoot constructs a new root chain.
+// NOTE: NewRoot is important part of key rotation and everything where we will
+// construct our key concepts from key pair.
 func NewRoot(rootPubKey key.Info, flags ...bool) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
@@ -149,10 +159,31 @@ func (c Chain) Invite(
 	return nc
 }
 
+// rotationInvite used for unit testing only!
+func (c Chain) rotationInvite(
+	inviter key.Handle,
+	invitee key.Info,
+	position int,
+) (nc Chain) {
+	assert.That(c.isLeaf(inviter), "only leaf can invite")
+
+	newBlock := Block{
+		HashToPrev: c.hashToLeaf(),
+		Invitee:    invitee,
+		Position:   position,
+		Rotation:   true,
+	}
+	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.Bytes()))
+
+	nc = c.Clone()
+	nc.Blocks = append(nc.Blocks, newBlock)
+	return nc
+}
+
 // Hops returns hops and common inviter's level if that exists. If not both
 // return values are NotConnected.
-func (c Chain) Hops(their Chain) (int, int) {
-	common := CommonInviter(c, their)
+func (c Chain) Hops(their Chain) (hops int, rootLvl int) {
+	common := CommonInviterLevel(c, their)
 	if common == NotConnected {
 		return NotConnected, NotConnected
 	}
@@ -162,7 +193,7 @@ func (c Chain) Hops(their Chain) (int, int) {
 	}
 
 	// both chain lengths without self, minus "tail" to common inviter
-	hops := c.Len() - 1 + their.Len() - 1 - 2*common
+	hops = c.Len() - 1 + their.Len() - 1 - 2*common
 
 	return hops, common
 }
@@ -174,6 +205,15 @@ func (c Chain) OneHop(their Chain) bool {
 
 func (c Chain) Len() int {
 	return len(c.Blocks)
+}
+
+func (c Chain) KeyRotationsLen() (count int) {
+	for _, b := range c.Blocks {
+		if b.Rotation {
+			count += 1
+		}
+	}
+	return
 }
 
 func (c Chain) isLeaf(invitersKey key.Handle) bool {
