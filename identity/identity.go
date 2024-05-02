@@ -9,14 +9,35 @@ import (
 // TODO: How to we add new backup keys to the system? This is the most
 // interesting question of them all. We must have one key pair for everything
 // that we get one ID key, aka Public key. But if we could have multiple
-// enclaves
-// where to store our private key, the same key? But maybe more interesting would be that we
-// could have multiple private keys? How we could do that?
-//  - Now we have RotateKey which works when we have previouos key available,
-//  only then. If we use RotateKey multiple times we end up having several key
-//  pairs which keys we control. this means that even when we lose some of the
-//  keys we can still control our identity. however, key rotation chain blocks
-//  should not be calculated when web of trust calculations are executed.
+// enclaves where to store our private key, the same key? But maybe more
+// interesting would be that we could have multiple private keys? How we could
+// do that? - Now we have RotateKey which works when we have previouos key
+// available, only then. If we use RotateKey multiple times we end up having
+// several key pairs which keys we control. this means that even when we lose
+// some of the keys we can still control our identity.
+
+// TODO: however, key rotation chain blocks should not be calculated when web of
+// trust calculations are executed. NOTE: this is not so simple as it seems at
+// the first sight. Also we don't need to do it too complexy. Key rotation
+// should be limited to happen only chain roots, not later!! we could even think
+// that it's allowed only when no invitations are done for us, i.e., that key
+// rotation should be done during the setup, not later. Why we did it later, if
+// we still control the key pair, we would loose all of our ICs? If we use key
+// rotation to build subkeys, it's different situation and these hops should be
+// calculated. If hop count is very important, we don't know it yet, we should
+// do something. Now we have the position property to categorize our blocks, but
+// how important it really is.
+
+// TODO: key rotation need the concept of the Root Chain, i.e., the cain that's
+// block are all under our control AND every block type is Rotation! Another
+// name could be Identity Chain (like Identity Matrix)
+
+// TODO: we should start to make tests at the Identity level.
+
+// TODO: network decicion is that we start with the simple http or grpc calls.
+// If grpc can be tunneled easily thru Onion Routing we will use it! It's faster
+// and finally easier. If Tor can be just one extra layer that will be added to
+// system later, we can build and test stuff much earlier!
 
 // If we mark other
 // parents of the IC to control block. This would allow parent keypair to
