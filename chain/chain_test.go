@@ -63,16 +63,19 @@ func TestNewChain(t *testing.T) {
 	assert.SLen(c.Blocks, 1)
 	assert.Equal(c.Len(), 1)
 	assert.Equal(c.KeyRotationsLen(), 0)
+	assert.Equal(c.AbsLen(), 1)
 
 	k2 := key.New()
 	c = c.rotationInvite(k, key.InfoFromHandle(k2), 1)
 	assert.Equal(c.Len(), 2, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 1)
+	assert.Equal(c.AbsLen(), 1)
 
 	k3 := key.New()
 	c = c.rotationInvite(k2, key.InfoFromHandle(k3), 1)
 	assert.Equal(c.Len(), 3, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 2)
+	assert.Equal(c.AbsLen(), 1)
 }
 
 func TestRead(t *testing.T) {
@@ -400,5 +403,5 @@ func TestChallengeInvitee(t *testing.T) {
 // Other potential problem is key rotation. It isn't so big problem when we have
 // a network in the game. Invitation Chain IDs aren't used for encrypting or
 // signing stuff, i.e., there isn't any data where to start brute force breaking
-// then keys. It's similar situation as GPG's master/sub key arrangement, where
+// the keys. It's similar situation as GPG's master/sub key arrangement, where
 // sub keys are used only and master key is only for rotation!

@@ -203,6 +203,10 @@ func (c Chain) OneHop(their Chain) bool {
 		their.IsInviterFor(c)
 }
 
+func (c Chain) AbsLen() int {
+	return c.Len() - c.KeyRotationsLen()
+}
+
 func (c Chain) Len() int {
 	return len(c.Blocks)
 }
