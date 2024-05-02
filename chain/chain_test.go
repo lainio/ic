@@ -71,23 +71,26 @@ func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	k := key.New()
-	c := NewRoot(key.InfoFromHandle(k))
+	c := NewRoot(key.InfoFromHandle(k), true /*rotation*/)
 
 	assert.SLen(c.Blocks, 1)
 	assert.Equal(c.Len(), 1)
-	assert.Equal(c.KeyRotationsLen(), 0)
+	assert.That(c.VerifyIDChain())
+	assert.Equal(c.KeyRotationsLen(), 1)
 	//assert.Equal(c.AbsLen(), 1)
 
 	k2 := key.New()
 	c = c.rotationInvite(k, key.InfoFromHandle(k2), 1)
 	assert.Equal(c.Len(), 2, "naturally +1 from previous")
-	assert.Equal(c.KeyRotationsLen(), 1)
+	assert.Equal(c.KeyRotationsLen(), 2)
+	assert.That(c.VerifyIDChain())
 	//assert.Equal(c.AbsLen(), 1)
 
 	k3 := key.New()
 	c = c.rotationInvite(k2, key.InfoFromHandle(k3), 1)
 	assert.Equal(c.Len(), 3, "naturally +1 from previous")
-	assert.Equal(c.KeyRotationsLen(), 2)
+	assert.Equal(c.KeyRotationsLen(), 3)
+	assert.That(c.VerifyIDChain())
 	//assert.Equal(c.AbsLen(), 1)
 }
 
@@ -370,7 +373,7 @@ func TestChallengeInvitee(t *testing.T) {
 			// In real world usage here we would send the d for Alice's signing
 			// over the network.
 			b := NewBlockFromData(d)
-			// pinCode is transported out-of-band and entered before signing
+			// pinCode is transported out-of-band and entered *before* signing
 			b.Position = pinCode
 			d = b.Bytes()
 			return try.To1(alice.Sign(d))

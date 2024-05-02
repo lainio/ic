@@ -22,6 +22,8 @@ const NotConnected = -1
 // imlementation doesn't have specific chains for the ID keys. the key handle is
 // just transported as an argument to the functions like Invite
 type Chain struct {
+	// TODO: We have to refer these chains outside, so should we have following
+	// fields: ID (: string, UUID), Type (enum: ID, Invitation),
 	Blocks []Block // Blocks is exported variable for serialization
 }
 
@@ -133,6 +135,7 @@ func (c Chain) IsNil() bool {
 }
 
 func (c Chain) Bytes() []byte {
+	// TODO: CBOR type
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	try.To(enc.Encode(c))
@@ -252,6 +255,26 @@ func (c Chain) VerifySign() bool {
 
 	for _, b := range c.Blocks[1:] {
 		if !b.VerifySign(invitersPubKey) {
+			return false
+		}
+		// the next block is signed with this block's pub key
+		invitersPubKey = b.Invitee.Public
+	}
+	return true
+}
+
+// VerifyIDChain is tool to verify whole ID chain, i.e., chain sipnatures hold
+// and Rotation flag is true in every Block.
+func (c Chain) VerifyIDChain() bool {
+	if c.Len() == 1 {
+		return c.firstBlock().Rotation // root block is valid always
+	}
+
+	// start with the root key
+	invitersPubKey := c.firstBlock().Invitee.Public
+
+	for _, b := range c.Blocks[1:] {
+		if !b.Rotation || !b.VerifySign(invitersPubKey) {
 			return false
 		}
 		// the next block is signed with this block's pub key
