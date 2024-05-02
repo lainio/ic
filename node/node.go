@@ -6,7 +6,9 @@ import (
 )
 
 type Node struct {
-	Chains []chain.Chain
+	// TODO: should we have myltiple IDChains? or just one or all in the same?
+
+	Chains []chain.Chain // TODO: InvitationChains renaming?
 }
 
 type WebOfTrust struct {

@@ -58,7 +58,7 @@ import (
 
 type Identity struct {
 	node.Node // these share the same key.ID&Public
-	key.Handle
+	key.Handle // should we have multiple key.Handle if we have pre rotated?
 }
 
 func New(h key.Handle, flags ...bool) Identity {
