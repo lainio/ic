@@ -55,9 +55,11 @@ func (p Pair) CommonInviterLevel() int { // TODO: not used!
 var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
+	// TODO: maybe we should check validity of chains earlier than until here?
 	if !c1.VerifySign() || !c2.VerifySign() {
 		return false
 	}
+
 	return EqualBlocks(c1.firstBlock(), c2.firstBlock())
 }
 
@@ -193,7 +195,7 @@ func (c Chain) Hops(their Chain) (hops int, rootLvl int) {
 	}
 
 	// both chain lengths without self, minus "tail" to common inviter
-	hops = c.Len() - 1 + their.Len() - 1 - 2*common
+	hops = c.AbsLen() - 1 + their.AbsLen() - 1 - 2*common
 
 	return hops, common
 }
@@ -204,7 +206,8 @@ func (c Chain) OneHop(their Chain) bool {
 }
 
 func (c Chain) AbsLen() int {
-	return c.Len() - c.KeyRotationsLen()
+	return c.Len()
+	//return c.Len() - c.KeyRotationsLen()
 }
 
 func (c Chain) Len() int {

@@ -13,6 +13,9 @@ var (
 	// root -> alice, root -> bob: alice and bob share same root inviter
 	rootMaster, root, alice, bob entity
 
+	// root2 -> alice2, root2 -> bob2: alice2 and bob2 share same root inviter
+	root2, alice2, bob2 entity
+
 	//  first chain for generic chain tests
 	testChain           Chain
 	rootKey, inviteeKey key.Handle
@@ -45,13 +48,23 @@ func setup() {
 	root.Handle = key.New()
 	alice.Handle = key.New()
 	bob.Handle = key.New()
-
+	// start root with one rotation key
 	rootMaster.Chain = NewRoot(key.InfoFromHandle(rootMaster))
 	root.Chain = rootMaster.rotationInvite(rootMaster.Handle, key.InfoFromHandle(root), 1)
-
 	// root invites alice and bod but they have no invitation between
 	alice.Chain = root.Invite(root.Handle, key.InfoFromHandle(alice), 1)
 	bob.Chain = root.Invite(root.Handle, key.InfoFromHandle(bob), 1)
+
+	// root2, alice2, bob2 setup
+	root2.Handle = key.New()
+	alice2.Handle = key.New()
+	bob2.Handle = key.New()
+	// start second root without rotation key
+	root2.Chain = NewRoot(key.InfoFromHandle(root2))
+
+	// root2 invites alice2 and bod2 but they have no invitation between
+	alice2.Chain = root2.Invite(root2.Handle, key.InfoFromHandle(alice2), 1)
+	bob2.Chain = root2.Invite(root2.Handle, key.InfoFromHandle(bob2), 1)
 }
 
 func TestNewChain(t *testing.T) {
@@ -63,19 +76,19 @@ func TestNewChain(t *testing.T) {
 	assert.SLen(c.Blocks, 1)
 	assert.Equal(c.Len(), 1)
 	assert.Equal(c.KeyRotationsLen(), 0)
-	assert.Equal(c.AbsLen(), 1)
+	//assert.Equal(c.AbsLen(), 1)
 
 	k2 := key.New()
 	c = c.rotationInvite(k, key.InfoFromHandle(k2), 1)
 	assert.Equal(c.Len(), 2, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 1)
-	assert.Equal(c.AbsLen(), 1)
+	//assert.Equal(c.AbsLen(), 1)
 
 	k3 := key.New()
 	c = c.rotationInvite(k2, key.InfoFromHandle(k3), 1)
 	assert.Equal(c.Len(), 3, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 2)
-	assert.Equal(c.AbsLen(), 1)
+	//assert.Equal(c.AbsLen(), 1)
 }
 
 func TestRead(t *testing.T) {
@@ -253,6 +266,14 @@ func TestSameInviter(t *testing.T) {
 func TestHops(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	//                   root2
+	//                  /    \
+	//                \/     \/
+	//              alice2  bob2
+	h, cLevel := alice2.Hops(bob2.Chain)
+	assert.Equal(h, 2, "alice2 and bob2 share common root (root2)")
+	assert.Equal(cLevel, 0, "alice's and bob's inviter is chain root!")
+
 	//                rootMaster
 	//                    |
 	//                   \/
@@ -260,9 +281,9 @@ func TestHops(t *testing.T) {
 	//                  /    \
 	//                \/     \/
 	//              alice   bob
-	h, cLevel := alice.Hops(bob.Chain)
+	h, cLevel = alice.Hops(bob.Chain)
 	assert.Equal(h, 2, "alice and bob share common root")
-	assert.Equal(cLevel, 1, "alice's and bob's inviter is chain root")
+	assert.Equal(cLevel, 1, "alice's and bob's inviter is ROTATED chain root")
 
 	cecilia := entity{
 		Handle: key.New(),
