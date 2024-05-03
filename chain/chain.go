@@ -24,6 +24,23 @@ const NotConnected = -1
 type Chain struct {
 	// TODO: We have to refer these chains outside, so should we have following
 	// fields: ID (: string, UUID), Type (enum: ID, Invitation),
+	//
+	// We might need to have some sort of chain management, but let's be
+	// careful here! We don't want to make this to complicated. However, we
+	// want to courage people to use only one chain as long as possible. That
+	// would mean that the have only on structure e.g. family. and they should
+	// try to use that same chain to connect to government, work place, etc.
+	// NOTE: ^ that's bullshit, we cannot do that! People won't want to think
+	// that kind of things, the just want to connect to other people, my job is
+	// to make it automatic as possible. I must find out what are the use cases
+	// people need when the use the SW. They install app, they start with the
+	// empty app, they create needed keys (this might happen automatically, but
+	// is depending the used authenticator), they meet a people (later we might
+	// build a service) and other one invites other: who invites and who's
+	// invitee is calculated the trust-level
+	// TODO: calculate identity's trust
+	// level
+
 	Blocks []Block // Blocks is exported variable for serialization
 }
 

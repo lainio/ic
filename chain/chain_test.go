@@ -415,17 +415,19 @@ func TestChallengeInvitee(t *testing.T) {
 // where they start with the master key and then they create as many sub keys as
 // they need to.
 
-// Is it an issue because chain doesn't include any
-// identifiers. PubKey is identifier, if we don't use PubKey as an identifier,
-// it the only option to use some other identifier and behind it similar to
-// DIDDoc concept. How about if chain holder creates new sub chains just to hide
-// it's actual identity?
-// For what purpose we could use them?
-// My current opinion is that this is not a big problem. At least we know that
-// we can get rid of it if we want.
+// Is it an issue because chain doesn't include any identifiers. PubKey is
+// identifier, if we don't use PubKey as an identifier, it the only option to
+// use some other identifier and behind it similar to DIDDoc concept. How about
+// if chain holder creates new sub chains just to hide it's actual identity? For
+// what purpose we could use them? My current opinion is that this is not a big
+// problem. At least we know that we can get rid of it if we want.
 
-// Other potential problem is key rotation. It isn't so big problem when we have
-// a network in the game. Invitation Chain IDs aren't used for encrypting or
-// signing stuff, i.e., there isn't any data where to start brute force breaking
-// the keys. It's similar situation as GPG's master/sub key arrangement, where
-// sub keys are used only and master key is only for rotation!
+// Next important task is to design how the actual network is build. that means:
+// what happens when a party has invitation chain(s) in their 'wallet', but they
+// don't have any network node up and running by them selves?
+
+// TODO: how find connection server?
+// we can search it from our courrent ICs, if our design is made so that servers
+// are wiiling to serve everybody. lets assume that they are. lets assume that
+// we are building inclusive network from the beginning. later we could add some
+// icentive for the parties to by ready to serve.

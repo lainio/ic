@@ -21,8 +21,21 @@ type Block struct {
 	Rotation bool // these two? TODO: learning, this is very important! maybe
 	// keep it this way that it's easy?
 
+	// TODO: authorization type field. This would be signed, i.e., included in
+	// the core block.
+
 	// TODO: where we should put our specific chain types? To keep it simple
 	// this is a good place. However, we have a Chain type as well.
+
+	// TODO: service endpoints should be here, and yes, they should be tamper
+	// free for the security reasons. Even when we are moving envelopes between
+	// endopints maybe we shouldn't allow chainging endpoints? But, but, there
+	// are many buts here! Let's make a hypothesis 1) we start with the message
+	// based transport, and the correlation & identification stuff are done
+	// later with the Tor-network. 2) when we bring streaming on board, we seal
+	// the two communicating parties to each other somo other way. OR we set
+	// new rules and restrictions to that cases like only direct Active Node
+	// Owners are allowed to stream to each others.
 }
 
 // NewVerifyBlock returns two randomized Blocks that can be used for
@@ -66,7 +79,7 @@ func (b Block) excludeSign() Block {
 		HashToPrev: b.HashToPrev,
 		Invitee:    b.Invitee,
 		Position:   b.Position,
-		Rotation: b.Rotation,
+		Rotation:   b.Rotation,
 	}
 	return newBlock
 }
