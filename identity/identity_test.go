@@ -153,3 +153,10 @@ func TestRotateKey(t *testing.T) {
 		assert.Equal(c.Len(), lengths[i]+1)
 	}
 }
+
+func TestTrustLevel(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	lvl := dave.TrustLevel()
+	assert.Equal(lvl, 0)
+}

@@ -18,7 +18,7 @@ import (
 
 // TODO: however, key rotation chain blocks should not be calculated when web of
 // trust calculations are executed. NOTE: this is not so simple as it seems at
-// the first sight. Also we don't need to do it too complexy. Key rotation
+// the first sight. Also we don't need to do it too complex. Key rotation
 // should be limited to happen only chain roots, not later!! we could even think
 // that it's allowed only when no invitations are done for us, i.e., that key
 // rotation should be done during the setup, not later. Why we did it later, if
@@ -57,7 +57,7 @@ import (
 // things later?
 
 type Identity struct {
-	node.Node // these share the same key.ID&Public
+	node.Node  // these share the same key.ID&Public
 	key.Handle // should we have multiple key.Handle if we have pre rotated?
 }
 
@@ -78,4 +78,14 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 
 	newID := i.Invite(newInfo, 0)
 	return newID
+}
+
+// TrustLevel calculates current trust-level of the Identity domain.
+// Calcultation is simple summary of Invitee chains and the levels there
+func (i Identity) TrustLevel() int {
+	return 0
+}
+
+func (i Identity) Friends(rhs Identity) bool {
+	return false
 }
