@@ -15,11 +15,11 @@ func TestNewVerifyBlock(t *testing.T) {
 		args args
 		want int // length of Block
 	}{
-		{"nil pincode", args{0}, 240},
+		{"nil pincode", args{0}, 294},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Skip("Not until Block is about ready again")
+			//t.Skip("Not until Block is about ready again")
 
 			defer assert.PushTester(t)()
 
