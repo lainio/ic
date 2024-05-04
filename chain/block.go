@@ -12,7 +12,7 @@ import (
 // is an important field, because its data must be same at the node
 // level. They verify that otherwise separated ICs belong to the same node!
 type Block struct {
-	HashToPrev []byte // TODO: check the size later => 32, TODO: make own type
+	HashToPrev key.Hash // TODO: check the size later => 32, TODO: make own type
 	Invitee    key.Info
 	Options
 
