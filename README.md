@@ -24,10 +24,14 @@ invitation and reputation chains. Later we might offer gRPC API as well.
 left to right direction
 skinparam packageStyle rectangle
 
+actor holder
 actor admin
 actor node_admin
 
 rectangle "CI System" {
+  (show qr) -- holder
+  (read qr) <|- (decide introduction/connection)
+  (read qr) -- holder
   admin -- (make mutual introduction)
   admin -- (introduction: invite)
   admin -- (create keys)
@@ -42,6 +46,20 @@ rectangle "CI System" {
 admin <|- node_admin
 @enduml
 ```
+
+### Use Case Explanations
+
+#### Decide introduction/connection
+
+If we have common invitations we could just connect and start chat. We can build
+pairwise connection. However, if we already know each others well we can bind
+our invitation chains together to make extra trust for our selves and our future
+invitation-connections.
+
+If we are reading QR code from ad aka sales pages and we know nothing about
+other end, we must check our invitation chains. How we get invitation chain form
+the QR code? The Tor address we are reading it from must be signed. This is very
+important!
 
 ```mermaid
 sequenceDiagram
