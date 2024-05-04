@@ -27,8 +27,8 @@ skinparam packageStyle rectangle
 actor admin
 actor node_admin
 
-rectangle "Agency CLI - create" {
-  admin -- (create WoT connection)
+rectangle "CI System" {
+  admin -- (make mutual introduction)
   admin -- (create keys)
   admin -- (app installation)
 
@@ -37,6 +37,8 @@ rectangle "Agency CLI - create" {
   node_admin -- (create dynDNS)
   node_admin -- (create client connection)
 }
+
+admin <|- node_admin
 @enduml
 ```
 
@@ -61,24 +63,8 @@ sequenceDiagram
     Seller -) IssuerFSM: 'attribute_value'
     end
 
-    alt Send thru existing connection
-    Seller -) Buyer: 'session_id' (same as above, design how app knows that this is a command)
-    end
-
-    Buyer -) RcvrFSM: 'session_id'
-    Buyer -) RcvrFSM: rcvr = role
-
-    RcvrFSM -) BackendFSM: receiver_arriwed
-    BackendFSM -) IssuerFSM: rcvr_arriwed
-    loop Schemas attributes
-    IssuerFSM -) BackendFSM: 'attribute_value'
-    BackendFSM -) RcvrFSM: 'attribute_value'
-    end
-    IssuerFSM -) BackendFSM: attributes done (not implemented, one attrib)
-    BackendFSM -) RcvrFSM: attributes done (not implemented, one attrib)
-
-    RcvrFSM -) Buyer: CREDENTIAL ISSUING PROTOCOL
 ```
 
 # References to PUML Works! Will use this in final.
+
 ![connection-protocol-save-state.puml](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/findy-network/findy-agent/master/docs/puml/protocols/connection-protocol-save-state.puml)
