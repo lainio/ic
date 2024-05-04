@@ -8,7 +8,7 @@ import (
 type Node struct {
 	// TODO: should we have myltiple IDChains? or just one or all in the same?
 
-	Chains []chain.Chain // TODO: InvitationChains renaming?
+	InviteeChains []chain.Chain // TODO: InvitationChains renaming?
 }
 
 type WebOfTrust struct {
@@ -33,13 +33,13 @@ func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
 func NewRoot(pubKey key.Info, flags ...bool) Node {
-	n := Node{Chains: make([]chain.Chain, 1, 12)}
-	n.Chains[0] = chain.NewRoot(pubKey, flags...)
+	n := Node{InviteeChains: make([]chain.Chain, 1, 12)}
+	n.InviteeChains[0] = chain.NewRoot(pubKey, flags...)
 	return n
 }
 
 func (n Node) AddChain(c chain.Chain) (rn Node) {
-	rn.Chains = append(n.Chains, c)
+	rn.InviteeChains = append(n.InviteeChains, c)
 	return rn
 }
 
@@ -47,7 +47,7 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 // those ICs of us (n Node) that invitee doesn't yet belong.
 // NOTE! Use identity.Invite at the API lvl.
 // This has worked since we started, but at the identity level we need symmetric
-// invitation system. 
+// invitation system.
 func (n Node) Invite(
 	// TODO: order of the arguments?
 	inviteesNode Node,
@@ -57,15 +57,15 @@ func (n Node) Invite(
 ) (
 	rn Node,
 ) {
-	rn.Chains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
+	rn.InviteeChains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
 
 	// keep all the existing web-of-trust chains if not rotation case
 	if !inviteesNode.rotationChain() {
-		rn.Chains = append(rn.Chains, inviteesNode.Chains...)
+		rn.InviteeChains = append(rn.InviteeChains, inviteesNode.InviteeChains...)
 	}
 
 	// add only those which invitee isn't member already
-	for _, c := range n.Chains {
+	for _, c := range n.InviteeChains {
 		// if inviteesNode already is inivited to same web-of-trust
 		if inviteesNode.sharedRoot(c) {
 			// only keep it
@@ -74,14 +74,14 @@ func (n Node) Invite(
 
 		// inviter (n) has something that invitee dosen't belong yet
 		newChain := c.Invite(inviter, invitee, position)
-		rn.Chains = append(rn.Chains, newChain)
+		rn.InviteeChains = append(rn.InviteeChains, newChain)
 	}
 	return rn
 }
 
 func (n Node) rotationChain() (yes bool) {
-	if n.Len() == 1 && n.Chains[0].Len() == 1 {
-		yes = n.Chains[0].Blocks[0].Rotation
+	if n.Len() == 1 && n.InviteeChains[0].Len() == 1 {
+		yes = n.InviteeChains[0].Blocks[0].Rotation
 	}
 	return yes
 }
@@ -90,7 +90,7 @@ func (n Node) rotationChain() (yes bool) {
 // is empty not nil.
 func (n Node) CommonChains(their Node) []chain.Pair {
 	common := make([]chain.Pair, 0, n.Len())
-	for _, my := range n.Chains {
+	for _, my := range n.InviteeChains {
 		p := their.sharedRootPair(my)
 		if p.Valid() {
 			common = append(common, p)
@@ -144,7 +144,7 @@ func (n Node) OneHop(their Node) bool {
 }
 
 func (n Node) CommonChain(their Node) chain.Chain {
-	for _, my := range n.Chains {
+	for _, my := range n.InviteeChains {
 		if their.sharedRoot(my) {
 			return my
 		}
@@ -153,11 +153,11 @@ func (n Node) CommonChain(their Node) chain.Chain {
 }
 
 func (n Node) Len() int {
-	return len(n.Chains)
+	return len(n.InviteeChains)
 }
 
 func (n Node) sharedRoot(their chain.Chain) bool {
-	for _, my := range n.Chains {
+	for _, my := range n.InviteeChains {
 		if chain.SameRoot(their, my) {
 			return true
 		}
@@ -166,7 +166,7 @@ func (n Node) sharedRoot(their chain.Chain) bool {
 }
 
 func (n Node) sharedRootPair(their chain.Chain) chain.Pair {
-	for _, my := range n.Chains {
+	for _, my := range n.InviteeChains {
 		if chain.SameRoot(their, my) {
 			return chain.Pair{Chain1: their, Chain2: my}
 		}

@@ -50,11 +50,11 @@ func TestNewIdentity(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	aliceID := New(alice)
-	assert.SLen(aliceID.Chains, 1)
-	assert.SLen(aliceID.Chains[0].Blocks, 1)
+	assert.SLen(aliceID.InviteeChains, 1)
+	assert.SLen(aliceID.InviteeChains[0].Blocks, 1)
 
 	bobID := New(bob)
-	assert.SLen(bobID.Chains, 1)
+	assert.SLen(bobID.InviteeChains, 1)
 }
 
 func TestIdentity_Invite(t *testing.T) {
@@ -64,7 +64,7 @@ func TestIdentity_Invite(t *testing.T) {
 	alice = root1.Invite(alice, 1)
 	assert.Equal(alice.Len(), 1)
 	{
-		c := alice.Chains[0]
+		c := alice.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.VerifySign())
 	}
@@ -72,7 +72,7 @@ func TestIdentity_Invite(t *testing.T) {
 	bob = alice.Invite(bob, 1)
 	assert.Equal(bob.Len(), 1)
 	{
-		c := bob.Chains[0]
+		c := bob.InviteeChains[0]
 		assert.SLen(c.Blocks, 3) // we know how long the chain is now
 		assert.That(c.VerifySign())
 	}
@@ -85,7 +85,7 @@ func TestIdentity_Invite(t *testing.T) {
 	carol = root2.Invite(carol, 1)
 	assert.Equal(carol.Len(), 1)
 	{
-		c := carol.Chains[0]
+		c := carol.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.VerifySign())
 	}
@@ -99,7 +99,7 @@ func TestIdentity_Invite(t *testing.T) {
 	eve = dave.Invite(eve, 1)
 	assert.Equal(eve.Len(), 1)
 	{
-		c := eve.Chains[0]
+		c := eve.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.VerifySign())
 	}
@@ -109,7 +109,7 @@ func TestIdentity_Invite(t *testing.T) {
 	dave = root2.Invite(dave, 1)
 	assert.Equal(dave.Len(), 2)
 	{
-		c := dave.Chains[1]
+		c := dave.InviteeChains[1]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.VerifySign())
 	}
@@ -138,7 +138,7 @@ func TestRotateKey(t *testing.T) {
 
 	length := eve.Len()
 	lengths := make([]int, length)
-	for i, c := range eve.Chains {
+	for i, c := range eve.InviteeChains {
 		lengths[i] = c.Len()
 	}
 
@@ -146,10 +146,10 @@ func TestRotateKey(t *testing.T) {
 
 	// TODO: +1 new chain is added, when doing key rotation we don't want only
 	// one link length new chain. Figure out how to handle that.
-	assert.SLen(eve.Chains, length)
+	assert.SLen(eve.InviteeChains, length)
 	//t.Skip("see TODO")
 
-	for i, c := range eve.Chains {
+	for i, c := range eve.InviteeChains {
 		assert.Equal(c.Len(), lengths[i]+1)
 	}
 }
