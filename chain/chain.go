@@ -54,6 +54,10 @@ type Pair struct {
 	Chain1, Chain2 Chain
 }
 
+func (p Pair) Valid() bool {
+	return !p.Chain1.IsNil() && !p.Chain2.IsNil()
+}
+
 func (p Pair) Hops() (int, int) {
 	return Hops(p.Chain1, p.Chain2)
 }
@@ -79,7 +83,8 @@ func SameRoot(c1, c2 Chain) bool {
 		return false
 	}
 
-	return EqualBlocks(c1.firstBlock(), c2.firstBlock())
+	b1, b2 := c1.firstBlock(), c2.firstBlock()
+	return EqualBlocks(b1, b2)
 }
 
 func SameInviter(c1, c2 Chain) bool {

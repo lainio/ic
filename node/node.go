@@ -89,9 +89,8 @@ func (n Node) rotationChain() (yes bool) {
 func (n Node) CommonChains(their Node) []chain.Pair {
 	common := make([]chain.Pair, 0, n.Len())
 	for _, my := range n.Chains {
-		p := their.shared(my)
-		isPair := !p.Chain1.IsNil() && !p.Chain2.IsNil()
-		if isPair {
+		p := their.sharedRootPair(my)
+		if p.Valid() {
 			common = append(common, p)
 		}
 	}
@@ -164,7 +163,7 @@ func (n Node) sharedRoot(their chain.Chain) bool {
 	return false
 }
 
-func (n Node) shared(their chain.Chain) chain.Pair {
+func (n Node) sharedRootPair(their chain.Chain) chain.Pair {
 	for _, my := range n.Chains {
 		if chain.SameRoot(their, my) {
 			return chain.Pair{Chain1: their, Chain2: my}
