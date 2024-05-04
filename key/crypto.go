@@ -28,7 +28,7 @@ type ID = []byte
 type Handle = enclave.KeyHandle
 
 // Info is key.Info that binds and transport both key's ID and its public key
-// together. TODO: start to use this in Chain?
+// together.
 type Info struct {
 	ID
 	Public

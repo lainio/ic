@@ -16,9 +16,12 @@ type Block struct {
 	Invitee    key.Info
 
 	InvitersSignature key.Signature
+	Position          int
 
-	Position int  // TODO: shoud we merge..
-	Rotation bool // these two? TODO: learning, this is very important! maybe
+	// TODO: start to use Flag aggregated class and Otions pattern
+	Options
+	//Rotation bool // these two? TODO: learning, this is very important! maybe
+
 	// keep it this way that it's easy?
 
 	// TODO: authorization type field. This would be signed, i.e., included in
@@ -79,7 +82,7 @@ func (b Block) excludeSign() Block {
 		HashToPrev: b.HashToPrev,
 		Invitee:    b.Invitee,
 		Position:   b.Position,
-		Rotation:   b.Rotation,
+		//Rotation:   b.Rotation, // TODO: use Options
 	}
 	return newBlock
 }
@@ -99,4 +102,38 @@ func (b Block) VerifySign(invitersPubKey key.Public) bool {
 		b.ExcludeBytes(),
 		b.InvitersSignature,
 	)
+}
+
+type Opts func(*Options)
+
+type Options struct {
+	Position     int
+	Rotation     bool
+	AllowRouting bool
+}
+
+func NewOptions(options ...Opts) *Options {
+	opts := new(Options)
+	for _, o := range options {
+		o(opts)
+	}
+	return opts
+}
+
+func WithPosition(p int) Opts {
+	return func(o *Options) {
+		o.Position = p
+	}
+}
+
+func WithRotation(r bool) Opts {
+	return func(o *Options) {
+		o.Rotation = r
+	}
+}
+
+func WithAllowRouting(allow bool) Opts {
+	return func(o *Options) {
+		o.AllowRouting = allow
+	}
 }

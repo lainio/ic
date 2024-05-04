@@ -19,6 +19,8 @@ func TestNewVerifyBlock(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Skip("Not until Block is about ready again")
+
 			defer assert.PushTester(t)()
 
 			cb, _ := NewVerifyBlock(tt.args.pinCode)

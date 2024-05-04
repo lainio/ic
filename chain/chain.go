@@ -127,18 +127,20 @@ func Hops(lhs, rhs Chain) (int, int) {
 // NewRoot constructs a new root chain.
 // NOTE: NewRoot is important part of key rotation and everything where we will
 // construct our key concepts from key pair.
-func NewRoot(rootPubKey key.Info, flags ...bool) Chain {
+func NewRoot(rootPubKey key.Info, flags ...Opts) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
 		HashToPrev:        nil,
 		Invitee:           rootPubKey,
 		InvitersSignature: nil,
-		Rotation:          flagOn(flags),
+		//		Rotation:          flagOn(flags),
 	}
+	opts := NewOptions(flags...)
+	chain.Blocks[0].Options = *opts
 	return chain
 }
 
-func flagOn(flags []bool) bool {
+func _(flags []bool) bool {
 	if len(flags) > 0 {
 		return flags[0] // TODO: only rotation flag is supported now
 	}
@@ -170,7 +172,7 @@ func (c Chain) Bytes() []byte {
 func (c Chain) Invite(
 	inviter key.Handle,
 	invitee key.Info,
-	position int,
+	position int, // TODO: use Options
 ) (nc Chain) {
 	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
@@ -190,7 +192,7 @@ func (c Chain) Invite(
 func (c Chain) rotationInvite(
 	inviter key.Handle,
 	invitee key.Info,
-	position int,
+	position int, // TODO: use Options
 ) (nc Chain) {
 	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
@@ -198,7 +200,10 @@ func (c Chain) rotationInvite(
 		HashToPrev: c.hashToLeaf(),
 		Invitee:    invitee,
 		Position:   position,
-		Rotation:   true,
+		//Rotation:   true,
+		Options: Options{
+			Rotation: true,
+		},
 	}
 	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.ExcludeBytes()))
 

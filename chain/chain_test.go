@@ -71,7 +71,7 @@ func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	k := key.New()
-	c := NewRoot(key.InfoFromHandle(k), true /*rotation*/)
+	c := NewRoot(key.InfoFromHandle(k), WithRotation(true))
 
 	assert.SLen(c.Blocks, 1)
 	assert.Equal(c.Len(), 1)

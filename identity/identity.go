@@ -2,6 +2,7 @@
 package identity
 
 import (
+	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/node"
 )
@@ -70,7 +71,7 @@ type Identity struct {
 	key.Handle
 }
 
-func New(h key.Handle, flags ...bool) Identity {
+func New(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{Node: node.NewRoot(info, flags...), Handle: h}
 }
@@ -82,8 +83,7 @@ func (i Identity) Invite(rhs Identity, position int) Identity {
 }
 
 func (i Identity) RotateKey(newKH key.Handle) Identity {
-	rotation := true
-	newInfo := New(newKH, rotation)
+	newInfo := New(newKH, chain.WithRotation(true))
 
 	newID := i.Invite(newInfo, 0)
 	return newID
