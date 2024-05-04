@@ -11,3 +11,71 @@ invitation and reputation chains. Later we might offer gRPC API as well.
 1. then input and output 
   - network transport
 1. last the persistence 
+
+## Use Cases
+
+1. Install App and generate key pairs and secure enclaves
+1. Meet a friend
+    - check who has *trust-level* TL status TODO:
+    - greater TL
+
+```plantuml
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+
+actor admin
+actor node_admin
+
+rectangle "Agency CLI - create" {
+  admin -- (create WoT connection)
+  admin -- (create keys)
+  admin -- (app installation)
+
+  node_admin -- (create tor proxy)
+  node_admin -- (create TLS cert)
+  node_admin -- (create dynDNS)
+  node_admin -- (create client connection)
+}
+@enduml
+```
+
+```mermaid
+sequenceDiagram
+    autonumber
+
+    participant Seller
+
+    %% -- box won't work on hugo, or when this machine is running it --
+    %% box Issuing Service
+    participant IssuerFSM
+    participant BackendFSM
+    participant RcvrFSM
+    %% end
+
+    participant Buyer
+
+    Seller -) IssuerFSM: 'session_id' (GUID)
+    Seller -) IssuerFSM: issuer = role
+    loop Schemas attributes
+    Seller -) IssuerFSM: 'attribute_value'
+    end
+
+    alt Send thru existing connection
+    Seller -) Buyer: 'session_id' (same as above, design how app knows that this is a command)
+    end
+
+    Buyer -) RcvrFSM: 'session_id'
+    Buyer -) RcvrFSM: rcvr = role
+
+    RcvrFSM -) BackendFSM: receiver_arriwed
+    BackendFSM -) IssuerFSM: rcvr_arriwed
+    loop Schemas attributes
+    IssuerFSM -) BackendFSM: 'attribute_value'
+    BackendFSM -) RcvrFSM: 'attribute_value'
+    end
+    IssuerFSM -) BackendFSM: attributes done (not implemented, one attrib)
+    BackendFSM -) RcvrFSM: attributes done (not implemented, one attrib)
+
+    RcvrFSM -) Buyer: CREDENTIAL ISSUING PROTOCOL
+```
