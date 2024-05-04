@@ -75,7 +75,7 @@ func New(h key.Handle, flags ...bool) Identity {
 	return Identity{Node: node.NewRoot(info, flags...), Handle: h}
 }
 
-// Invite ivites other identity holder to all (decided later) our ICs.
+// Invite invites other identity holder to all (decided later) our ICs.
 func (i Identity) Invite(rhs Identity, position int) Identity {
 	rhs.Node = i.Node.Invite(rhs.Node, i, key.InfoFromHandle(rhs.Handle), position)
 	return rhs
