@@ -79,7 +79,8 @@ func (n Node) Invite(
 		}
 
 		// inviter (n) has something that invitee dosen't belong yet
-		newChain := c.Invite(inviter, invitee, position)
+		newChain := c.Invite(inviter, invitee,
+			chain.WithPosition(position))
 		rn.InviteeChains = append(rn.InviteeChains, newChain)
 	}
 	return rn

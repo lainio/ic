@@ -172,15 +172,15 @@ func (c Chain) Bytes() []byte {
 func (c Chain) Invite(
 	inviter key.Handle,
 	invitee key.Info,
-	position int, // TODO: use Options
+	opts ...Opts,
 ) (nc Chain) {
 	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
 	newBlock := Block{
 		HashToPrev: c.hashToLeaf(),
 		Invitee:    invitee,
-		Position:   position,
 	}
+	newBlock.Options = *NewOptions(opts...)
 	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.ExcludeBytes()))
 
 	nc = c.Clone()
@@ -192,19 +192,16 @@ func (c Chain) Invite(
 func (c Chain) rotationInvite(
 	inviter key.Handle,
 	invitee key.Info,
-	position int, // TODO: use Options
+	opts ...Opts,
 ) (nc Chain) {
 	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
 	newBlock := Block{
 		HashToPrev: c.hashToLeaf(),
 		Invitee:    invitee,
-		Position:   position,
-		//Rotation:   true,
-		Options: Options{
-			Rotation: true,
-		},
 	}
+	ops := append(opts, WithRotation(true))
+	newBlock.Options = *NewOptions(ops...)
 	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.ExcludeBytes()))
 
 	nc = c.Clone()

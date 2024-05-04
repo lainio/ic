@@ -41,7 +41,8 @@ func setup() {
 	testChain = NewRoot(key.InfoFromHandle(rootKey))
 	inviteeKey = key.New()
 	level := 1
-	testChain = testChain.Invite(rootKey, key.InfoFromHandle(inviteeKey), level)
+	testChain = testChain.Invite(rootKey, key.InfoFromHandle(inviteeKey),
+		WithPosition(level))
 
 	// root, alice, bob setup
 	rootMaster.Handle = key.New()
@@ -50,10 +51,13 @@ func setup() {
 	bob.Handle = key.New()
 	// start root with one rotation key
 	rootMaster.Chain = NewRoot(key.InfoFromHandle(rootMaster))
-	root.Chain = rootMaster.rotationInvite(rootMaster.Handle, key.InfoFromHandle(root), 1)
+	root.Chain = rootMaster.rotationInvite(rootMaster.Handle, key.InfoFromHandle(root),
+		WithPosition(1))
 	// root invites alice and bod but they have no invitation between
-	alice.Chain = root.Invite(root.Handle, key.InfoFromHandle(alice), 1)
-	bob.Chain = root.Invite(root.Handle, key.InfoFromHandle(bob), 1)
+	alice.Chain = root.Invite(root.Handle, key.InfoFromHandle(alice),
+		WithPosition(1))
+	bob.Chain = root.Invite(root.Handle, key.InfoFromHandle(bob),
+		WithPosition(1))
 
 	// root2, alice2, bob2 setup
 	root2.Handle = key.New()
@@ -63,8 +67,10 @@ func setup() {
 	root2.Chain = NewRoot(key.InfoFromHandle(root2))
 
 	// root2 invites alice2 and bod2 but they have no invitation between
-	alice2.Chain = root2.Invite(root2.Handle, key.InfoFromHandle(alice2), 1)
-	bob2.Chain = root2.Invite(root2.Handle, key.InfoFromHandle(bob2), 1)
+	alice2.Chain = root2.Invite(root2.Handle, key.InfoFromHandle(alice2),
+		WithPosition(1))
+	bob2.Chain = root2.Invite(root2.Handle, key.InfoFromHandle(bob2),
+		WithPosition(1))
 }
 
 func TestNewChain(t *testing.T) {
@@ -80,14 +86,16 @@ func TestNewChain(t *testing.T) {
 	//assert.Equal(c.AbsLen(), 1)
 
 	k2 := key.New()
-	c = c.rotationInvite(k, key.InfoFromHandle(k2), 1)
+	c = c.rotationInvite(k, key.InfoFromHandle(k2),
+		WithPosition(1))
 	assert.Equal(c.Len(), 2, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 2)
 	assert.That(c.VerifyIDChain())
 	//assert.Equal(c.AbsLen(), 1)
 
 	k3 := key.New()
-	c = c.rotationInvite(k2, key.InfoFromHandle(k3), 1)
+	c = c.rotationInvite(k2, key.InfoFromHandle(k3),
+		WithPosition(1))
 	assert.Equal(c.Len(), 3, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 3)
 	assert.That(c.VerifyIDChain())
@@ -123,7 +131,8 @@ func TestVerifyChain(t *testing.T) {
 
 	newInvitee := key.New()
 	level := 3
-	testChain = testChain.Invite(inviteeKey, key.InfoFromHandle(newInvitee), level)
+	testChain = testChain.Invite(inviteeKey, key.InfoFromHandle(newInvitee),
+		WithPosition(level))
 
 	assert.SLen(testChain.Blocks, 3)
 	assert.That(testChain.VerifySign())
@@ -140,7 +149,8 @@ func TestInvitation(t *testing.T) {
 	cecilia := entity{
 		Handle: key.New(),
 	}
-	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
+		WithPosition(1))
 	assert.SLen(cecilia.Blocks, 4)
 	assert.That(cecilia.Chain.VerifySign())
 	assert.That(!SameRoot(testChain, cecilia.Chain), "we have two different roots")
@@ -166,7 +176,8 @@ func TestCommonInviterLevel(t *testing.T) {
 	}
 
 	// bob intives cecilia
-	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
+		WithPosition(1))
 	//                rootMaster
 	//                    |
 	//                   \/
@@ -184,7 +195,8 @@ func TestCommonInviterLevel(t *testing.T) {
 		Handle: key.New(),
 	}
 	// alice invites david
-	david.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(david), 1)
+	david.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(david),
+		WithPosition(1))
 	//                rootMaster
 	//                    |
 	//                   \/
@@ -201,7 +213,8 @@ func TestCommonInviterLevel(t *testing.T) {
 	edvin := entity{
 		Handle: key.New(),
 	}
-	edvin.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(edvin), 1)
+	edvin.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(edvin),
+		WithPosition(1))
 	//                rootMaster
 	//                    |
 	//                   \/
@@ -215,7 +228,8 @@ func TestCommonInviterLevel(t *testing.T) {
 	assert.Equal(CommonInviterLevel(edvin.Chain, david.Chain), 2,
 		"alice is at level 2 from chain's root and inviter of both")
 
-	edvin2Chain := alice.Chain.Invite(alice.Handle, key.InfoFromHandle(key.New()), 1)
+	edvin2Chain := alice.Chain.Invite(alice.Handle, key.InfoFromHandle(key.New()),
+		WithPosition(1))
 	//                rootMaster
 	//                    |
 	//                   \/
@@ -229,8 +243,10 @@ func TestCommonInviterLevel(t *testing.T) {
 	assert.Equal(CommonInviterLevel(edvin2Chain, david.Chain), 2,
 		"alice is at level 2 from chain's root and inviter of both")
 
-	fred1Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()), 1)
-	fred2Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()), 1)
+	fred1Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()),
+		WithPosition(1))
+	fred2Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()),
+		WithPosition(1))
 	//                rootMaster                     lvl 0
 	//                    |
 	//                   \/
@@ -258,7 +274,8 @@ func TestSameInviter(t *testing.T) {
 	cecilia := entity{
 		Handle: key.New(),
 	}
-	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
+		WithPosition(1))
 	assert.SLen(cecilia.Blocks, 4)
 	assert.That(cecilia.Chain.VerifySign())
 	assert.That(bob.IsInviterFor(cecilia.Chain))
@@ -291,7 +308,8 @@ func TestHops(t *testing.T) {
 	cecilia := entity{
 		Handle: key.New(),
 	}
-	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia), 1)
+	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
+		WithPosition(1))
 	//                rootMaster
 	//                    |
 	//                   \/
@@ -309,7 +327,8 @@ func TestHops(t *testing.T) {
 	david := entity{
 		Handle: key.New(),
 	}
-	david.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(david), 1)
+	david.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(david),
+		WithPosition(1))
 	//                rootMaster
 	//                    |
 	//                   \/
@@ -327,7 +346,8 @@ func TestHops(t *testing.T) {
 	edvin := entity{
 		Handle: key.New(),
 	}
-	edvin.Chain = david.Invite(david.Handle, key.InfoFromHandle(edvin), 1)
+	edvin.Chain = david.Invite(david.Handle, key.InfoFromHandle(edvin),
+		WithPosition(1))
 	//                rootMaster
 	//                    |
 	//                   \/

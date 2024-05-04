@@ -15,11 +15,13 @@ type Block struct {
 	HashToPrev []byte // TODO: check the size later => 32, TODO: make own type
 	Invitee    key.Info
 
-	InvitersSignature key.Signature
-	Position          int
-
 	// TODO: start to use Flag aggregated class and Otions pattern
-	Options
+	Options // belongs to signed data
+
+	InvitersSignature key.Signature
+
+	//Position          int
+
 	//Rotation bool // these two? TODO: learning, this is very important! maybe
 
 	// keep it this way that it's easy?
@@ -53,7 +55,9 @@ func NewVerifyBlock(pinCode int) (Block, Block) {
 	return challengeBlock, Block{
 		HashToPrev: challengeBlock.HashToPrev,
 		Invitee:    challengeBlock.Invitee,
-		Position:   pinCode, // TODO: move to transport with Invitee key.Info
+		Options: Options{
+			Position: pinCode,
+		},
 	}
 }
 
@@ -81,8 +85,10 @@ func (b Block) excludeSign() Block {
 	newBlock := Block{
 		HashToPrev: b.HashToPrev,
 		Invitee:    b.Invitee,
-		Position:   b.Position,
-		//Rotation:   b.Rotation, // TODO: use Options
+		Options: Options{
+			Position: b.Position,
+			Rotation: b.Rotation,
+		},
 	}
 	return newBlock
 }
