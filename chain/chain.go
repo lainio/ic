@@ -142,13 +142,6 @@ func New(keyInfo key.Info, flags ...Opts) Chain {
 	return chain
 }
 
-func _(flags []bool) bool {
-	if len(flags) > 0 {
-		return flags[0] // TODO: only rotation flag is supported now
-	}
-	return false
-}
-
 func NewChainFromData(d []byte) (c Chain) {
 	r := bytes.NewReader(d)
 	dec := gob.NewDecoder(r)
