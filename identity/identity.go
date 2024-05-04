@@ -57,8 +57,17 @@ import (
 // things later?
 
 type Identity struct {
-	node.Node  // these share the same key.ID&Public
-	key.Handle // should we have multiple key.Handle if we have pre rotated?
+	node.Node // chains inside these share the same key.ID&Public
+
+	// TODO: should we have multiple key.Handle if we have pre rotated?
+	// we will have dynamic rotation (RotateKey), and we'll have ID chain later
+	// that's used for catastrophes, i.e., we have lost the control of our
+	// private key. Then we need a backup key. Backup keys are stored in ID
+	// Chain. Because we can sign nothing, we need a backup route where will
+	// tell that use this key form this id chain. All of the ID Chains have the
+	// same original root. Even when we don't have root key (genesis key) any
+	// more chain's validity can be proofed.
+	key.Handle
 }
 
 func New(h key.Handle, flags ...bool) Identity {

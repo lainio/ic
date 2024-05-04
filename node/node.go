@@ -8,7 +8,13 @@ import (
 type Node struct {
 	// TODO: should we have myltiple IDChains? or just one or all in the same?
 
-	InviteeChains []chain.Chain // TODO: InvitationChains renaming?
+	InviteeChains []chain.Chain
+
+	ChainsInviter []chain.Chain // TODO: if the node is service, this will be
+	// too large. We need extremely good reason to have this kind of storage.
+	// Also we will have service type inviters who will have we large count of
+	// invitees. And if that's something we don't need, we don't store it.
+	// However, if it's small and doesn't matter, let's think about it then.
 }
 
 type WebOfTrust struct {
