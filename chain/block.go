@@ -18,14 +18,16 @@ type Block struct {
 
 	InvitersSignature key.Signature
 
-	// TODO: authorization type field. This would be signed, i.e., included in
-	// the core block. See the Options it will there.
-
 	// TODO: where we should put our specific chain types? To keep it simple
-	// this is a good place. However, we have a Chain type as well.
+	// this is a good place. However, we have a Chain type as well. They belong
+	// to Identity, and Node will be changed to concept of invitation chains,
+	// maybe named like that as well.
 
 	// TODO: service endpoints should be here, and yes, they should be tamper
-	// free for the security reasons. Even when we are moving envelopes between
+	// free for the security reasons and we have use case, i.e. QR code.
+
+	// TODO: about endopints:
+	// Even when we are moving envelopes between
 	// endopints maybe we shouldn't allow chainging endpoints? But, but, there
 	// are many buts here! Let's make a hypothesis 1) we start with the message
 	// based transport, and the correlation & identification stuff are done
@@ -108,6 +110,10 @@ type Options struct {
 	Position     int
 	Rotation     bool
 	AllowRouting bool
+
+	// TODO: future ones, endpoint or does this belong to key.Info? It might be
+	// good if we could share same key with the Tor service and our ID?
+	// However, the key rotation is as important as
 }
 
 func NewOptions(options ...Opts) *Options {
