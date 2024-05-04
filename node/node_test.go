@@ -67,7 +67,8 @@ func TestInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
-	alice.Node = root1.Invite(alice.Node, root1.Handle, key.InfoFromHandle(alice), 1)
+	alice.Node = root1.Invite(alice.Node, root1.Handle,
+		key.InfoFromHandle(alice), 1)
 	assert.Equal(alice.Len(), 1)
 	{
 		c := alice.Chains[0]
