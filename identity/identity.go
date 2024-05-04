@@ -73,7 +73,7 @@ type Identity struct {
 
 func New(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
-	return Identity{Node: node.NewRoot(info, flags...), Handle: h}
+	return Identity{Node: node.New(info, flags...), Handle: h}
 }
 
 // Invite invites other identity holder to all (decided later) our ICs.

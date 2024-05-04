@@ -38,7 +38,7 @@ func teardown() {}
 func setup() {
 	// general chain for tests
 	rootKey = key.New()
-	testChain = NewRoot(key.InfoFromHandle(rootKey))
+	testChain = New(key.InfoFromHandle(rootKey))
 	inviteeKey = key.New()
 	level := 1
 	testChain = testChain.Invite(rootKey, key.InfoFromHandle(inviteeKey),
@@ -50,7 +50,7 @@ func setup() {
 	alice.Handle = key.New()
 	bob.Handle = key.New()
 	// start root with one rotation key
-	rootMaster.Chain = NewRoot(key.InfoFromHandle(rootMaster))
+	rootMaster.Chain = New(key.InfoFromHandle(rootMaster))
 	root.Chain = rootMaster.rotationInvite(rootMaster.Handle, key.InfoFromHandle(root),
 		WithPosition(1))
 	// root invites alice and bod but they have no invitation between
@@ -64,7 +64,7 @@ func setup() {
 	alice2.Handle = key.New()
 	bob2.Handle = key.New()
 	// start second root without rotation key
-	root2.Chain = NewRoot(key.InfoFromHandle(root2))
+	root2.Chain = New(key.InfoFromHandle(root2))
 
 	// root2 invites alice2 and bod2 but they have no invitation between
 	alice2.Chain = root2.Invite(root2.Handle, key.InfoFromHandle(alice2),
@@ -77,7 +77,7 @@ func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	k := key.New()
-	c := NewRoot(key.InfoFromHandle(k), WithRotation(true))
+	c := New(key.InfoFromHandle(k), WithRotation(true))
 
 	assert.SLen(c.Blocks, 1)
 	assert.Equal(c.Len(), 1)

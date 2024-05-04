@@ -124,16 +124,18 @@ func Hops(lhs, rhs Chain) (int, int) {
 	return lhs.Hops(rhs)
 }
 
-// NewRoot constructs a new root chain.
-// NOTE: NewRoot is important part of key rotation and everything where we will
+// New constructs a new chain. It's a genesis block. We can start our identity
+// chain with this. If it's a rotation block, the first one, we are creating
+// backup chain for several keys.
+//
+// NOTE: New is important part of key rotation and everything where we will
 // construct our key concepts from key pair.
-func NewRoot(rootPubKey key.Info, flags ...Opts) Chain {
+func New(keyInfo key.Info, flags ...Opts) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
 		HashToPrev:        nil,
-		Invitee:           rootPubKey,
+		Invitee:           keyInfo,
 		InvitersSignature: nil,
-		//		Rotation:          flagOn(flags),
 	}
 	opts := NewOptions(flags...)
 	chain.Blocks[0].Options = *opts
@@ -188,25 +190,14 @@ func (c Chain) Invite(
 	return nc
 }
 
-// rotationInvite used for unit testing only!
+// rotationInvite used for unit testing only! TODO: remove, Invite is enought.
 func (c Chain) rotationInvite(
 	inviter key.Handle,
 	invitee key.Info,
 	opts ...Opts,
 ) (nc Chain) {
-	assert.That(c.isLeaf(inviter), "only leaf can invite")
-
-	newBlock := Block{
-		HashToPrev: c.hashToLeaf(),
-		Invitee:    invitee,
-	}
 	ops := append(opts, WithRotation(true))
-	newBlock.Options = *NewOptions(ops...)
-	newBlock.InvitersSignature = try.To1(inviter.Sign(newBlock.ExcludeBytes()))
-
-	nc = c.Clone()
-	nc.Blocks = append(nc.Blocks, newBlock)
-	return nc
+	return c.Invite(inviter, invitee, ops...)
 }
 
 // Hops returns hops and common inviter's level if that exists. If not both

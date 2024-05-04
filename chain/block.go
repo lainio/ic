@@ -14,20 +14,12 @@ import (
 type Block struct {
 	HashToPrev []byte // TODO: check the size later => 32, TODO: make own type
 	Invitee    key.Info
-
-	// TODO: start to use Flag aggregated class and Otions pattern
-	Options // belongs to signed data
+	Options
 
 	InvitersSignature key.Signature
 
-	//Position          int
-
-	//Rotation bool // these two? TODO: learning, this is very important! maybe
-
-	// keep it this way that it's easy?
-
 	// TODO: authorization type field. This would be signed, i.e., included in
-	// the core block.
+	// the core block. See the Options it will there.
 
 	// TODO: where we should put our specific chain types? To keep it simple
 	// this is a good place. However, we have a Chain type as well.
