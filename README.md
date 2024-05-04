@@ -29,6 +29,7 @@ actor node_admin
 
 rectangle "CI System" {
   admin -- (make mutual introduction)
+  admin -- (introduction: invite)
   admin -- (create keys)
   admin -- (app installation)
 
