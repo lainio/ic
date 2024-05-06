@@ -159,6 +159,16 @@ func (n Node) CommonChain(their Node) chain.Chain {
 	return chain.Nil
 }
 
+func (n Node) Find(pubkey key.Public) (b chain.Block, found bool) {
+	for _, c := range n.InviteeChains {
+		bl, found := c.Find(pubkey)
+		if found {
+			return bl, true
+		}
+	}
+	return
+}
+
 func (n Node) Len() int {
 	return len(n.InviteeChains)
 }

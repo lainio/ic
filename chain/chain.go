@@ -306,6 +306,15 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 	)
 }
 
+func (c Chain) Find(pubkey key.Public) (b Block, found bool) {
+	for _, block := range c.Blocks {
+		if key.EqualBytes(block.Invitee.Public, pubkey) {
+			return block, true
+		}
+	}
+	return
+}
+
 // Challenge offers a method and placeholder for challenging other chain holder.
 // Most common cases is that caller of the function implements the closure where
 // it calls other party over the network to sign the challenge which is readily

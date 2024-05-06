@@ -89,12 +89,24 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 	return newID
 }
 
+// TODO: implement tests!! for node, and chain pkgs.
+func (i Identity) Endpoint(pubkey key.Public) string {
+	bl, found := i.Find(pubkey)
+	if found {
+		return bl.Endpoint
+	}
+	return ""
+}
+
 // TrustLevel calculates current trust-level of the Identity domain.
 // Calcultation is simple summary of Invitee chains and the levels there
+// TODO: Where this is used?
 func (i Identity) TrustLevel() int {
 	return 0
 }
 
+// Friends tells if these two are friends by IC.
+// TODO: Where this is used?
 func (i Identity) Friends(rhs Identity) bool {
 	return false
 }
