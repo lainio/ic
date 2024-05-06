@@ -115,6 +115,7 @@ sequenceDiagram
     %% end
 
     participant Seller
+    participant SellerStore as Identity Store
     participant ActiveNode
 
     QR_Code ->> Buyer : 'ID_Key' (PubKey, from IC who has endpoint)
@@ -138,12 +139,35 @@ sequenceDiagram
     IStore -->> -Buyer: Tor Endpoint
 
     alt we got endpoint to connect
+
     note over Buyer, Seller: HANDSHAKE starts here
-    Buyer ->> Seller: handshake start
+    note over Buyer, Seller: present ICs
+    Buyer ->> +Seller: IC for connection
+
+    Seller ->> SellerStore: calcWebOfTrust(BuyerIC)
+
+    alt WoT > trust_level
+    SellerStore -->> Seller: WoT
+
+    Seller -->> -Buyer: IC for connection w/ ID_Key
+
+    note over Buyer, Seller: Initiator's challenge
+    Buyer ->> +Seller:  our challenge
+    Seller -->> -Buyer: challenge reply + responce challenge
+
+    note over Buyer, Seller: Adressee's challenge reply and ACK
+    Buyer ->> +Seller:  challenge reply
+    Seller -->> -Buyer: ACK
+
+    else NotConnected
+    SellerStore -->> Seller: NotConnected
+
+    note over Buyer, Seller: Initiator's IC not recognized **NACK**
+    Seller -->> Buyer: NACK
+    Seller -->> Buyer: challenge reply
+    end
+    Buyer ->> Seller:  challenge reply + our challenge
+    Seller -->> Buyer: challenge reply
     end
 
 ```
-
-# References to PUML Works! Will use this in final.
-
-![connection-protocol-save-state.puml](http://www.plantuml.com/plantuml/proxy?cache=no&src=https://raw.githubusercontent.com/findy-network/findy-agent/master/docs/puml/protocols/connection-protocol-save-state.puml)
