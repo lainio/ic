@@ -110,6 +110,7 @@ type Options struct {
 	Position     int
 	Rotation     bool
 	AllowRouting bool
+	Endpoint     string
 
 	// TODO: future ones, endpoint or does this belong to key.Info? It might be
 	// good if we could share same key with the Tor service and our ID?
@@ -139,5 +140,11 @@ func WithRotation(r bool) Opts {
 func WithAllowRouting(allow bool) Opts {
 	return func(o *Options) {
 		o.AllowRouting = allow
+	}
+}
+
+func WithEndpoint(endpoint string) Opts {
+	return func(o *Options) {
+		o.Endpoint = endpoint
 	}
 }
