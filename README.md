@@ -136,6 +136,10 @@ sequenceDiagram
     end
     end
 
+    note right of Buyer: How about WoT w/ ID_Key, should we calc it before?
+    %% the WoT is related to endpoint in this phase which might be ok but if we
+    %% will calculate it later there's no need to do it here?
+
     IStore -->> -Buyer: Tor Endpoint
 
     alt we got endpoint to connect
@@ -152,6 +156,8 @@ sequenceDiagram
     Seller -->> -Buyer: IC for connection w/ ID_Key
 
     note over Buyer, Seller: Initiator's challenge
+    %% TODO: we should compare this to FIDO's authn
+
     Buyer ->> +Seller:  our challenge
     Seller -->> -Buyer: challenge reply + responce challenge
 
@@ -166,8 +172,6 @@ sequenceDiagram
     Seller -->> Buyer: NACK
     Seller -->> Buyer: challenge reply
     end
-    Buyer ->> Seller:  challenge reply + our challenge
-    Seller -->> Buyer: challenge reply
     end
 
 ```
