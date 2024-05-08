@@ -16,6 +16,9 @@ var (
 	// root2 -> alice2, root2 -> bob2: alice2 and bob2 share same root inviter
 	root2, alice2, bob2 entity
 
+	// for TestFind & fred who has long chain
+	edvin entity
+
 	//  first chain for generic chain tests
 	testChain           Chain
 	rootKey, inviteeKey key.Handle
@@ -343,7 +346,7 @@ func TestHops(t *testing.T) {
 	assert.Equal(h, 2, "david and cecilia share bod as inviter")
 	assert.Equal(cLevel, 2, "david's and cecilia's inviter bob is 1 hop from root")
 
-	edvin := entity{
+	edvin = entity{
 		Handle: key.New(),
 	}
 	edvin.Chain = david.Invite(david.Handle, key.InfoFromHandle(edvin),
@@ -368,6 +371,26 @@ func TestHops(t *testing.T) {
 	h, cLevel = Hops(alice.Chain, edvin.Chain)
 	assert.Equal(h, 4, "alice and edvin share root as a common inviter => 1 + 3")
 	assert.Equal(cLevel, 1, "alice's and edvin's common inviter root is chain root")
+}
+
+func TestFind(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	{
+		foundBlock, found := edvin.Find(rootMaster.lastBlock().Invitee.Public)
+		assert.That(found)
+		assert.DeepEqual(foundBlock.Invitee.ID, rootMaster.ID())
+	}
+	{
+		foundBlock, found := edvin.Find(bob.lastBlock().Invitee.Public)
+		assert.That(found)
+		assert.DeepEqual(foundBlock.Invitee.ID, bob.ID())
+	}
+	{
+		rootBlock, found := edvin.Find(root.lastBlock().Invitee.Public)
+		assert.That(found)
+		assert.DeepEqual(rootBlock.Invitee.ID, root.ID())
+	}
 }
 
 // TestChallengeInvitee test shows how we can challenge the party who presents

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/key"
 )
@@ -69,6 +70,10 @@ func TestInvite(t *testing.T) {
 	// Root1 chains start here:
 	alice.Node = root1.Invite(alice.Node, root1.Handle,
 		key.InfoFromHandle(alice), 1)
+	//                   root1
+	//                  /
+	//                \/
+	//              alice
 	assert.Equal(alice.Len(), 1)
 	{
 		c := alice.InviteeChains[0]
@@ -77,6 +82,13 @@ func TestInvite(t *testing.T) {
 	}
 
 	bob.Node = alice.Invite(bob.Node, alice.Handle, key.InfoFromHandle(bob), 1)
+	//                   root1
+	//                  /
+	//                \/
+	//              alice
+	//              /
+	//             \/
+	//            bob
 	assert.Equal(bob.Len(), 1)
 	{
 		c := bob.InviteeChains[0]
@@ -88,8 +100,13 @@ func TestInvite(t *testing.T) {
 	common := alice.CommonChain(bob.Node)
 	assert.SNotNil(common.Blocks)
 
-	// Root2 invites Carol here
+	// root2 chains start here:
+	// root2 invites Carol here
 	carol.Node = root2.Invite(carol.Node, root2.Handle, key.InfoFromHandle(carol), 1)
+	//                  root2
+	//                  /
+	//                \/
+	//              carol
 	assert.Equal(carol.Len(), 1)
 	{
 		c := carol.InviteeChains[0]
@@ -104,6 +121,10 @@ func TestInvite(t *testing.T) {
 	// Dave is one of the roots as well and we build it here:
 	dave.Node = New(key.InfoFromHandle(dave))
 	eve.Node = dave.Invite(eve.Node, dave.Handle, key.InfoFromHandle(eve), 1)
+	//                 dave
+	//                 /
+	//               \/
+	//              eve
 	assert.Equal(eve.Len(), 1)
 	{
 		c := eve.InviteeChains[0]
@@ -114,6 +135,13 @@ func TestInvite(t *testing.T) {
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
 	// Eve!
 	dave.Node = root2.Invite(dave.Node, root2.Handle, key.InfoFromHandle(dave), 1)
+	//                  root2
+	//                  /    \
+	//                \/     \/
+	//              carol    dave-2-chains
+	//                      //
+	//                    \/
+	//                   eve(root-is-dave)
 	assert.Equal(dave.Len(), 2)
 	{
 		c := dave.InviteeChains[1]
@@ -129,9 +157,16 @@ func TestInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 	// .. so Carol can invite Eve
 	eve.Node = carol.Invite(eve.Node, carol.Handle, key.InfoFromHandle(eve), 1)
-	assert.Equal(eve.Len(), 2)
+	//                  root2
+	//                  /    \
+	//                \/     \/
+	//              carol    dave-2-chains
+	//                   \       //
+	//                   \/     \/
+	//                  eve(root-is-dave)
+	assert.Equal(eve.Len(), 2, "has two chains")
 
-	// now Eve has common chain with Root1 as well
+	// now Eve has common chain with Root2 as well
 	common = eve.CommonChain(root2.Node)
 	assert.SNotNil(common.Blocks)
 }
@@ -141,6 +176,31 @@ func TestCommonChains(t *testing.T) {
 
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)
+}
+
+func TestFind(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	// found ones:
+	{
+		pubkey := try.To1(dave.CBORPublicKey())
+		block, found := eve.Find(pubkey)
+		assert.That(found)
+		assert.DeepEqual(block.Invitee.Public, pubkey)
+	}
+	{
+		pubkey := try.To1(root2.CBORPublicKey())
+		block, found := eve.Find(pubkey)
+		assert.That(found)
+		assert.DeepEqual(block.Invitee.Public, pubkey)
+	}
+
+	// not found:
+	{
+		pubkey := try.To1(root1.CBORPublicKey())
+		_, found := eve.Find(pubkey)
+		assert.ThatNot(found)
+	}
 }
 
 func TestWebOfTrustInfo(t *testing.T) {
