@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/key"
 )
 
@@ -43,7 +45,7 @@ func setup() {
 	grace.Handle = key.New()
 
 	root1 = New(root1)
-	root2 = New(root2)
+	root2 = New(root2, chain.WithEndpoint("endpoint_value"))
 }
 
 func TestNewIdentity(t *testing.T) {
@@ -95,7 +97,7 @@ func TestIdentity_Invite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave = New(dave)
+	dave = New(dave, chain.WithEndpoint("endpoint_value_dave"))
 	eve = dave.Invite(eve, 1)
 	assert.Equal(eve.Len(), 1)
 	{
@@ -159,4 +161,31 @@ func TestTrustLevel(t *testing.T) {
 
 	lvl := dave.TrustLevel()
 	assert.Equal(lvl, 0)
+}
+
+func TestEndpoint(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	//                  root2
+	//                  /    \
+	//                \/     \/
+	//              carol    dave-2-chains
+	//                   \       //
+	//                   \/     \/
+	//                  eve(root-is-dave)
+	//                  /
+	//                \/
+	//               eve(key-rotated)
+	{
+		pubkey := try.To1(root2.CBORPublicKey())
+		ep := eve.Endpoint(pubkey)
+		assert.NotEmpty(ep)
+		assert.Equal(ep, "endpoint_value")
+	}
+	{
+		pubkey := try.To1(dave.CBORPublicKey())
+		ep := eve.Endpoint(pubkey)
+		assert.NotEmpty(ep)
+		assert.Equal(ep, "endpoint_value_dave")
+	}
 }
