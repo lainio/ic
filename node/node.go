@@ -20,10 +20,13 @@ type Node struct {
 type WebOfTrust struct {
 	// Hops tells how far the the other end is when traversing thru the
 	// CommonInvider
-	Hops int
+	Hops int // TODO: rename HopsThruInviter
+	// TODO: should we have Hops that's the actual distance when we are in same
+	// chain?
 
 	// CommonInviter from root, i.e. how far away it's from absolute root
-	CommonInvider int
+	CommonInvider int // TODO: CommonInviderLvl
+	// TODO: should be return ID_Key aka pubkey?
 
 	// Position of the CommonInvider.
 	Position int
