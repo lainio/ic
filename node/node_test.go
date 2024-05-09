@@ -181,6 +181,14 @@ func TestCommonChains(t *testing.T) {
 func TestFind(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	//                  root2
+	//                  /    \
+	//                \/     \/
+	//              carol    dave-2-chains
+	//                   \       //
+	//                   \/     \/
+	//                  eve(root-is-dave)
+
 	// found ones:
 	{
 		pubkey := try.To1(dave.CBORPublicKey())
