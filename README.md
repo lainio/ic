@@ -145,32 +145,28 @@ sequenceDiagram
     alt we got endpoint to connect
 
     note over Buyer, Seller: HANDSHAKE starts here
-    note over Buyer, Seller: present ICs
-    Buyer ->> +Seller: IC for connection
+    note over Buyer, Seller: present both ICs & Adressee's challenge
+    Buyer ->> +Seller: IC for connection + our ID_Key
+    note right of Buyer: Our ID_Key might be something that we don't need= leaf
 
     Seller ->> SellerStore: calcWebOfTrust(BuyerIC)
-
-    alt WoT > trust_level
+    note right of Seller: NOTE if store doesn't have any IC w/ Buyer ID<br/>we don't accept connection
     SellerStore -->> Seller: WoT
 
-    Seller -->> -Buyer: IC for connection w/ ID_Key
+    alt WoT > trust_level
 
-    note over Buyer, Seller: Initiator's challenge
+    Seller -->> -Buyer: IC for connection + ID_Key + challenge
     %% TODO: we should compare this to FIDO's authn
 
-    Buyer ->> +Seller:  our challenge
-    Seller -->> -Buyer: challenge reply + responce challenge
-
-    note over Buyer, Seller: Adressee's challenge reply and ACK
-    Buyer ->> +Seller:  challenge reply
-    Seller -->> -Buyer: ACK
+    note over Buyer, Seller: Adressee's challenge responce and ACK
+    Buyer ->> +Seller:  challenge responce + our *own* challenge
+    Seller -->> -Buyer: challenge responce + ACK
 
     else NotConnected
     SellerStore -->> Seller: NotConnected
 
-    note over Buyer, Seller: Initiator's IC not recognized **NACK**
+    note over Buyer, Seller: Initiator's IC not recognized <br/> `<b>NACK<b/>`
     Seller -->> Buyer: NACK
-    Seller -->> Buyer: challenge reply
     end
     end
 
