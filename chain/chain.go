@@ -115,7 +115,7 @@ func CommonInviterLevel(c1, c2 Chain) (level int) {
 		if !EqualBlocks(c1.Blocks[i], c2.Blocks[i]) {
 			return i - 1
 		}
-		level = i
+		level = i // TODO: because we don't start from root is the lvl wrong?
 	}
 	return level
 }
@@ -300,6 +300,11 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 		return false
 	}
 
+	// if we are a root or too near of a root we cannot be inviter
+	if c.Len() < 1 || invitee.Len() < 2 {
+		return false
+	}
+
 	return EqualBlocks(
 		c.lastBlock(),
 		invitee.secondLastBlock(),
@@ -331,9 +336,13 @@ func (c Chain) firstBlock() Block {
 }
 
 func (c Chain) lastBlock() Block {
-	return c.Blocks[len(c.Blocks)-1]
+	l := len(c.Blocks)
+	assert.That(l > 0, "Blocks is too short")
+	return c.Blocks[l-1]
 }
 
 func (c Chain) secondLastBlock() Block {
-	return c.Blocks[len(c.Blocks)-2]
+	l := len(c.Blocks)
+	assert.That(l > 1, "Blocks is too short")
+	return c.Blocks[l-2]
 }
