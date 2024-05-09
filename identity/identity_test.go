@@ -189,3 +189,66 @@ func TestEndpoint(t *testing.T) {
 		assert.Equal(ep, "endpoint_value_dave")
 	}
 }
+
+func TestWebOfTrust(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	// successful:
+	{
+		wot := root2.WebOfTrust(eve)
+		assert.Equal(wot.Hops, 3)
+		assert.Equal(wot.CommonInvider, 0)
+	}
+	{
+		wot := carol.WebOfTrust(eve)
+		assert.Equal(wot.Hops, 4)
+		assert.Equal(wot.CommonInvider, 0)
+	}
+	{
+		wot := eve.WebOfTrust(carol)
+		assert.Equal(wot.Hops, 4)
+		assert.Equal(wot.CommonInvider, 0)
+	}
+	{
+		wot := eve.WebOfTrust(root2)
+		assert.Equal(wot.Hops, 3)
+		assert.Equal(wot.CommonInvider, 0)
+	}
+	{
+		wot := eve.WebOfTrust(dave)
+		assert.Equal(wot.Hops, 1+1)        // rotation
+		assert.Equal(wot.CommonInvider, 0) // TODO: if dave is invited original
+		// eve, but well, we cannot assert it yet!!!! new fields are needed
+	}
+
+	frank = alice.Invite(frank, 1)
+	grace = bob.Invite(grace, 1)
+	//                  root1
+	//                  /
+	//                \/
+	//              alice -->   bob
+	//               \            \
+	//               \/            \/
+	//              frank         grace
+	{
+		wot := frank.WebOfTrust(grace)
+		assert.Equal(wot.Hops, 3)
+		assert.Equal(wot.CommonInvider, 1) // TODO: ^ this works, see above
+	}
+	{
+		wot := alice.WebOfTrust(bob)
+		assert.Equal(wot.Hops, 1)
+		assert.Equal(wot.CommonInvider, 0) // TODO: is this wrong? Why not 1? Maybe
+		// **new fix**?
+	}
+	//                  root1
+	//                  /
+	//                \/
+	//              alice -->   bob
+	//               \            \
+	//               \/            \/
+	//              frank         grace
+	//              /
+	//            \/
+	//           frank(when-key-rotated)
+}
