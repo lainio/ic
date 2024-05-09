@@ -144,10 +144,11 @@ sequenceDiagram
 
     alt we got endpoint to connect
 
-    note over Buyer, Seller: HANDSHAKE starts here
+    note over Buyer, Seller: HANDSHAKE starts here. Remember full Node and all ICs
+
     note over Buyer, Seller: present both ICs & Adressee's challenge
-    Buyer ->> +Seller: IC for connection + our ID_Key
-    note right of Buyer: Our ID_Key might be something that we don't need= leaf
+    Buyer ->> +Seller: our ID_Key (+ IC for connection)
+    note right of Buyer: Our ID_Key might be better because of the size?<br/>When we send it if not?
 
     Seller ->> SellerStore: calcWebOfTrust(BuyerIC)
     note right of Seller: NOTE if store doesn't have any IC w/ Buyer ID<br/>we don't accept connection
@@ -159,7 +160,7 @@ sequenceDiagram
     %% TODO: we should compare this to FIDO's authn
 
     note over Buyer, Seller: Adressee's challenge responce and ACK
-    Buyer ->> +Seller:  challenge responce + our *own* challenge
+    Buyer ->> +Seller:  challenge responce + our *own* challenge (+ our ICs)
     Seller -->> -Buyer: challenge responce + ACK
 
     else NotConnected
