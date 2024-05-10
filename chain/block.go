@@ -23,18 +23,13 @@ type Block struct {
 	// to Identity, and Node will be changed to concept of invitation chains,
 	// maybe named like that as well.
 
-	// TODO: service endpoints should be here, and yes, they should be tamper
-	// free for the security reasons and we have use case, i.e. QR code.
-
 	// TODO: about endopints:
-	// Even when we are moving envelopes between
-	// endopints maybe we shouldn't allow chainging endpoints? But, but, there
-	// are many buts here! Let's make a hypothesis 1) we start with the message
-	// based transport, and the correlation & identification stuff are done
-	// later with the Tor-network. 2) when we bring streaming on board, we seal
-	// the two communicating parties to each other somo other way. OR we set
-	// new rules and restrictions to that cases like only direct Active Node
-	// Owners are allowed to stream to each others.
+	// We don't want any static rounting, i.e., we try to avoid the need of
+	// envelope until have to. That means that if we have Active Nodes that
+	// serve their ancestors, those ansestor client apps connect nodes directly
+	// anw we use only one lvl envelope for those cases. This might lead to
+	// rule that only those Identies who have their own Active Nodes can
+	// stream.
 }
 
 // NewVerifyBlock returns two randomized Blocks that can be used for
@@ -103,6 +98,8 @@ func (b Block) VerifySign(invitersPubKey key.Public) bool {
 		b.InvitersSignature,
 	)
 }
+
+// TODO: move all options to own file?
 
 type Opts func(*Options)
 
