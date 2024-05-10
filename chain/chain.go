@@ -67,14 +67,6 @@ func (p Pair) OneHop() bool {
 		p.Chain2.IsInviterFor(p.Chain1)
 }
 
-// CommonInviterLevel is stupid helper that's more a precondition than actual method.
-// The implementation asserts that common inviter really exists.
-func (p Pair) CommonInviterLevel() int { // TODO: not used!
-	common := CommonInviterLevel(p.Chain1, p.Chain2)
-	assert.NotEqual(common, NotConnected)
-	return common
-}
-
 var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
@@ -115,7 +107,7 @@ func CommonInviterLevel(c1, c2 Chain) (level int) {
 		if !EqualBlocks(c1.Blocks[i], c2.Blocks[i]) {
 			return i - 1
 		}
-		level = i // TODO: because we don't start from root is the lvl wrong?
+		level = i // BUG: ?!because we don't start from root is the lvl wrong?
 	}
 	return level
 }

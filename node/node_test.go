@@ -206,7 +206,7 @@ func TestFind(t *testing.T) {
 	// not found:
 	{
 		pubkey := try.To1(root1.CBORPublicKey())
-		_, found := eve.Find(pubkey)
+		_, found := eve.Find(pubkey) // eve is invited only by root1 chains
 		assert.ThatNot(found)
 	}
 }

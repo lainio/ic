@@ -211,7 +211,7 @@ func TestCommonInviterLevel(t *testing.T) {
 	//              \/        \/
 	//            david      cecilia
 	assert.Equal(CommonInviterLevel(cecilia.Chain, david.Chain), 1,
-		"cecilia's and david's common inviter is chain root")
+		"common inviter is root whos lvl is 1")
 
 	edvin := entity{
 		Handle: key.New(),
@@ -293,8 +293,8 @@ func TestHops(t *testing.T) {
 	//                  /    \
 	//                \/     \/
 	//              alice2  bob2
-	h, cLevel := alice2.Hops(bob2.Chain)
-	assert.Equal(h, 2, "alice2 and bob2 share common root (root2)")
+	hop, cLevel := alice2.Hops(bob2.Chain)
+	assert.Equal(hop, 2, "alice2 and bob2 share common root (root2)")
 	assert.Equal(cLevel, 0, "alice's and bob's inviter is chain root!")
 
 	//                rootMaster
@@ -304,8 +304,8 @@ func TestHops(t *testing.T) {
 	//                  /    \
 	//                \/     \/
 	//              alice   bob
-	h, cLevel = alice.Hops(bob.Chain)
-	assert.Equal(h, 2, "alice and bob share common root")
+	hop, cLevel = alice.Hops(bob.Chain)
+	assert.Equal(hop, 2, "alice and bob share common root")
 	assert.Equal(cLevel, 1, "alice's and bob's inviter is ROTATED chain root")
 
 	cecilia := entity{
@@ -323,8 +323,8 @@ func TestHops(t *testing.T) {
 	//                       \
 	//                       \/
 	//                      cecilia
-	h, cLevel = alice.Hops(cecilia.Chain)
-	assert.Equal(h, 3, "alice has 1 hop to root, cecilia 2 hpos == 3")
+	hop, cLevel = alice.Hops(cecilia.Chain)
+	assert.Equal(hop, 3, "alice has 1 hop to root, cecilia 2 hpos == 3")
 	assert.Equal(cLevel, 1, "the share inviter is chain root")
 
 	david := entity{
@@ -342,8 +342,8 @@ func TestHops(t *testing.T) {
 	//                     |   \
 	//                    \/   \/
 	//                cecilia   david
-	h, cLevel = david.Hops(cecilia.Chain)
-	assert.Equal(h, 2, "david and cecilia share bod as inviter")
+	hop, cLevel = david.Hops(cecilia.Chain)
+	assert.Equal(hop, 2, "david and cecilia share bod as inviter")
 	assert.Equal(cLevel, 2, "david's and cecilia's inviter bob is 1 hop from root")
 
 	edvin = entity{
@@ -364,12 +364,12 @@ func TestHops(t *testing.T) {
 	//                           |
 	//                          \/
 	//                         edvin
-	h, cLevel = edvin.Hops(cecilia.Chain)
-	assert.Equal(h, 3, "cecilia has 1 hop to common inviter bob and edvin has 2 hops == 3")
+	hop, cLevel = edvin.Hops(cecilia.Chain)
+	assert.Equal(hop, 3, "cecilia has 1 hop to common inviter bob and edvin has 2 hops == 3")
 	assert.Equal(cLevel, 2, "common inviter of cecilia and edvin is bod that's 1 hop from chain root")
 
-	h, cLevel = Hops(alice.Chain, edvin.Chain)
-	assert.Equal(h, 4, "alice and edvin share root as a common inviter => 1 + 3")
+	hop, cLevel = Hops(alice.Chain, edvin.Chain)
+	assert.Equal(hop, 4, "alice and edvin share root as a common inviter => 1 + 3")
 	assert.Equal(cLevel, 1, "alice's and edvin's common inviter root is chain root")
 }
 
