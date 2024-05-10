@@ -193,7 +193,16 @@ func TestEndpoint(t *testing.T) {
 func TestWebOfTrust(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	// successful:
+	//                  root2
+	//                  /    \
+	//                \/     \/
+	//              carol    dave-2-chains
+	//                   \       //
+	//                   \/     \/
+	//                  eve(root-is-dave)
+	//                  /
+	//                \/
+	//               eve(key-rotated)
 	{
 		wot := root2.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 3)
@@ -201,13 +210,13 @@ func TestWebOfTrust(t *testing.T) {
 	}
 	{
 		wot := carol.WebOfTrust(eve)
-		assert.Equal(wot.Hops, 4)
-		assert.Equal(wot.CommonInvider, 0)
+		assert.Equal(wot.Hops, 2)
+		assert.Equal(wot.CommonInvider, 1)
 	}
 	{
 		wot := eve.WebOfTrust(carol)
-		assert.Equal(wot.Hops, 4)
-		assert.Equal(wot.CommonInvider, 0)
+		assert.Equal(wot.Hops, 2)
+		assert.Equal(wot.CommonInvider, 1)
 	}
 	{
 		wot := eve.WebOfTrust(root2)
@@ -233,13 +242,12 @@ func TestWebOfTrust(t *testing.T) {
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInvider, 1) // TODO: ^ this works, see above
+		assert.Equal(wot.CommonInvider, 1)
 	}
 	{
 		wot := alice.WebOfTrust(bob)
 		assert.Equal(wot.Hops, 1)
-		assert.Equal(wot.CommonInvider, 0) // TODO: is this wrong? Why not 1? Maybe
-		// **new fix**?
+		assert.Equal(wot.CommonInvider, 1)
 	}
 	//                  root1
 	//                  /
@@ -251,4 +259,10 @@ func TestWebOfTrust(t *testing.T) {
 	//              /
 	//            \/
 	//           frank(when-key-rotated)
+	frank = frank.RotateKey(key.New())
+	{
+		wot := frank.WebOfTrust(grace)
+		assert.Equal(wot.Hops, 4)
+		assert.Equal(wot.CommonInvider, 1)
+	}
 }

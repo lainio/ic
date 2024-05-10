@@ -103,11 +103,13 @@ func CommonInviterLevel(c1, c2 Chain) (level int) {
 	}
 
 	// root is the same, start from next until difference is found
-	for i := range c.Blocks[1:] {
+	startBlock := 1
+	for i := range c.Blocks[startBlock:] {
+		i += startBlock
 		if !EqualBlocks(c1.Blocks[i], c2.Blocks[i]) {
 			return i - 1
 		}
-		level = i // BUG: ?!because we don't start from root is the lvl wrong?
+		level = i
 	}
 	return level
 }

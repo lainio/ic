@@ -49,8 +49,8 @@ func setup() {
 	frank.Handle = key.New()
 	grace.Handle = key.New()
 
-	root1.Node = New(key.InfoFromHandle(root1))
-	root2.Node = New(key.InfoFromHandle(root2))
+	root1.Node = New(key.InfoFromHandle(root1), chain.WithEndpoint("root1"))
+	root2.Node = New(key.InfoFromHandle(root2), chain.WithEndpoint("root2"))
 }
 
 func TestNewRootNode(t *testing.T) {
@@ -119,7 +119,7 @@ func TestInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave.Node = New(key.InfoFromHandle(dave))
+	dave.Node = New(key.InfoFromHandle(dave), chain.WithEndpoint("dave"))
 	eve.Node = dave.Invite(eve.Node, dave.Handle, key.InfoFromHandle(eve), 1)
 	//                 dave
 	//                 /
@@ -133,7 +133,7 @@ func TestInvite(t *testing.T) {
 	}
 
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
-	// Eve!
+	// Eve! NOTE but when Dave invites new parties nowon they will get 2 chains
 	dave.Node = root2.Invite(dave.Node, root2.Handle, key.InfoFromHandle(dave), 1)
 	//                  root2
 	//                  /    \
@@ -218,8 +218,8 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.SLen(common, 2)
 
 	wot := dave.WebOfTrustInfo(eve.Node)
-	assert.Equal(0, wot.CommonInvider)
-	assert.Equal(1, wot.Hops)
+	assert.Equal(wot.CommonInvider, 0)
+	assert.Equal(wot.Hops, 1)
 
 	wot = NewWebOfTrust(bob.Node, carol.Node)
 	assert.Equal(chain.NotConnected, wot.CommonInvider)
@@ -237,33 +237,46 @@ func TestWebOfTrustInfo(t *testing.T) {
 	common = root1.CommonChains(alice.Node)
 	assert.SLen(common, 1)
 	h, level := common[0].Hops()
-	assert.Equal(1, h)
-	assert.Equal(0, level)
+	assert.Equal(h, 1)
+	assert.Equal(level, 0)
 
 	wot = NewWebOfTrust(frank.Node, grace.Node)
-	assert.Equal(1, wot.CommonInvider)
-	assert.Equal(3, wot.Hops)
+	assert.Equal(wot.CommonInvider, 1)
+	assert.Equal(wot.Hops, 3)
 
 	root3 := entity{Handle: key.New()}
-	root3.Node = New(key.InfoFromHandle(root3))
+	root3.Node = New(key.InfoFromHandle(root3), chain.WithEndpoint("root3"))
 	heidi := entity{Handle: key.New()}
 	heidi.Node = root3.Invite(heidi.Node, root3.Handle, key.InfoFromHandle(heidi), 1)
 	assert.SLen(heidi.InviteeChains, 1)
-	assert.SLen(heidi.InviteeChains[0].Blocks, 2, "root = root3")
+	assert.SLen(heidi.InviteeChains[0].Blocks, 2, "heidi's root is 'root3'")
 
 	// verify Eve's situation:
 	assert.SLen(eve.InviteeChains, 2)
-	assert.SLen(eve.InviteeChains[0].Blocks, 2, "root == dave")
-	assert.Equal(3, len(eve.InviteeChains[1].Blocks), "root is root2")
+	assert.SLen(eve.InviteeChains[0].Blocks, 2, "eve's 1s root: dave")
+	assert.SLen(eve.InviteeChains[1].Blocks, 3, "eve's 2nd root: root2")
 
+	// heidi got's 2 new roots from eve:
 	heidi.Node = eve.Invite(heidi.Node, eve.Handle, key.InfoFromHandle(heidi), 1)
+	assert.SLen(heidi.InviteeChains, 3, "heidi's 2 + previous 1")
+
 	// next dave's invitation doesn't add any new chains because there is no
 	// new roots in daves chains
+	heidiNodeLen := heidi.Len()
 	heidi.Node = dave.Invite(heidi.Node, dave.Handle, key.InfoFromHandle(heidi), 1)
+	assert.Equal(heidi.Len(), heidiNodeLen)
+
+	//                  root2                     root3
+	//                  /    \                       \
+	//                \/     \/                       \
+	//              carol    dave-2-chains             \
+	//                   \       // (<- ROOT)           \
+	//                   \/     \/                      \/
+	//                  eve(root-is-dave) ----------->  heidi
 
 	wot = NewWebOfTrust(eve.Node, heidi.Node)
-	assert.Equal(0, wot.CommonInvider, "common root is dave")
-	assert.Equal(1, wot.Hops, "dave invites heidi")
+	assert.Equal(wot.CommonInvider, 1, "common root is dave and eve is 1 from it")
+	assert.Equal(wot.Hops, 1, "dave invites heidi")
 	assert.That(eve.IsInviterFor(heidi.Node))
 	assert.That(heidi.OneHop(eve.Node))
 }
