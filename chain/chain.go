@@ -10,6 +10,7 @@ import (
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
 )
 
@@ -58,7 +59,7 @@ func (p Pair) Valid() bool {
 	return !p.Chain1.IsNil() && !p.Chain2.IsNil()
 }
 
-func (p Pair) Hops() (int, int) {
+func (p Pair) Hops() (hop.Distance, hop.Distance) {
 	return Hops(p.Chain1, p.Chain2)
 }
 
@@ -91,7 +92,7 @@ func SameInviter(c1, c2 Chain) bool {
 
 // CommonInviterLevel returns inviter's distance (current level) from chain's root if
 // inviter exists.  If not it returns NotConnected
-func CommonInviterLevel(c1, c2 Chain) (level int) {
+func CommonInviterLevel(c1, c2 Chain) (level hop.Distance) {
 	if !SameRoot(c1, c2) {
 		return NotConnected
 	}
@@ -107,14 +108,14 @@ func CommonInviterLevel(c1, c2 Chain) (level int) {
 	for i := range c.Blocks[startBlock:] {
 		i += startBlock
 		if !EqualBlocks(c1.Blocks[i], c2.Blocks[i]) {
-			return i - 1
+			return hop.Distance(i - 1)
 		}
-		level = i
+		level = hop.Distance(i)
 	}
 	return level
 }
 
-func Hops(lhs, rhs Chain) (int, int) {
+func Hops(lhs, rhs Chain) (hop.Distance, hop.Distance) {
 	return lhs.Hops(rhs)
 }
 
@@ -189,7 +190,7 @@ func (c Chain) rotationInvite(
 
 // Hops returns hops and common inviter's level if that exists. If not both
 // return values are NotConnected.
-func (c Chain) Hops(their Chain) (hops int, rootLvl int) {
+func (c Chain) Hops(their Chain) (hops hop.Distance, rootLvl hop.Distance) {
 	common := CommonInviterLevel(c, their)
 	if common == NotConnected {
 		return NotConnected, NotConnected
@@ -210,16 +211,16 @@ func (c Chain) OneHop(their Chain) bool {
 		their.IsInviterFor(c)
 }
 
-func (c Chain) AbsLen() int {
+func (c Chain) AbsLen() hop.Distance {
 	return c.Len()
 	//return c.Len() - c.KeyRotationsLen()
 }
 
-func (c Chain) Len() int {
-	return len(c.Blocks)
+func (c Chain) Len() hop.Distance {
+	return hop.Distance(len(c.Blocks))
 }
 
-func (c Chain) KeyRotationsLen() (count int) {
+func (c Chain) KeyRotationsLen() (count hop.Distance) {
 	for _, b := range c.Blocks {
 		if b.Rotation {
 			count += 1

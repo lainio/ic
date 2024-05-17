@@ -7,6 +7,7 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
 )
 
@@ -139,7 +140,7 @@ func TestRotateKey(t *testing.T) {
 	// TODO: merge ALL similar dependency tests in other packages by using run!
 
 	length := eve.Len()
-	lengths := make([]int, length)
+	lengths := make([]hop.Distance, length)
 	for i, c := range eve.InviteeChains {
 		lengths[i] = c.Len()
 	}

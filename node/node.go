@@ -2,6 +2,7 @@ package node
 
 import (
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
 )
 
@@ -20,12 +21,12 @@ type Node struct {
 type WebOfTrust struct {
 	// Hops tells how far the the other end is when traversing thru the
 	// CommonInvider
-	Hops int // TODO: rename HopsThruInviter
+	Hops hop.Distance // TODO: rename HopsThruInviter
 	// TODO: should we have Hops that's the actual distance when we are in same
 	// chain?
 
 	// CommonInviter from root, i.e. how far away it's from absolute root
-	CommonInvider int // TODO: CommonInviderLvl
+	CommonInvider hop.Distance // TODO: CommonInviderLvl
 	// TODO: should be return ID_Key aka pubkey?
 
 	// Position of the CommonInvider.
@@ -33,7 +34,7 @@ type WebOfTrust struct {
 }
 
 // NewWebOfTrust returns web-of-trust information of two nodes if they share a
-// trust chain. If not the Hops field is chain.NotConnected.
+// trust chain. If not the Hops field is hop.NotConnected.
 func NewWebOfTrust(n1, n2 Node) WebOfTrust {
 	return n1.WebOfTrustInfo(n2)
 }
@@ -110,22 +111,18 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 }
 
 // WebOfTrustInfo returns web-of-trust information of two nodes if they share a
-// trust chain. If not the Hops field is chain.NotConnected.
+// trust chain. If not the Hops field is hop.NotConnected.
 func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 	chainPairs := n.CommonChains(their)
 
-	hops := chain.NotConnected
-	fromRoot := chain.NotConnected
+	hops := hop.NewNotConnected()
+	fromRoot := hop.NewNotConnected()
 
 	for _, pair := range chainPairs {
 		h, f := pair.Hops()
 
-		if hops == chain.NotConnected || h < hops {
-			hops = h
-
-			if fromRoot == chain.NotConnected || f < fromRoot {
-				fromRoot = f
-			}
+		if hops.PickShorter(h) {
+			fromRoot.PickShorter(f)
 		}
 	}
 	return WebOfTrust{Hops: hops, CommonInvider: fromRoot}
