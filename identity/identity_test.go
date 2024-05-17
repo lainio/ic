@@ -208,27 +208,33 @@ func TestWebOfTrust(t *testing.T) {
 		wot := root2.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 3)
 		assert.Equal(wot.CommonInviderLevel, 0)
+		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(root2.CBORPublicKey()))
 	}
 	{
 		wot := carol.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 2)
 		assert.Equal(wot.CommonInviderLevel, 1)
+		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(carol.CBORPublicKey()))
 	}
 	{
 		wot := eve.WebOfTrust(carol)
 		assert.Equal(wot.Hops, 2)
 		assert.Equal(wot.CommonInviderLevel, 1)
+		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(carol.CBORPublicKey()))
 	}
 	{
 		wot := eve.WebOfTrust(root2)
 		assert.Equal(wot.Hops, 3)
 		assert.Equal(wot.CommonInviderLevel, 0)
+		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(root2.CBORPublicKey()))
 	}
 	{
 		wot := eve.WebOfTrust(dave)
-		assert.Equal(wot.Hops, 1+1)             // rotation
-		assert.Equal(wot.CommonInviderLevel, 0) // TODO: if dave is invited original
-		// eve, but well, we cannot assert it yet!!!! new fields are needed
+		assert.Equal(wot.Hops, 1+1, "rotation 1+1")
+		assert.Equal(wot.CommonInviderLevel, 0)
+
+		assert.DeepEqual(wot.CommonInviderPubKey,
+			try.To1(dave.CBORPublicKey()), "dave invited originally eve!")
 	}
 
 	frank = alice.Invite(frank, 1)

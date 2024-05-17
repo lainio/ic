@@ -59,6 +59,8 @@ func (p Pair) Valid() bool {
 	return !p.Chain1.IsNil() && !p.Chain2.IsNil()
 }
 
+// Hops returns hops and common inviter's level if that exists. If not both
+// return values are NotConnected.
 func (p Pair) Hops() (hop.Distance, hop.Distance) {
 	return Hops(p.Chain1, p.Chain2)
 }
@@ -66,6 +68,12 @@ func (p Pair) Hops() (hop.Distance, hop.Distance) {
 func (p Pair) OneHop() bool {
 	return p.Chain1.IsInviterFor(p.Chain2) ||
 		p.Chain2.IsInviterFor(p.Chain1)
+}
+
+// CommonInviterIDKey returns IDKey aka pubkey of common inviter by root level.
+func (p Pair) CommonInviterIDKey(lvl hop.Distance) key.Public {
+	block := p.Chain1.Blocks[lvl]
+	return block.Invitee.Public
 }
 
 var Nil = Chain{Blocks: nil}
@@ -115,6 +123,8 @@ func CommonInviterLevel(c1, c2 Chain) (level hop.Distance) {
 	return level
 }
 
+// Hops returns hops and common inviter's level if that exists. If not both
+// return values are NotConnected.
 func Hops(lhs, rhs Chain) (hop.Distance, hop.Distance) {
 	return lhs.Hops(rhs)
 }
