@@ -35,6 +35,8 @@ rectangle "CI System" {
   admin -- (make mutual introduction)
   admin -- (introduction: invite)
   admin -- (create keys)
+  (create keys) <|- (create backup key chain)
+  admin - (create backup key chain)
   admin -- (app installation)
 
   node_admin -- (create tor proxy)
@@ -48,6 +50,17 @@ admin <|- node_admin
 ```
 
 ### Use Case Explanations
+
+#### Create backup key chain & create keys
+
+Backup keys will be used in catastrophes, i.e., we have lost our current IDKey
+pair. For instance, our FIDO HW token is lost or broken. How to prove our
+identity in these situations. We cannot taken backups of the HW tokens. But we
+should be able to register multiple tokens for our identity for these
+situations.
+
+> NOTE, key rotations are different actions and are done to, e.g., minimize
+> correlation.
 
 #### Decide introduction/connection
 
