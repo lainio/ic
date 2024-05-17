@@ -16,10 +16,15 @@ import (
 // available, only then. If we use RotateKey multiple times we end up having
 // several key pairs which keys we control. this means that even when we lose
 // some of the keys we can still control our identity.
+//  - we can rotate keys to extend our ICs, which is fine and helps
+//  - we will allow to have one special chain that's the Cntr Chain it's genesis
+//  block must have same Public Key as we have for our start phase IDKey. this
+//  will be quite complex structure, but we can check it at the node/identity
+//  lvl.
 
 // TODO: however, key rotation chain blocks should not be calculated when web of
 // trust calculations are executed. NOTE: this is not so simple as it seems at
-// the first sight. Also we don't need to do it too complex. Key rotation
+// the first sight. Also we *don't need to do it too complex*. Key rotation
 // should be limited to happen only chain roots, not later!! we could even think
 // that it's allowed only when no invitations are done for us, i.e., that key
 // rotation should be done during the setup, not later. Why we did it later, if
@@ -47,15 +52,6 @@ import (
 // have one identity key.Handle that controls everything we are doing. but how
 // about if we could have multiple key.handles and the control would go thru
 // parent/child thru IC?
-// NOTE: we tried to add new root but of course it failed! It's impossible. It
-// seems that it is very difficult to have multiple key handles registered for
-// the same invitation chain. Second option could be that we have always append
-// our chains by ourselves after whe have been Invited. That woulb give us
-// multiple chain blocks that are fully under our control!
-
-// TODO: Should we mark these 'helper' blocks somehow in the chain. they aren't
-// less important, but maybe it would give opportunities to optimize certain
-// things later?
 
 type Identity struct {
 	node.Node // chains inside these share the same key.ID&Public
