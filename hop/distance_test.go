@@ -25,7 +25,7 @@ func TestDistance_TakeShorter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer assert.PushTester(t)()
-			
+
 			swaped := tt.d.PickShorter(tt.args.rhs)
 			assert.Equal(swaped, tt.wantSwap)
 		})
