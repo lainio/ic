@@ -207,33 +207,33 @@ func TestWebOfTrust(t *testing.T) {
 	{
 		wot := root2.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInviderLevel, 0)
-		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(root2.CBORPublicKey()))
+		assert.Equal(wot.CommonInviterLevel, 0)
+		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(root2.CBORPublicKey()))
 	}
 	{
 		wot := carol.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 2)
-		assert.Equal(wot.CommonInviderLevel, 1)
-		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(carol.CBORPublicKey()))
+		assert.Equal(wot.CommonInviterLevel, 1)
+		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(carol.CBORPublicKey()))
 	}
 	{
 		wot := eve.WebOfTrust(carol)
 		assert.Equal(wot.Hops, 2)
-		assert.Equal(wot.CommonInviderLevel, 1)
-		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(carol.CBORPublicKey()))
+		assert.Equal(wot.CommonInviterLevel, 1)
+		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(carol.CBORPublicKey()))
 	}
 	{
 		wot := eve.WebOfTrust(root2)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInviderLevel, 0)
-		assert.DeepEqual(wot.CommonInviderPubKey, try.To1(root2.CBORPublicKey()))
+		assert.Equal(wot.CommonInviterLevel, 0)
+		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(root2.CBORPublicKey()))
 	}
 	{
 		wot := eve.WebOfTrust(dave)
 		assert.Equal(wot.Hops, 1+1, "rotation 1+1")
-		assert.Equal(wot.CommonInviderLevel, 0)
+		assert.Equal(wot.CommonInviterLevel, 0)
 
-		assert.DeepEqual(wot.CommonInviderPubKey,
+		assert.DeepEqual(wot.CommonInviterPubKey,
 			try.To1(dave.CBORPublicKey()), "dave invited originally eve!")
 	}
 
@@ -249,12 +249,12 @@ func TestWebOfTrust(t *testing.T) {
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInviderLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 1)
 	}
 	{
 		wot := alice.WebOfTrust(bob)
 		assert.Equal(wot.Hops, 1)
-		assert.Equal(wot.CommonInviderLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 1)
 	}
 	//                  root1
 	//                  /
@@ -270,6 +270,6 @@ func TestWebOfTrust(t *testing.T) {
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 4)
-		assert.Equal(wot.CommonInviderLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 1)
 	}
 }

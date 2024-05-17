@@ -20,18 +20,18 @@ type Node struct {
 
 type WebOfTrust struct {
 	// Hops tells how far the the other end is when traversing thru the
-	// CommonInvider
+	// CommonInviter
 	Hops hop.Distance // TODO: rename HopsThruInviter
 	// TODO: should we have Hops that's the actual distance when we are in same
 	// chain? Or flag that we are in the same chain? Latter is better.
 
 	// CommonInviter from root, i.e. how far away it's from absolute root
-	CommonInviderLevel hop.Distance // TODO: CommonInvider type??
+	CommonInviterLevel hop.Distance // TODO: CommonInviter type??
 
 	// ID_Key aka pubkey for the common invider
-	CommonInviderPubKey key.Public
+	CommonInviterPubKey key.Public
 
-	// Position of the CommonInvider.
+	// Position of the CommonInviter.
 	Position int
 }
 
@@ -131,8 +131,8 @@ func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 	}
 	return WebOfTrust{
 		Hops:                hops,
-		CommonInviderLevel:  fromRoot,
-		CommonInviderPubKey: commonIDKey,
+		CommonInviterLevel:  fromRoot,
+		CommonInviterPubKey: commonIDKey,
 	}
 }
 
