@@ -26,7 +26,7 @@ type WebOfTrust struct {
 	// chain?
 
 	// CommonInviter from root, i.e. how far away it's from absolute root
-	CommonInvider hop.Distance // TODO: CommonInviderLvl
+	CommonInviderLevel hop.Distance // TODO: CommonInviderLvl
 	// TODO: should be return ID_Key aka pubkey?
 
 	// Position of the CommonInvider.
@@ -125,7 +125,7 @@ func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 			fromRoot.PickShorter(f)
 		}
 	}
-	return WebOfTrust{Hops: hops, CommonInvider: fromRoot}
+	return WebOfTrust{Hops: hops, CommonInviderLevel: fromRoot}
 }
 
 func (n Node) IsInviterFor(their Node) bool {

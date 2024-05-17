@@ -218,11 +218,11 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.SLen(common, 2)
 
 	wot := dave.WebOfTrustInfo(eve.Node)
-	assert.Equal(wot.CommonInvider, 0)
+	assert.Equal(wot.CommonInviderLevel, 0)
 	assert.Equal(wot.Hops, 1)
 
 	wot = NewWebOfTrust(bob.Node, carol.Node)
-	assert.Equal(chain.NotConnected, wot.CommonInvider)
+	assert.Equal(chain.NotConnected, wot.CommonInviderLevel)
 	assert.Equal(chain.NotConnected, wot.Hops)
 
 	frank.Node = alice.Invite(frank.Node, alice.Handle, key.InfoFromHandle(frank), 1)
@@ -241,7 +241,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(level, 0)
 
 	wot = NewWebOfTrust(frank.Node, grace.Node)
-	assert.Equal(wot.CommonInvider, 1)
+	assert.Equal(wot.CommonInviderLevel, 1)
 	assert.Equal(wot.Hops, 3)
 
 	root3 := entity{Handle: key.New()}
@@ -275,7 +275,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	//                  eve(root-is-dave) ----------->  heidi
 
 	wot = NewWebOfTrust(eve.Node, heidi.Node)
-	assert.Equal(wot.CommonInvider, 1, "common root is dave and eve is 1 from it")
+	assert.Equal(wot.CommonInviderLevel, 1, "common root is dave and eve is 1 from it")
 	assert.Equal(wot.Hops, 1, "dave invites heidi")
 	assert.That(eve.IsInviterFor(heidi.Node))
 	assert.That(heidi.OneHop(eve.Node))

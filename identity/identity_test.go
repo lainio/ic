@@ -207,27 +207,27 @@ func TestWebOfTrust(t *testing.T) {
 	{
 		wot := root2.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInvider, 0)
+		assert.Equal(wot.CommonInviderLevel, 0)
 	}
 	{
 		wot := carol.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 2)
-		assert.Equal(wot.CommonInvider, 1)
+		assert.Equal(wot.CommonInviderLevel, 1)
 	}
 	{
 		wot := eve.WebOfTrust(carol)
 		assert.Equal(wot.Hops, 2)
-		assert.Equal(wot.CommonInvider, 1)
+		assert.Equal(wot.CommonInviderLevel, 1)
 	}
 	{
 		wot := eve.WebOfTrust(root2)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInvider, 0)
+		assert.Equal(wot.CommonInviderLevel, 0)
 	}
 	{
 		wot := eve.WebOfTrust(dave)
-		assert.Equal(wot.Hops, 1+1)        // rotation
-		assert.Equal(wot.CommonInvider, 0) // TODO: if dave is invited original
+		assert.Equal(wot.Hops, 1+1)             // rotation
+		assert.Equal(wot.CommonInviderLevel, 0) // TODO: if dave is invited original
 		// eve, but well, we cannot assert it yet!!!! new fields are needed
 	}
 
@@ -243,12 +243,12 @@ func TestWebOfTrust(t *testing.T) {
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInvider, 1)
+		assert.Equal(wot.CommonInviderLevel, 1)
 	}
 	{
 		wot := alice.WebOfTrust(bob)
 		assert.Equal(wot.Hops, 1)
-		assert.Equal(wot.CommonInvider, 1)
+		assert.Equal(wot.CommonInviderLevel, 1)
 	}
 	//                  root1
 	//                  /
@@ -264,6 +264,6 @@ func TestWebOfTrust(t *testing.T) {
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 4)
-		assert.Equal(wot.CommonInvider, 1)
+		assert.Equal(wot.CommonInviderLevel, 1)
 	}
 }
