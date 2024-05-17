@@ -21,9 +21,9 @@ func (d Distance) String() string {
 }
 
 func (d *Distance) PickShorter(rhs Distance) (swap bool) {
-	if *d == NotConnected || rhs < *d {
+	swap = *d == NotConnected || rhs < *d
+	if swap {
 		*d = rhs
-		return true
 	}
-	return false
+	return swap
 }
