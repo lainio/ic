@@ -76,6 +76,10 @@ func (p Pair) CommonInviterIDKey(lvl hop.Distance) key.Public {
 	return block.Invitee.Public
 }
 
+func (p Pair) MutualChain() bool {
+	return SameRoot(p.Chain1, p.Chain2)
+}
+
 var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
@@ -98,11 +102,12 @@ func SameInviter(c1, c2 Chain) bool {
 	)
 }
 
-// CommonInviterLevel returns inviter's distance (current level) from chain's root if
-// inviter exists.  If not it returns NotConnected
-func CommonInviterLevel(c1, c2 Chain) (level hop.Distance) {
+// CommonInviterLevel returns inviter's distance (current level) from chain's
+// root if inviter exists.  The same flag tells if Inviter is in the same IC.
+// If the Common Inviter not exists, it returns NotConnected, false.
+func CommonInviterLevel(c1, c2 Chain) (level hop.Distance, same bool) {
 	if !SameRoot(c1, c2) {
-		return NotConnected
+		return NotConnected, false
 	}
 
 	// pickup the shorter of the chains for the compare loop below
@@ -111,16 +116,20 @@ func CommonInviterLevel(c1, c2 Chain) (level hop.Distance) {
 		c = c2
 	}
 
+	// we can find only IC branch, so default is the that they are same:
+	same = true
+
 	// root is the same, start from next until difference is found
 	startBlock := 1
 	for i := range c.Blocks[startBlock:] {
 		i += startBlock
 		if !EqualBlocks(c1.Blocks[i], c2.Blocks[i]) {
-			return hop.Distance(i - 1)
+			same = false
+			return hop.Distance(i - 1), same
 		}
 		level = hop.Distance(i)
 	}
-	return level
+	return level, same
 }
 
 // Hops returns hops and common inviter's level if that exists. If not both
@@ -201,7 +210,7 @@ func (c Chain) rotationInvite(
 // Hops returns hops and common inviter's level if that exists. If not both
 // return values are NotConnected.
 func (c Chain) Hops(their Chain) (hops hop.Distance, rootLvl hop.Distance) {
-	common := CommonInviterLevel(c, their)
+	common, _ := CommonInviterLevel(c, their) // TODO: same IC
 	if common == NotConnected {
 		return NotConnected, NotConnected
 	}

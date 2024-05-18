@@ -210,8 +210,9 @@ func TestCommonInviterLevel(t *testing.T) {
 	//               |        \
 	//              \/        \/
 	//            david      cecilia
-	assert.Equal(CommonInviterLevel(cecilia.Chain, david.Chain), 1,
-		"common inviter is root whos lvl is 1")
+	cinviter, sameIC := CommonInviterLevel(cecilia.Chain, david.Chain)
+	assert.Equal(cinviter, 1, "common inviter is root whos lvl is 1")
+	assert.ThatNot(sameIC)
 
 	edvin := entity{
 		Handle: key.New(),
@@ -228,8 +229,10 @@ func TestCommonInviterLevel(t *testing.T) {
 	//       ____/   |        \
 	//     \/       \/        \/
 	//  edvin     david      cecilia
-	assert.Equal(CommonInviterLevel(edvin.Chain, david.Chain), 2,
+	cinviter, sameIC = CommonInviterLevel(edvin.Chain, david.Chain)
+	assert.Equal(cinviter, 2,
 		"alice is at level 2 from chain's root and inviter of both")
+	assert.ThatNot(sameIC)
 
 	edvin2Chain := alice.Chain.Invite(alice.Handle, key.InfoFromHandle(key.New()),
 		WithPosition(1))
@@ -243,8 +246,10 @@ func TestCommonInviterLevel(t *testing.T) {
 	//       ____/   | \      \___
 	//     \/       \/  \/        \/
 	//  edvin  edvin2   david    cecilia
-	assert.Equal(CommonInviterLevel(edvin2Chain, david.Chain), 2,
+	cinviter, sameIC = CommonInviterLevel(edvin2Chain, david.Chain)
+	assert.Equal(cinviter, 2,
 		"alice is at level 2 from chain's root and inviter of both")
+	assert.ThatNot(sameIC)
 
 	fred1Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()),
 		WithPosition(1))
@@ -263,8 +268,21 @@ func TestCommonInviterLevel(t *testing.T) {
 	//  |   \__
 	// \/      \/
 	// fred1   fred2
-	assert.Equal(CommonInviterLevel(fred2Chain, fred1Chain), 3,
-		"edvin is at level 2 from chain's root")
+	cinviter, sameIC = CommonInviterLevel(fred2Chain, fred1Chain)
+	assert.Equal(cinviter, 3, "edvin is at level 3 from chain's root")
+	assert.ThatNot(sameIC)
+
+	cinviter, sameIC = CommonInviterLevel(alice.Chain, fred1Chain)
+	assert.Equal(cinviter, 2, "alice is at level 2 from chain's root")
+	assert.That(sameIC, "alice is fred's chain's 'root'")
+
+	cinviter, sameIC = CommonInviterLevel(bob.Chain, cecilia.Chain)
+	assert.Equal(cinviter, 2, "bob is at level 2 from chain's root")
+	assert.That(sameIC, "bob is cecilia's chain's 'root'")
+
+	cinviter, sameIC = CommonInviterLevel(root.Chain, cecilia.Chain)
+	assert.Equal(cinviter, 1, "root is at level 2 from chain's root")
+	assert.That(sameIC, "root is cecilia's chain's 'root'")
 }
 
 // TestSameInviter test that two chain holders have same inviter.
