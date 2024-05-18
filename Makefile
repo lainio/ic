@@ -3,12 +3,15 @@
 PKG1 := github.com/lainio/ic/chain
 PKG2 := github.com/lainio/ic/node
 PKG3 := github.com/lainio/ic/identity
+PKG4 := github.com/lainio/ic/hop
 PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4)
 
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 
 GO := go
 #GO := go1.18beta1
+
+check: lint test
 
 build:
 	@$(GO) build -o /dev/null $(PKGS)
@@ -24,6 +27,9 @@ test2:
 
 test3:
 	$(GO) test $(PKG3)
+
+test4:
+	$(GO) test $(PKG4)
 
 test:
 	$(GO) test $(PKGS)
