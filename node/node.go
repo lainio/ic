@@ -18,20 +18,26 @@ type Node struct {
 	// However, if it's small and doesn't matter, let's think about it then.
 }
 
+// WebOfTrust includes most important information about WoT.
 type WebOfTrust struct {
 	// Hops tells how far the the other end is when traversing thru the
-	// CommonInviter
-	Hops hop.Distance // TODO: rename HopsThruInviter
-	// TODO: should we have Hops that's the actual distance when we are in same
-	// chain? Or flag that we are in the same chain? Latter is better.
+	// CommonInviter. NOTE that if parties don't have WoT this is
+	// hop.NotConnected.
+	Hops hop.Distance
 
-	// CommonInviter from root, i.e. how far away it's from absolute root
+	// SameChain tells if two parties are in the same Invitation Chain (IC).
+	// You should take this to count when make decisions abount Hops.
+	SameChain bool
+
+	// CommonInviterLevel is lvl from root, i.e. how far away it's from
+	// absolute root that's always level: 0.
 	CommonInviterLevel hop.Distance // TODO: CommonInviter type??
 
-	// ID_Key aka pubkey for the common invider
+	// CommonInviterPubKey, ID_Key aka pubkey for the common inviter. This
+	// helps you to locate common inviter from the ICs.
 	CommonInviterPubKey key.Public
 
-	// Position of the CommonInviter.
+	// Position of the CommonInviter. // TODO: not used at the moment!
 	Position int
 }
 
@@ -119,13 +125,16 @@ func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 
 	hops := hop.NewNotConnected()
 	fromRoot := hop.NewNotConnected()
-	var commonIDKey key.Public
-
+	var (
+		commonIDKey key.Public
+		sameChain   bool
+	)
 	for _, pair := range chainPairs {
 		hps, lvl := pair.Hops()
 
 		if hops.PickShorter(hps) {
 			commonIDKey = pair.CommonInviterIDKey(lvl)
+			_, sameChain = chain.CommonInviterLevel(pair.Chain1, pair.Chain2)
 			fromRoot.PickShorter(lvl)
 		}
 	}
@@ -133,6 +142,7 @@ func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 		Hops:                hops,
 		CommonInviterLevel:  fromRoot,
 		CommonInviterPubKey: commonIDKey,
+		SameChain:           sameChain,
 	}
 }
 

@@ -221,6 +221,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot.CommonInviterLevel, 0)
 	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(dave.CBORPublicKey()))
 	assert.Equal(wot.Hops, 1)
+	assert.That(wot.SameChain)
 
 	wot = NewWebOfTrust(bob.Node, carol.Node)
 	assert.Equal(wot.CommonInviterLevel, chain.NotConnected)
@@ -245,6 +246,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot.CommonInviterLevel, 1)
 	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(alice.CBORPublicKey()))
 	assert.Equal(wot.Hops, 3)
+	assert.ThatNot(wot.SameChain)
 
 	root3 := entity{Handle: key.New()}
 	root3.Node = New(key.InfoFromHandle(root3), chain.WithEndpoint("root3"))
@@ -262,8 +264,9 @@ func TestWebOfTrustInfo(t *testing.T) {
 	heidi.Node = eve.Invite(heidi.Node, eve.Handle, key.InfoFromHandle(heidi), 1)
 	assert.SLen(heidi.InviteeChains, 3, "heidi's 2 + previous 1")
 
-	// next dave's invitation doesn't add any new chains because there is no
-	// new roots in daves chains
+	// NOTE --- does nothing! -----
+	//   next dave's invitation doesn't add any new chains because there is no
+	//   new roots in daves chains
 	heidiNodeLen := heidi.Len()
 	heidi.Node = dave.Invite(heidi.Node, dave.Handle, key.InfoFromHandle(heidi), 1)
 	assert.Equal(heidi.Len(), heidiNodeLen)
@@ -280,6 +283,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot.CommonInviterLevel, 1, "common root is dave and eve is 1 from it")
 	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(eve.CBORPublicKey()))
 	assert.Equal(wot.Hops, 1, "dave invites heidi")
+	assert.That(wot.SameChain)
 	assert.That(eve.IsInviterFor(heidi.Node))
 	assert.That(heidi.OneHop(eve.Node))
 }
