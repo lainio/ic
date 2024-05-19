@@ -87,7 +87,6 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 	return newID
 }
 
-// TODO: implement tests!! for node, and chain pkgs.
 func (i Identity) Endpoint(pubkey key.Public) string {
 	bl, found := i.Find(pubkey)
 	if found {
@@ -96,7 +95,7 @@ func (i Identity) Endpoint(pubkey key.Public) string {
 	return ""
 }
 
-func (i Identity) WebOfTrust(rhs Identity) node.WebOfTrust {
+func (i Identity) WebOfTrust(rhs Identity) *node.WebOfTrust {
 	return i.WebOfTrustInfo(rhs.Node)
 }
 

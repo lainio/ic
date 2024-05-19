@@ -219,9 +219,15 @@ func TestWebOfTrustInfo(t *testing.T) {
 
 	wot := dave.WebOfTrustInfo(eve.Node)
 	assert.Equal(wot.CommonInviterLevel, 0)
-	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(dave.CBORPublicKey()))
+	daveIDK := try.To1(dave.CBORPublicKey())
+	assert.DeepEqual(wot.CommonInviterPubKey, daveIDK)
 	assert.Equal(wot.Hops, 1)
 	assert.That(wot.SameChain)
+	wot2 := eve.WoT(daveIDK) // Let'r try our other WoT method
+	assert.NotNil(wot2)
+	assert.DeepEqual(wot2.CommonInviterPubKey, daveIDK)
+	assert.That(wot2.SameChain)
+	assert.Equal(wot2.Hops, 1)
 
 	wot = NewWebOfTrust(bob.Node, carol.Node)
 	assert.Equal(wot.CommonInviterLevel, chain.NotConnected)
@@ -233,6 +239,16 @@ func TestWebOfTrustInfo(t *testing.T) {
 	grace.Node = bob.Invite(grace.Node, bob.Handle, key.InfoFromHandle(grace), 1)
 	assert.Equal(grace.Len(), 1)
 	assert.Equal(bob.Len(), 1)
+	//                   root1
+	//                  /
+	//                \/
+	//              alice -> frank
+	//              /
+	//             \/
+	//            bob -> grace
+
+	aliceIDK := try.To1(alice.CBORPublicKey())
+	root1IDK := try.To1(root1.CBORPublicKey())
 
 	common = frank.CommonChains(grace.Node)
 	assert.SLen(common, 1)
@@ -242,9 +258,33 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(h, 1)
 	assert.Equal(level, 0)
 
+	wot2 = frank.WoT(aliceIDK)
+	assert.NotNil(wot2)
+	assert.DeepEqual(wot2.CommonInviterPubKey, aliceIDK)
+	assert.That(wot2.SameChain)
+	assert.Equal(wot2.Hops, 1)
+
+	wot2 = grace.WoT(aliceIDK)
+	assert.NotNil(wot2)
+	assert.DeepEqual(wot2.CommonInviterPubKey, aliceIDK)
+	assert.That(wot2.SameChain)
+	assert.Equal(wot2.Hops, 2)
+
+	wot2 = frank.WoT(root1IDK)
+	assert.NotNil(wot2)
+	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
+	assert.That(wot2.SameChain)
+	assert.Equal(wot2.Hops, 2)
+
+	wot2 = grace.WoT(root1IDK)
+	assert.NotNil(wot2)
+	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
+	assert.That(wot2.SameChain)
+	assert.Equal(wot2.Hops, 3)
+
 	wot = NewWebOfTrust(frank.Node, grace.Node)
 	assert.Equal(wot.CommonInviterLevel, 1)
-	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(alice.CBORPublicKey()))
+	assert.DeepEqual(wot.CommonInviterPubKey, aliceIDK)
 	assert.Equal(wot.Hops, 3)
 	assert.ThatNot(wot.SameChain)
 

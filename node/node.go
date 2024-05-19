@@ -43,7 +43,7 @@ type WebOfTrust struct {
 
 // NewWebOfTrust returns web-of-trust information of two nodes if they share a
 // trust chain. If not the Hops field is hop.NotConnected.
-func NewWebOfTrust(n1, n2 Node) WebOfTrust {
+func NewWebOfTrust(n1, n2 Node) *WebOfTrust {
 	return n1.WebOfTrustInfo(n2)
 }
 
@@ -118,9 +118,38 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 	return common
 }
 
+func (n Node) WoT(IDK key.Public) *WebOfTrust {
+	var (
+		found bool
+		hops  = hop.NewNotConnected()
+		lvl   = hop.NewNotConnected()
+	)
+	for _, c := range n.InviteeChains {
+		_, idkFound := c.Find(IDK)
+		if idkFound {
+			currentLvl := c.FindLevel(IDK)
+			if lvl.PickShorter(currentLvl) {
+				// locations are in the same IC: - 1 if for our own block
+				hops = c.Len() - 1 - lvl
+				found = idkFound
+			}
+		}
+	}
+
+	if found {
+		return &WebOfTrust{
+			SameChain:           true,
+			Hops:                hops,
+			CommonInviterLevel:  lvl, // their lvl in IC
+			CommonInviterPubKey: IDK,
+		}
+	}
+	return nil
+}
+
 // WebOfTrustInfo returns web-of-trust information of two nodes if they share a
 // trust chain. If not the Hops field is hop.NotConnected.
-func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
+func (n Node) WebOfTrustInfo(their Node) *WebOfTrust {
 	chainPairs := n.CommonChains(their)
 
 	hops := hop.NewNotConnected()
@@ -138,7 +167,7 @@ func (n Node) WebOfTrustInfo(their Node) WebOfTrust {
 			fromRoot.PickShorter(lvl)
 		}
 	}
-	return WebOfTrust{
+	return &WebOfTrust{
 		Hops:                hops,
 		CommonInviterLevel:  fromRoot,
 		CommonInviterPubKey: commonIDKey,
@@ -177,9 +206,10 @@ func (n Node) CommonChain(their Node) chain.Chain {
 	return chain.Nil
 }
 
-func (n Node) Find(pubkey key.Public) (block chain.Block, found bool) {
+// Find finds the first (TODO: rename?) chain block that has the IDK.
+func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 	for _, c := range n.InviteeChains {
-		block, found = c.Find(pubkey)
+		block, found = c.Find(IDK)
 		if found {
 			return
 		}

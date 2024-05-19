@@ -325,13 +325,23 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 	)
 }
 
-func (c Chain) Find(pubkey key.Public) (b Block, found bool) {
+// Find finds Block from Chain if it exists.
+func (c Chain) Find(IDK key.Public) (b Block, found bool) {
 	for _, block := range c.Blocks {
-		if key.EqualBytes(block.Invitee.Public, pubkey) {
+		if key.EqualBytes(block.Invitee.Public, IDK) {
 			return block, true
 		}
 	}
 	return
+}
+
+func (c Chain) FindLevel(IDK key.Public) (lvl hop.Distance) {
+	for i, block := range c.Blocks {
+		if key.EqualBytes(block.Invitee.Public, IDK) {
+			return hop.Distance(i)
+		}
+	}
+	return hop.NewNotConnected()
 }
 
 // Challenge offers a method and placeholder for challenging other chain holder.
