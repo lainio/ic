@@ -133,25 +133,28 @@ sequenceDiagram
 
     QR_Code ->> Buyer : 'ID_Key' (PubKey, from IC who has endpoint)
 
-    note right of Buyer: with ID_Key we can get IC, or specifics like endpoint
-    Buyer ->> +IStore: getEndpoint( ID_Key )
+    note right of Buyer: with ID_Key we can get IC, or specifics like endpoint<br/>which is WoT-related calculation
+    Buyer ->> +IStore: getEndpoint(ID_Key) / getWoTAndEndpoint(ID_Key)
 
-    alt we recognize ID_Key by finding a mutual IC
+    alt we recognize ID_Key by finding a MUTUAL IC (RARE)
+    note right of IStore: use common inviter to get endpoint:<br/> we have an IC where ID_Key<br/> holder has published QR-code
+    %% NOTE: QR-code stuff should always be as high of the IC as possible
     IStore ->> +INode: getEndpoint(ID_Key)
     INode -->> -IStore: endpoint
     else we try to use Resolver if our chains have it
     IStore ->> +INode: getResolver()
     INode -->> -IStore: Resolver_endpoint
     alt we did have Resolver
-    note right of IStore: Resolver because we can have common inviter w/ the ID_Key
+    note right of IStore: Resolver because we can have<br/> common inviter w/ the ID_Key
     IStore ->> +ActiveNode: solve(ID_Key)
     ActiveNode -->> -IStore: endpoint
     end
     end
 
-    note right of Buyer: How about WoT w/ ID_Key, should we calc it before?
+    note right of Buyer: How WoT for ID_Key, getting Endpoint is the same
     %% the WoT is related to endpoint in this phase which might be ok but if we
     %% will calculate it later there's no need to do it here?
+    %% We should calc it ASAP, before we want to connect QR-code
 
     IStore -->> -Buyer: Tor Endpoint
 
@@ -159,7 +162,7 @@ sequenceDiagram
 
     note over Buyer, Seller: HANDSHAKE starts here. Remember full Node and all ICs
 
-    note over Buyer, Seller: present both ICs & Adressee's challenge
+    note over Buyer, Seller: present both ICs & Addressee's challenge
     Buyer ->> +Seller: our ID_Key (+ IC for connection)
     note right of Buyer: Our ID_Key might be better because of the size?<br/>When we send it if not?
 
@@ -172,7 +175,7 @@ sequenceDiagram
     Seller -->> -Buyer: IC for connection + ID_Key + challenge
     %% TODO: we should compare this to FIDO's authn
 
-    note over Buyer, Seller: Adressee's challenge responce and ACK
+    note over Buyer, Seller: Addressee's challenge responce and ACK
     Buyer ->> +Seller:  challenge responce + our *own* challenge (+ our ICs)
     Seller -->> -Buyer: challenge responce + ACK
 
