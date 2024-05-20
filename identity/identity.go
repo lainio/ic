@@ -2,6 +2,7 @@
 package identity
 
 import (
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/node"
@@ -97,6 +98,16 @@ func (i Identity) Endpoint(pubkey key.Public) string {
 
 func (i Identity) WebOfTrust(rhs Identity) *node.WebOfTrust {
 	return i.WebOfTrustInfo(rhs.Node)
+}
+
+// Challenge offers a method and placeholder for challenging other chain holder.
+// Most common cases is that caller of the function implements the closure where
+// it calls other party over the network to sign the challenge which is readily
+// build and randomized.
+func (i Identity) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
+	assert.SLonger(i.InviteeChains, 0)
+	// All InviteeChains are equally useful for Challenge.
+	return i.InviteeChains[0].Challenge(pinCode, f)
 }
 
 // TrustLevel calculates current trust-level of the Identity domain.

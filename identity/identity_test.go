@@ -273,3 +273,53 @@ func TestWebOfTrust(t *testing.T) {
 		assert.Equal(wot.CommonInviterLevel, 1)
 	}
 }
+
+func TestChallenge(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	// When let's say Bob have received Alice's Identity he can use Challenge
+	// method for Alice's Identity to let Alice proof that she controls the
+	// Identity
+	pinCode := 1234
+	// success tests:
+	assert.That(alice.Challenge(pinCode,
+		func(d []byte) key.Signature {
+			// In real world usage here we would send the d for Alice's signing
+			// over the network.
+			b := chain.NewBlockFromData(d)
+			// pinCode is transported out-of-band and entered *before* signing
+			b.Position = pinCode
+			d = b.Bytes()
+			return try.To1(alice.Sign(d))
+		},
+	))
+	assert.That(bob.Challenge(pinCode,
+		func(d []byte) key.Signature {
+			b := chain.NewBlockFromData(d)
+			b.Position = pinCode
+			d = b.Bytes()
+			return try.To1(bob.Sign(d))
+		},
+	))
+
+	// failures:
+	// Test that if alice tries to sign bob's challenge it won't work.
+	assert.ThatNot(bob.Challenge(pinCode,
+		func(d []byte) key.Signature {
+			b := chain.NewBlockFromData(d)
+			b.Position = pinCode
+			d = b.Bytes()
+			// NOTE Alice canot sign bob's challenge
+			return try.To1(alice.Sign(d))
+		},
+	))
+	// Wrong pinCode
+	assert.ThatNot(bob.Challenge(pinCode+1,
+		func(d []byte) key.Signature {
+			b := chain.NewBlockFromData(d)
+			b.Position = pinCode
+			d = b.Bytes()
+			return try.To1(bob.Sign(d))
+		},
+	))
+}
