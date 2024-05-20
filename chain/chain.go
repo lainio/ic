@@ -190,16 +190,6 @@ func (c Chain) Invite(
 	return nc
 }
 
-// rotationInvite used for unit testing only! TODO: remove, Invite is enought.
-func (c Chain) rotationInvite(
-	inviter key.Handle,
-	invitee key.Info,
-	opts ...Opts,
-) (nc Chain) {
-	ops := append(opts, WithRotation(true))
-	return c.Invite(inviter, invitee, ops...)
-}
-
 // Hops returns hops and common inviter's level if that exists. If not both
 // return values are NotConnected.
 func (c Chain) Hops(their Chain) (hops hop.Distance, rootLvl hop.Distance) {

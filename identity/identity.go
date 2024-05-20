@@ -82,7 +82,7 @@ func (i Identity) Invite(rhs Identity, position int) Identity {
 }
 
 func (i Identity) RotateKey(newKH key.Handle) Identity {
-	newInfo := New(newKH, chain.WithRotation(true))
+	newInfo := New(newKH, chain.WithRotation())
 
 	newID := i.Invite(newInfo, 0)
 	return newID

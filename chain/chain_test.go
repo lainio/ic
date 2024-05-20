@@ -54,8 +54,8 @@ func setup() {
 	bob.Handle = key.New()
 	// start root with one rotation key
 	rootMaster.Chain = New(key.InfoFromHandle(rootMaster))
-	root.Chain = rootMaster.rotationInvite(rootMaster.Handle, key.InfoFromHandle(root),
-		WithPosition(1))
+	root.Chain = rootMaster.Invite(rootMaster.Handle, key.InfoFromHandle(root),
+		WithRotation(), WithPosition(1))
 	// root invites alice and bod but they have no invitation between
 	alice.Chain = root.Invite(root.Handle, key.InfoFromHandle(alice),
 		WithPosition(1))
@@ -80,7 +80,7 @@ func TestNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	k := key.New()
-	c := New(key.InfoFromHandle(k), WithRotation(true))
+	c := New(key.InfoFromHandle(k), WithRotation())
 
 	assert.SLen(c.Blocks, 1)
 	assert.Equal(c.Len(), 1)
@@ -89,16 +89,14 @@ func TestNewChain(t *testing.T) {
 	//assert.Equal(c.AbsLen(), 1)
 
 	k2 := key.New()
-	c = c.rotationInvite(k, key.InfoFromHandle(k2),
-		WithPosition(1))
+	c = c.Invite(k, key.InfoFromHandle(k2), WithRotation(), WithPosition(1))
 	assert.Equal(c.Len(), 2, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 2)
 	assert.That(c.VerifyIDChain())
 	//assert.Equal(c.AbsLen(), 1)
 
 	k3 := key.New()
-	c = c.rotationInvite(k2, key.InfoFromHandle(k3),
-		WithPosition(1))
+	c = c.Invite(k2, key.InfoFromHandle(k3), WithRotation(), WithPosition(1))
 	assert.Equal(c.Len(), 3, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 3)
 	assert.That(c.VerifyIDChain())

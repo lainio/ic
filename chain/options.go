@@ -27,9 +27,9 @@ func WithPosition(p int) Opts {
 	}
 }
 
-func WithRotation(r bool) Opts {
+func WithRotation() Opts {
 	return func(o *Options) {
-		o.Rotation = r
+		o.Rotation = true
 	}
 }
 
