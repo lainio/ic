@@ -331,6 +331,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 func TestCheckIntegrity(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	// - OK versions
 	ok := alice.CheckIntegrity()
 	assert.That(ok)
 	ok = bob.CheckIntegrity()
@@ -349,4 +350,10 @@ func TestCheckIntegrity(t *testing.T) {
 	assert.That(ok)
 	ok = root2.CheckIntegrity()
 	assert.That(ok)
+
+	// - Not OK ruined version:
+	// - this very bad test but until we have better...
+	grace.InviteeChains[0].Blocks[0].Invitee.Public[30] = 0
+	ok = grace.CheckIntegrity()
+	assert.ThatNot(ok, "see 2 lines above ^")
 }
