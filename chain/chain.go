@@ -255,14 +255,14 @@ func (c Chain) isLeaf(invitersKey key.Handle) bool {
 func (c Chain) LeafPubKey() key.Public {
 	assert.That(c.Len() > 0, "chain cannot be empty")
 
-	return c.lastBlock().Invitee.Public
+	return c.LastBlock().Invitee.Public
 }
 
 func (c Chain) hashToLeaf() []byte {
 	if c.Blocks == nil {
 		return nil
 	}
-	ha := sha256.Sum256(c.lastBlock().Bytes())
+	ha := sha256.Sum256(c.LastBlock().Bytes())
 	return ha[:]
 }
 
@@ -320,7 +320,7 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 	}
 
 	return EqualBlocks(
-		c.lastBlock(),
+		c.LastBlock(),
 		invitee.secondLastBlock(),
 	)
 }
@@ -349,7 +349,7 @@ func (c Chain) FindLevel(IDK key.Public) (lvl hop.Distance) {
 // it calls other party over the network to sign the challenge which is readily
 // build and randomized.
 func (c Chain) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
-	pubKey := c.lastBlock().Invitee.Public
+	pubKey := c.LastBlock().Invitee.Public
 	challengeBlock, sigBlock := NewVerifyBlock(pinCode)
 	sig := f(challengeBlock.Bytes())
 	return key.VerifySign(pubKey, sigBlock.Bytes(), sig)
@@ -359,7 +359,7 @@ func (c Chain) firstBlock() Block {
 	return c.Blocks[0]
 }
 
-func (c Chain) lastBlock() Block {
+func (c Chain) LastBlock() Block {
 	l := len(c.Blocks)
 	assert.That(l > 0, "Blocks is too short")
 	return c.Blocks[l-1]
