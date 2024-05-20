@@ -327,3 +327,26 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.That(eve.IsInviterFor(heidi.Node))
 	assert.That(heidi.OneHop(eve.Node))
 }
+
+func TestCheckIntegrity(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	ok := alice.CheckIntegrity()
+	assert.That(ok)
+	ok = bob.CheckIntegrity()
+	assert.That(ok)
+	ok = carol.CheckIntegrity()
+	assert.That(ok)
+	ok = dave.CheckIntegrity()
+	assert.That(ok)
+	ok = eve.CheckIntegrity()
+	assert.That(ok)
+	ok = frank.CheckIntegrity()
+	assert.That(ok)
+	ok = grace.CheckIntegrity()
+	assert.That(ok)
+	ok = root1.CheckIntegrity()
+	assert.That(ok)
+	ok = root2.CheckIntegrity()
+	assert.That(ok)
+}

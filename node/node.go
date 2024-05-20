@@ -217,6 +217,22 @@ func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 	return
 }
 
+func (n Node) CheckIntegrity() bool {
+	if len(n.InviteeChains) == 0 || !n.InviteeChains[0].VerifySign() {
+		return false
+	}
+
+	IDK := n.InviteeChains[0].LastBlock().Invitee.Public
+
+	for _, c := range n.InviteeChains[1:] {
+		notOK := !(key.EqualBytes(c.LastBlock().Invitee.Public, IDK) && c.VerifySign())
+		if notOK {
+			return false
+		}
+	}
+	return true
+}
+
 func (n Node) Len() int {
 	return len(n.InviteeChains)
 }
