@@ -395,17 +395,17 @@ func TestFind(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	{
-		foundBlock, found := edvin.Find(rootMaster.lastBlock().Invitee.Public)
+		foundBlock, found := edvin.Find(rootMaster.LastBlock().Invitee.Public)
 		assert.That(found)
 		assert.DeepEqual(foundBlock.Invitee.ID, rootMaster.ID())
 	}
 	{
-		foundBlock, found := edvin.Find(bob.lastBlock().Invitee.Public)
+		foundBlock, found := edvin.Find(bob.LastBlock().Invitee.Public)
 		assert.That(found)
 		assert.DeepEqual(foundBlock.Invitee.ID, bob.ID())
 	}
 	{
-		rootBlock, found := edvin.Find(root.lastBlock().Invitee.Public)
+		rootBlock, found := edvin.Find(root.LastBlock().Invitee.Public)
 		assert.That(found)
 		assert.DeepEqual(rootBlock.Invitee.ID, root.ID())
 	}
