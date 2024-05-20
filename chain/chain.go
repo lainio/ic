@@ -76,26 +76,19 @@ func (p Pair) CommonInviterIDKey(lvl hop.Distance) key.Public {
 	return block.Invitee.Public
 }
 
-func (p Pair) MutualChain() bool {
+// SameRoot not needed yet.
+func (p Pair) _() bool {
 	return SameRoot(p.Chain1, p.Chain2)
 }
 
 var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
-	// TODO: maybe we should check validity of chains earlier than until here?
-	if !c1.VerifySign() || !c2.VerifySign() {
-		return false
-	}
-
 	b1, b2 := c1.firstBlock(), c2.firstBlock()
 	return EqualBlocks(b1, b2)
 }
 
 func SameInviter(c1, c2 Chain) bool {
-	if !c1.VerifySign() || !c2.VerifySign() {
-		return false
-	}
 	return EqualBlocks(
 		c1.secondLastBlock(),
 		c2.secondLastBlock(),
@@ -310,10 +303,6 @@ func (c Chain) Clone() Chain {
 }
 
 func (c Chain) IsInviterFor(invitee Chain) bool {
-	if !invitee.VerifySign() {
-		return false
-	}
-
 	// if we are a root or too near of a root we cannot be inviter
 	if c.Len() < 1 || invitee.Len() < 2 {
 		return false
