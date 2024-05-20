@@ -26,10 +26,10 @@ type WebOfTrust struct {
 	Hops hop.Distance
 
 	// SameChain tells if two parties are in the same Invitation Chain (IC).
-	// You should take this to count when make decisions abount Hops.
+	// You should take this to count when make decisions about Hops.
 	SameChain bool
 
-	// CommonInviterLevel is lvl from root, i.e. how far away it's from
+	// CommonInviterLevel is hops from root, i.e. how far away it's from
 	// absolute root that's always level: 0.
 	CommonInviterLevel hop.Distance // TODO: CommonInviter type??
 
@@ -37,7 +37,7 @@ type WebOfTrust struct {
 	// helps you to locate common inviter from the ICs.
 	CommonInviterPubKey key.Public
 
-	// Position of the CommonInviter. // TODO: not used at the moment!
+	// Position of the CommonInviter. // TODO: currently not used
 	Position int
 }
 
