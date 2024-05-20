@@ -49,8 +49,8 @@ func setup() {
 	frank.Handle = key.New()
 	grace.Handle = key.New()
 
-	root1.Node = New(key.InfoFromHandle(root1), chain.WithEndpoint("root1"))
-	root2.Node = New(key.InfoFromHandle(root2), chain.WithEndpoint("root2"))
+	root1.Node = New(key.InfoFromHandle(root1), chain.WithEndpoint("root1", true))
+	root2.Node = New(key.InfoFromHandle(root2), chain.WithEndpoint("root2", true))
 }
 
 func TestNewRootNode(t *testing.T) {
@@ -119,7 +119,7 @@ func TestInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave.Node = New(key.InfoFromHandle(dave), chain.WithEndpoint("dave"))
+	dave.Node = New(key.InfoFromHandle(dave), chain.WithEndpoint("dave", true))
 	eve.Node = dave.Invite(eve.Node, dave.Handle, key.InfoFromHandle(eve), 1)
 	//                 dave
 	//                 /
@@ -289,7 +289,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.ThatNot(wot.SameChain)
 
 	root3 := entity{Handle: key.New()}
-	root3.Node = New(key.InfoFromHandle(root3), chain.WithEndpoint("root3"))
+	root3.Node = New(key.InfoFromHandle(root3), chain.WithEndpoint("root3", true))
 	heidi := entity{Handle: key.New()}
 	heidi.Node = root3.Invite(heidi.Node, root3.Handle, key.InfoFromHandle(heidi), 1)
 	assert.SLen(heidi.InviteeChains, 1)

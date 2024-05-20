@@ -6,11 +6,11 @@ type Options struct {
 	Position     int
 	Rotation     bool
 	AllowRouting bool
+	Resolver     bool
 	Endpoint     string
 
 	// TODO: future ones, endpoint or does this belong to key.Info? It might be
 	// good if we could share same key with the Tor service and our ID?
-	// However, the key rotation is as important as
 }
 
 func NewOptions(options ...Opts) *Options {
@@ -39,8 +39,9 @@ func WithAllowRouting(allow bool) Opts {
 	}
 }
 
-func WithEndpoint(endpoint string) Opts {
+func WithEndpoint(endpoint string, isResolver bool) Opts {
 	return func(o *Options) {
 		o.Endpoint = endpoint
+		o.Resolver = isResolver
 	}
 }

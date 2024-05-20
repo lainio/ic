@@ -11,6 +11,11 @@ import (
 	"github.com/lainio/ic/key"
 )
 
+const (
+	endpointValue     = "endpoint_value"
+	endpointValueDave = "endpoint_value_dave"
+)
+
 var (
 	// root1 -> alice, alice -> bob, root2 -> carol
 	root1, alice, bob, carol,
@@ -46,7 +51,7 @@ func setup() {
 	grace.Handle = key.New()
 
 	root1 = New(root1)
-	root2 = New(root2, chain.WithEndpoint("endpoint_value"))
+	root2 = New(root2, chain.WithEndpoint(endpointValue, true))
 }
 
 func TestNewIdentity(t *testing.T) {
@@ -98,7 +103,7 @@ func TestIdentity_Invite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave = New(dave, chain.WithEndpoint("endpoint_value_dave"))
+	dave = New(dave, chain.WithEndpoint(endpointValueDave, true))
 	eve = dave.Invite(eve, 1)
 	assert.Equal(eve.Len(), 1)
 	{
@@ -181,13 +186,13 @@ func TestEndpoint(t *testing.T) {
 		pubkey := try.To1(root2.CBORPublicKey())
 		ep := eve.Endpoint(pubkey)
 		assert.NotEmpty(ep)
-		assert.Equal(ep, "endpoint_value")
+		assert.Equal(ep, endpointValue)
 	}
 	{
 		pubkey := try.To1(dave.CBORPublicKey())
 		ep := eve.Endpoint(pubkey)
 		assert.NotEmpty(ep)
-		assert.Equal(ep, "endpoint_value_dave")
+		assert.Equal(ep, endpointValueDave)
 	}
 }
 
