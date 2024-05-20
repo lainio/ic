@@ -324,6 +324,16 @@ func (c Chain) Find(IDK key.Public) (b Block, found bool) {
 	return
 }
 
+// Resolver returns first found Resolver or empty string.
+func (c Chain) Resolver() (endpoint string) {
+	for _, block := range c.Blocks {
+		if block.Resolver {
+			return block.Endpoint
+		}
+	}
+	return
+}
+
 func (c Chain) FindLevel(IDK key.Public) (lvl hop.Distance) {
 	for i, block := range c.Blocks {
 		if key.EqualBytes(block.Invitee.Public, IDK) {

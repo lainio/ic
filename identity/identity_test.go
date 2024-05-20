@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	endpointValue     = "endpoint_value"
-	endpointValueDave = "endpoint_value_dave"
+	endpointValueRoot1 = "endpoint_value_root1"
+	endpointValueRoot2 = "endpoint_value_root2"
+	endpointValueDave  = "endpoint_value_dave"
 )
 
 var (
@@ -50,8 +51,8 @@ func setup() {
 	frank.Handle = key.New()
 	grace.Handle = key.New()
 
-	root1 = New(root1)
-	root2 = New(root2, chain.WithEndpoint(endpointValue, true))
+	root1 = New(root1, chain.WithEndpoint(endpointValueRoot1, true))
+	root2 = New(root2, chain.WithEndpoint(endpointValueRoot2, true))
 }
 
 func TestNewIdentity(t *testing.T) {
@@ -186,13 +187,37 @@ func TestEndpoint(t *testing.T) {
 		pubkey := try.To1(root2.CBORPublicKey())
 		ep := eve.Endpoint(pubkey)
 		assert.NotEmpty(ep)
-		assert.Equal(ep, endpointValue)
+		assert.Equal(ep, endpointValueRoot2)
 	}
 	{
 		pubkey := try.To1(dave.CBORPublicKey())
 		ep := eve.Endpoint(pubkey)
 		assert.NotEmpty(ep)
 		assert.Equal(ep, endpointValueDave)
+	}
+}
+
+func TestResolver(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	{
+		ep := carol.Resolver()
+		assert.NotEmpty(ep)
+		assert.Equal(ep, endpointValueRoot2)
+	}
+	//                  root1
+	//                  /
+	//                \/
+	//              alice -->   bob
+	{
+		ep := alice.Resolver()
+		assert.NotEmpty(ep)
+		assert.Equal(ep, endpointValueRoot1)
+	}
+	{
+		ep := bob.Resolver()
+		assert.NotEmpty(ep)
+		assert.Equal(ep, endpointValueRoot1)
 	}
 }
 

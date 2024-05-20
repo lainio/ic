@@ -206,6 +206,16 @@ func (n Node) CommonChain(their Node) chain.Chain {
 	return chain.Nil
 }
 
+func (n Node) Resolver() (endpoint string) {
+	for _, c := range n.InviteeChains {
+		endpoint = c.Resolver()
+		if endpoint != "" {
+			return endpoint
+		}
+	}
+	return
+}
+
 // Find finds the first (TODO: rename?) chain block that has the IDK.
 func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 	for _, c := range n.InviteeChains {

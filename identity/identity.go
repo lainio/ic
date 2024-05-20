@@ -88,6 +88,10 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 	return newID
 }
 
+func (i Identity) Resolver() string {
+	return i.Node.Resolver()
+}
+
 func (i Identity) Endpoint(pubkey key.Public) string {
 	bl, found := i.Find(pubkey)
 	if found {
