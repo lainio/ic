@@ -223,7 +223,12 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.DeepEqual(wot.CommonInviterPubKey, daveIDK)
 	assert.Equal(wot.Hops, 1)
 	assert.That(wot.SameChain)
-	wot2 := eve.WoT(daveIDK) // Let'r try our other WoT method
+	digestDave := &chain.Digest{
+		IDK:     daveIDK,
+		RootIDK: daveIDK,
+		Hops:    0,
+	}
+	wot2 := eve.WoT(digestDave) // Let'r try our other WoT method
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, daveIDK)
 	assert.That(wot2.SameChain)
@@ -258,25 +263,35 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(h, 1)
 	assert.Equal(level, 0)
 
-	wot2 = frank.WoT(aliceIDK)
+	digestAlice := &chain.Digest{
+		IDK:     aliceIDK,
+		RootIDK: root1IDK,
+		Hops:    1,
+	}
+	wot2 = frank.WoT(digestAlice)
 	assert.NotNil(wot2)
-	assert.DeepEqual(wot2.CommonInviterPubKey, aliceIDK)
+	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 1)
+	assert.Equal(wot2.Hops, 3, "we did give root=root1")
 
-	wot2 = grace.WoT(aliceIDK)
+	wot2 = grace.WoT(digestAlice)
 	assert.NotNil(wot2)
-	assert.DeepEqual(wot2.CommonInviterPubKey, aliceIDK)
+	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 2)
+	assert.Equal(wot2.Hops, 4, "root was root1")
 
-	wot2 = frank.WoT(root1IDK)
+	digestRoot1 := &chain.Digest{
+		IDK:     root1IDK,
+		RootIDK: root1IDK,
+		Hops:    0,
+	}
+	wot2 = frank.WoT(digestRoot1)
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
 	assert.Equal(wot2.Hops, 2)
 
-	wot2 = grace.WoT(root1IDK)
+	wot2 = grace.WoT(digestRoot1)
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)

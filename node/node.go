@@ -118,16 +118,16 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 	return common
 }
 
-func (n Node) WoT(IDK key.Public) *WebOfTrust {
+func (n Node) WoT(digest *chain.Digest) *WebOfTrust {
 	var (
 		found bool
 		hops  = hop.NewNotConnected()
 		lvl   = hop.NewNotConnected()
 	)
 	for _, c := range n.InviteeChains {
-		_, idkFound := c.Find(IDK)
+		_, idkFound := c.Find(digest.RootIDK)
 		if idkFound {
-			currentLvl := c.FindLevel(IDK)
+			currentLvl := c.FindLevel(digest.RootIDK)
 			if lvl.PickShorter(currentLvl) {
 				// locations are in the same IC: - 1 if for our own block
 				hops = c.Len() - 1 - lvl
@@ -139,9 +139,9 @@ func (n Node) WoT(IDK key.Public) *WebOfTrust {
 	if found {
 		return &WebOfTrust{
 			SameChain:           true,
-			Hops:                hops,
+			Hops:                hops + digest.Hops,
 			CommonInviterLevel:  lvl, // their lvl in IC
-			CommonInviterPubKey: IDK,
+			CommonInviterPubKey: digest.RootIDK,
 		}
 	}
 	return nil
