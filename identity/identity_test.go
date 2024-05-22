@@ -14,6 +14,7 @@ import (
 const (
 	endpointValueRoot1 = "endpoint_value_root1"
 	endpointValueRoot2 = "endpoint_value_root2"
+	endpointValueRoot3 = "endpoint_value_root3"
 	endpointValueDave  = "endpoint_value_dave"
 )
 
@@ -23,6 +24,11 @@ var (
 
 	// dave (new root) -> eve, root2 -> dave, carol -> eve (now root2 member)
 	root2, dave, eve Identity
+
+	// root3 --> ivan --> mike
+	//     \
+	//      --> judy --> olivia
+	root3, ivan, mike, judy, olivia Identity
 
 	// alice -> frank, bob -> grace
 	frank, grace Identity
@@ -42,6 +48,7 @@ func setup() {
 	// root, alice, bob setup
 	root1.Handle = key.New()
 	root2.Handle = key.New()
+	root3.Handle = key.New()
 	alice.Handle = key.New()
 	bob.Handle = key.New()
 	carol.Handle = key.New()
@@ -51,8 +58,14 @@ func setup() {
 	frank.Handle = key.New()
 	grace.Handle = key.New()
 
+	ivan.Handle = New(key.New())
+	mike.Handle = New(key.New())
+	judy.Handle = New(key.New())
+	olivia.Handle = New(key.New())
+
 	root1 = New(root1, chain.WithEndpoint(endpointValueRoot1, true))
 	root2 = New(root2, chain.WithEndpoint(endpointValueRoot2, true))
+	root3 = New(root3, chain.WithEndpoint(endpointValueRoot3, true))
 }
 
 func TestNewIdentity(t *testing.T) {
@@ -160,6 +173,54 @@ func TestRotateKey(t *testing.T) {
 
 	for i, c := range eve.InviteeChains {
 		assert.Equal(c.Len(), lengths[i]+1)
+	}
+}
+
+func TestRotateAndInvite(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	// root3 --> ivan --> mike
+	//     \
+	//      --> judy --> olivia
+	{
+		assert.SLen(ivan.InviteeChains, 0)
+		ivan = root3.InviteWithRotateKey(ivan, 1)
+		assert.SLen(ivan.InviteeChains, 1)
+		assert.SLen(ivan.InviteeChains[0].Blocks, 2+1,
+			"2 parties + 1 rotation")
+	}
+	{
+		assert.SLen(judy.InviteeChains, 0)
+		judy = root3.InviteWithRotateKey(judy, 1)
+		assert.SLen(judy.InviteeChains, 1)
+		assert.SLen(judy.InviteeChains[0].Blocks, 2+1,
+			"2 parties + 1 rotation")
+	}
+	{
+		assert.SLen(mike.InviteeChains, 0)
+		mike = ivan.InviteWithRotateKey(mike, 1)
+		assert.SLen(judy.InviteeChains, 1)
+		assert.SLen(mike.InviteeChains, 1)
+		assert.SLen(mike.InviteeChains[0].Blocks, 3+1+1,
+			"old length 3 + 1 new party + 1 rotation")
+	}
+	{
+		assert.SLen(olivia.InviteeChains, 0)
+		olivia = judy.InviteWithRotateKey(olivia, 1)
+		assert.SLen(judy.InviteeChains, 1)
+		assert.SLen(olivia.InviteeChains, 1)
+		assert.SLen(olivia.InviteeChains[0].Blocks, 3+1+1,
+			"old length 3 + 1 new party + 1 rotation")
+	}
+	// judy 'tries' to invite mike.
+	// mike is already invited to root3's chain, nothing happens
+	{
+		assert.SLen(mike.InviteeChains, 1, "1 IC already w/ same root")
+		mike = judy.InviteWithRotateKey(mike, 1)
+		assert.SLen(judy.InviteeChains, 1, "nothing new")
+		assert.SLen(mike.InviteeChains, 1, "nothing new")
+		assert.SLen(mike.InviteeChains[0].Blocks, 3+1+1,
+			"old length 3 + 1 new party + 1 rotation")
 	}
 }
 

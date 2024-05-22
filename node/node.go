@@ -62,6 +62,46 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 	return rn
 }
 
+// InviteWithRotateKey is method to add invitee's node's invitation chains (IC)
+// to all of those ICs of us (n Node) that invitee doesn't yet belong.
+func (n Node) InviteWithRotateKey(
+	// TODO: order of the arguments?
+	inviteesNode Node,
+	inviterOrg, inviterNew key.Handle,
+	invitee key.Info,
+	position int,
+) (
+	rn Node,
+) {
+	rn.InviteeChains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
+
+	// keep all the existing web-of-trust chains if not rotation case
+	if !inviteesNode.rotationChain() {
+		rn.InviteeChains = append(rn.InviteeChains, inviteesNode.InviteeChains...)
+	}
+
+	// add only those which invitee isn't member already
+	for _, c := range n.InviteeChains {
+		// if inviteesNode already is inivited to same web-of-trust
+		if inviteesNode.sharedRoot(c) {
+			// only keep it
+			continue
+		}
+
+		// inviter (n) has something that invitee dosen't belong yet
+		newChain := c.Invite(inviterOrg,
+			key.InfoFromHandle(inviterNew), chain.WithPosition(position))
+
+		newChain = newChain.Invite(inviterNew, invitee,
+			chain.WithPosition(position))
+
+		rn.InviteeChains = append(rn.InviteeChains, newChain)
+	}
+	return rn
+}
+
+// TODO: merge these 2 functions to one, refactoring.
+
 // Invite is method to add invitee's node's invitation chains (IC) to all of
 // those ICs of us (n Node) that invitee doesn't yet belong.
 // NOTE! Use identity.Invite at the API lvl.

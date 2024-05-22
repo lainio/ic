@@ -8,20 +8,21 @@ import (
 	"github.com/lainio/ic/node"
 )
 
-// TODO: How to we add new backup keys to the system? This is the most
-// interesting question of them all. We must have one key pair for everything
-// that we get one ID key, aka Public key. But if we could have multiple
-// enclaves where to store our private key, the same key? But maybe more
-// interesting would be that we could have multiple private keys? How we could
-// do that? - Now we have RotateKey which works when we have previouos key
-// available, only then. If we use RotateKey multiple times we end up having
-// several key pairs which keys we control. this means that even when we lose
-// some of the keys we can still control our identity.
-//  - we can rotate keys to extend our ICs, which is fine and helps
-//  - we will allow to have one special chain that's the Cntr Chain it's genesis
-//  block must have same Public Key as we have for our start phase IDKey. this
-//  will be quite complex structure, but we can check it at the node/identity
-//  lvl.
+// WIP: we need to have ID chain that allows us to RotateKey even when we don't
+// have the original private key in our control. How we can do that? We'll have
+// our backup keys in the onen chain in our Node. TODO: Stupid! who ever could
+// add this IDK chain after or could they.. No they couldn't with out having the
+// original IDK in their control. We don't have hided Master Key, OR
+// actually we could have if we start everything with one rotation, but the
+// question is what good does it give to us? The question is that what direction
+// we should use the backup key chain?
+
+// When normally we'll rotate key
+// just by adding a new block to all of the Node's chains (Type is Rotation).
+// Now we don't have a key to do that but when have a related key. Maybe we must
+// fork the chain? Is this so important... Maybe it is because disastorous
+// things happen but the question is where we should handle thouse things? In
+// the cain, or in the some where else?
 
 // TODO: however, key rotation chain blocks should not be calculated when web of
 // trust calculations are executed. NOTE: this is not so simple as it seems at
@@ -38,13 +39,6 @@ import (
 // TODO: key rotation need the concept of the Root Chain, i.e., the cain that's
 // block are all under our control AND every block type is Rotation! Another
 // name could be Identity Chain (like Identity Matrix)
-
-// TODO: we should start to make tests at the Identity level.
-
-// TODO: network decicion is that we start with the simple http or grpc calls.
-// If grpc can be tunneled easily thru Onion Routing we will use it! It's faster
-// and finally easier. If Tor can be just one extra layer that will be added to
-// system later, we can build and test stuff much earlier!
 
 // If we mark other
 // parents of the IC to control block. This would allow parent keypair to
@@ -68,9 +62,22 @@ type Identity struct {
 	key.Handle
 }
 
+// New creates a Identity object. NOTE that this far too simple for production
+// use when we need to setup many keys (propably) for the backup keys, etc. NOTE
+// we can create new backup keys as long as we own the previous one.
 func New(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{Node: node.New(info, flags...), Handle: h}
+}
+
+func (i Identity) InviteWithRotateKey(
+	rhs Identity,
+	position int,
+) Identity {
+	newKH := key.New()
+	rhs.Node = i.Node.InviteWithRotateKey(
+		rhs.Node, i, newKH, key.InfoFromHandle(rhs.Handle), position)
+	return rhs
 }
 
 // Invite invites other identity holder to all (decided later) our ICs.
