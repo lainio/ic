@@ -17,7 +17,9 @@ import (
 	"github.com/lainio/err2/try"
 )
 
-// TODO: from where we get the key!
+// TODO: from where we get the key! In the server this is ordinary secret. We
+// can still think this when we have our UI app ready.
+// TODO: how we should handle and store these keys! this solves so much!
 var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50ac2f32856844")
 
 type Public = []byte
@@ -25,6 +27,12 @@ type ID = []byte
 
 // Handle is key.Handle that has secure access to private key as well. But
 // private key is always hided. And that's why we have only Handle to key pair.
+//
+// NOTE: Handle is stateless as well, which means that we don't need to persist
+// them, i.e., if we have created the Handle, we can use it thru its ID.
+//
+// Handle also allows us decided what kind of key storage we are using and it
+// simplyfies key management A LOT.
 type Handle = enclave.KeyHandle
 
 // Info is key.Info that binds and transport both key's ID and its public key
