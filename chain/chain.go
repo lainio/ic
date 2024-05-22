@@ -14,11 +14,7 @@ import (
 	"github.com/lainio/ic/key"
 )
 
-// NotConnected tells that chains aren't connected at all, i.e. we don't have
-// any route to other.
-const NotConnected = -1
-
-// Chain is the data type for Invitation Chain, it's ID is rootPubKey
+// Chain is the data type for Invitation Chain
 // TODO: should be add some information about chains type? The current
 // imlementation doesn't have specific chains for the ID keys. the key handle is
 // just transported as an argument to the functions like Invite
@@ -64,7 +60,7 @@ func SameInviter(c1, c2 Chain) bool {
 // If the Common Inviter not exists, it returns NotConnected, false.
 func CommonInviterLevel(c1, c2 Chain) (level hop.Distance, same bool) {
 	if !SameRoot(c1, c2) {
-		return NotConnected, false
+		return hop.NotConnected, false
 	}
 
 	// pickup the shorter of the chains for the compare loop below
@@ -158,8 +154,8 @@ func (c Chain) Invite(
 // return values are NotConnected.
 func (c Chain) Hops(their Chain) (hops hop.Distance, rootLvl hop.Distance) {
 	common, _ := CommonInviterLevel(c, their) // TODO: same IC
-	if common == NotConnected {
-		return NotConnected, NotConnected
+	if common == hop.NotConnected {
+		return hop.NotConnected, hop.NotConnected
 	}
 
 	if c.OneHop(their) {

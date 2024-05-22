@@ -7,6 +7,7 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
 )
 
@@ -235,8 +236,8 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot2.Hops, 1)
 
 	wot = NewWebOfTrust(bob.Node, carol.Node)
-	assert.Equal(wot.CommonInviterLevel, chain.NotConnected)
-	assert.Equal(wot.Hops, chain.NotConnected)
+	assert.Equal(wot.CommonInviterLevel, hop.NotConnected)
+	assert.Equal(wot.Hops, hop.NotConnected)
 
 	frank.Node = alice.Invite(frank.Node, alice.Handle, key.InfoFromHandle(frank), 1)
 	assert.Equal(frank.Len(), 1)
