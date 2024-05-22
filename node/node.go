@@ -8,6 +8,7 @@ import (
 
 type Node struct {
 	// TODO: should we have myltiple IDChains? or just one or all in the same?
+	// TODO: we should have backup key chain or ID key chain. Now, what direct?
 
 	InviteeChains []chain.Chain
 
