@@ -8,34 +8,23 @@ import (
 	"github.com/lainio/ic/key"
 )
 
-// Block is the block in our invitation Chain (IC). Note that Invitee
-// is an important field, because its data must be same at the node
-// level. They verify that otherwise separated ICs belong to the same node!
+// Block is the block in our invitation Chain (IC). Note that Invitee is an
+// important field, because its data must be same at the node level. They tell
+// that otherwise separated ICs belong to the same node. [Invitee.Public] is the
+// identity ID, we call it in the docs IDK.
 type Block struct {
-	HashToPrev key.Hash // TODO: check the size later => 32, TODO: make own type
+	HashToPrev key.Hash
 	Invitee    key.Info
 	Options
 
 	InvitersSignature key.Signature
-
-	// TODO: where we should put our specific chain types? To keep it simple
-	// this is a good place. However, we have a Chain type as well. They belong
-	// to Identity, and Node will be changed to concept of invitation chains,
-	// maybe named like that as well.
-
-	// TODO: about endopints:
-	// We don't want any static rounting, i.e., we try to avoid the need of
-	// envelope until have to. That means that if we have Active Nodes that
-	// serve their ancestors, those ansestor client apps connect nodes directly
-	// anw we use only one lvl envelope for those cases. This might lead to
-	// rule that only those Identies who have their own Active Nodes can
-	// stream.
 }
 
 // NewVerifyBlock returns two randomized Blocks that can be used for
 // verification or challenges, etc. First block is for challenge, i.e. pinCode
 // is unknown aka 0, and second block is for actual signing where pincode is set
-// to Position field. By this we can send pincode by other, safe channel.
+// to Position field. By this we can send pincode by other, thru safe channel
+// and out-of-band.
 func NewVerifyBlock(pinCode int) (Block, Block) {
 	challengeBlock := Block{
 		HashToPrev: key.RandSlice(32),
@@ -59,6 +48,8 @@ func NewBlockFromData(d []byte) (b Block) {
 	return b
 }
 
+// Bytes return marshallel bytes of the Block.
+// TODO: start to use CBOR? for everything, all add as format?
 func (b Block) Bytes() []byte {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)

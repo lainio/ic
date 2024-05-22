@@ -14,30 +14,8 @@ import (
 	"github.com/lainio/ic/key"
 )
 
-// Chain is the data type for Invitation Chain
-// TODO: should be add some information about chains type? The current
-// imlementation doesn't have specific chains for the ID keys. the key handle is
-// just transported as an argument to the functions like Invite
+// Chain is the data type for Invitation Chain.
 type Chain struct {
-	// TODO: We have to refer these chains outside, so should we have following
-	// fields: ID (: string, UUID), Type (enum: ID, Invitation),
-	//
-	// We might need to have some sort of chain management, but let's be
-	// careful here! We don't want to make this too complicated. However, we
-	// want to courage people to use only one chain as long as possible. That
-	// would mean that the have only on structure e.g. family. and they should
-	// try to use that same chain to connect to government, work place, etc.
-	// NOTE: ^ that's bullshit, we cannot do that! People won't want to think
-	// that kind of things, they just want to connect to other people, my job is
-	// to make it automatic as possible. I must find out what are the use cases
-	// people need when the use the SW. They install app, they start with the
-	// empty app, they create needed keys (this might happen automatically, but
-	// is depending the used authenticator), they meet a people (later we might
-	// build a service) and other one invites other: who invites and who's
-	// invitee is calculated the trust-level
-	// TODO: calculate identity's trust
-	// level
-
 	Blocks []Block // Blocks is exported variable for serialization
 }
 
@@ -56,8 +34,8 @@ func SameInviter(c1, c2 Chain) bool {
 }
 
 // CommonInviterLevel returns inviter's distance (current level) from chain's
-// root if inviter exists.  The same flag tells if Inviter is in the same IC.
-// If the Common Inviter not exists, it returns NotConnected, false.
+// root if inviter exists, and same if Inviter is in the same IC. If the Common
+// Inviter doesn't exist, it returns [hop.NotConnected] and false.
 func CommonInviterLevel(c1, c2 Chain) (level hop.Distance, same bool) {
 	if !SameRoot(c1, c2) {
 		return hop.NotConnected, false
@@ -153,7 +131,7 @@ func (c Chain) Invite(
 // Hops returns hops and common inviter's level if that exists. If not both
 // return values are NotConnected.
 func (c Chain) Hops(their Chain) (hops hop.Distance, rootLvl hop.Distance) {
-	common, _ := CommonInviterLevel(c, their) // TODO: same IC
+	common, _ := CommonInviterLevel(c, their)
 	if common == hop.NotConnected {
 		return hop.NotConnected, hop.NotConnected
 	}
