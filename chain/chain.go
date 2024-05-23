@@ -188,6 +188,7 @@ func (c Chain) hashToLeaf() []byte {
 }
 
 // VerifySign verifies chains signatures, from root to the leaf.
+// TODO: merge with the next, refactoring.
 func (c Chain) VerifySign() bool {
 	if c.Len() == 1 {
 		return true // root block is valid always

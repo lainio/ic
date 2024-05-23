@@ -7,6 +7,10 @@ import (
 )
 
 type Node struct {
+	// TODO: implement use of these keys as rotated. The existing Chain Will
+	// break, how to keep everything simple? Draw?
+	BackupKeys chain.Chain // The Name of chain is enough
+
 	// TODO: should we have myltiple IDChains? or just one or all in the same?
 	// TODO: we should have backup key chain or ID key chain. Now, what direct?
 
@@ -268,6 +272,14 @@ func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 	return
 }
 
+// CheckIntegrity checks your Node's integrity, which means that all of the
+// InviteeChains must be signed properly and their LastBlock shares same IDK.
+// The last part is the logical binging under the Node structure.
+//
+// NOTE that you cannot trust the Node who's integrity is violated!
+//
+// TODO: consider returning an error or even panicing an error, but maybe caller
+// can do that?
 func (n Node) CheckIntegrity() bool {
 	if len(n.InviteeChains) == 0 || !n.InviteeChains[0].VerifySign() {
 		return false

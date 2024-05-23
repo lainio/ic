@@ -83,7 +83,6 @@ func (i Identity) InviteWithRotateKey(
 // Invite invites other identity holder to all (decided later) our ICs.
 // TODO: position is given just as but we have chain.Options, maybe use them?
 func (i Identity) Invite(rhs Identity, position int) Identity {
-	// TODO: if they have common chain already?
 	rhs.Node = i.Node.Invite(rhs.Node, i, key.InfoFromHandle(rhs.Handle), position)
 	return rhs
 }
