@@ -83,7 +83,7 @@ func TestIdentity_Invite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
-	alice = root1.Invite(alice, 1)
+	alice = root1.Invite(alice, chain.WithPosition(1))
 	assert.Equal(alice.Len(), 1)
 	{
 		c := alice.InviteeChains[0]
@@ -91,7 +91,7 @@ func TestIdentity_Invite(t *testing.T) {
 		assert.That(c.VerifySign())
 	}
 
-	bob = alice.Invite(bob, 1)
+	bob = alice.Invite(bob, chain.WithPosition(1))
 	assert.Equal(bob.Len(), 1)
 	{
 		c := bob.InviteeChains[0]
@@ -104,7 +104,7 @@ func TestIdentity_Invite(t *testing.T) {
 	assert.SNotNil(common.Blocks)
 
 	// Root2 invites Carol here
-	carol = root2.Invite(carol, 1)
+	carol = root2.Invite(carol, chain.WithPosition(1))
 	assert.Equal(carol.Len(), 1)
 	{
 		c := carol.InviteeChains[0]
@@ -118,7 +118,7 @@ func TestIdentity_Invite(t *testing.T) {
 
 	// Dave is one of the roots as well and we build it here:
 	dave = New(dave, chain.WithEndpoint(endpointValueDave, true))
-	eve = dave.Invite(eve, 1)
+	eve = dave.Invite(eve, chain.WithPosition(1))
 	assert.Equal(eve.Len(), 1)
 	{
 		c := eve.InviteeChains[0]
@@ -128,7 +128,7 @@ func TestIdentity_Invite(t *testing.T) {
 
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
 	// Eve!
-	dave = root2.Invite(dave, 1)
+	dave = root2.Invite(dave, chain.WithPosition(1))
 	assert.Equal(dave.Len(), 2)
 	{
 		c := dave.InviteeChains[1]
@@ -143,7 +143,7 @@ func TestIdentity_Invite(t *testing.T) {
 	common = carol.CommonChain(eve.Node)
 	assert.SNil(common.Blocks)
 	// .. so Carol can invite Eve
-	eve = carol.Invite(eve, 1)
+	eve = carol.Invite(eve, chain.WithPosition(1))
 	assert.Equal(eve.Len(), 2)
 
 	// now Eve has common chain with Root1 as well
@@ -184,21 +184,21 @@ func TestRotateAndInvite(t *testing.T) {
 	//      --> judy --> olivia
 	{
 		assert.SLen(ivan.InviteeChains, 0)
-		ivan = root3.InviteWithRotateKey(ivan, 1)
+		ivan = root3.InviteWithRotateKey(ivan, chain.WithPosition(1))
 		assert.SLen(ivan.InviteeChains, 1)
 		assert.SLen(ivan.InviteeChains[0].Blocks, 2+1,
 			"2 parties + 1 rotation")
 	}
 	{
 		assert.SLen(judy.InviteeChains, 0)
-		judy = root3.InviteWithRotateKey(judy, 1)
+		judy = root3.InviteWithRotateKey(judy, chain.WithPosition(1))
 		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(judy.InviteeChains[0].Blocks, 2+1,
 			"2 parties + 1 rotation")
 	}
 	{
 		assert.SLen(mike.InviteeChains, 0)
-		mike = ivan.InviteWithRotateKey(mike, 1)
+		mike = ivan.InviteWithRotateKey(mike, chain.WithPosition(1))
 		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(mike.InviteeChains, 1)
 		assert.SLen(mike.InviteeChains[0].Blocks, 3+1+1,
@@ -206,7 +206,7 @@ func TestRotateAndInvite(t *testing.T) {
 	}
 	{
 		assert.SLen(olivia.InviteeChains, 0)
-		olivia = judy.InviteWithRotateKey(olivia, 1)
+		olivia = judy.InviteWithRotateKey(olivia, chain.WithPosition(1))
 		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(olivia.InviteeChains, 1)
 		assert.SLen(olivia.InviteeChains[0].Blocks, 3+1+1,
@@ -216,7 +216,7 @@ func TestRotateAndInvite(t *testing.T) {
 	// mike is already invited to root3's chain, nothing happens
 	{
 		assert.SLen(mike.InviteeChains, 1, "1 IC already w/ same root")
-		mike = judy.InviteWithRotateKey(mike, 1)
+		mike = judy.InviteWithRotateKey(mike, chain.WithPosition(1))
 		assert.SLen(judy.InviteeChains, 1, "nothing new")
 		assert.SLen(mike.InviteeChains, 1, "nothing new")
 		assert.SLen(mike.InviteeChains[0].Blocks, 3+1+1,
@@ -328,8 +328,8 @@ func TestWebOfTrust(t *testing.T) {
 			try.To1(dave.CBORPublicKey()), "dave invited originally eve!")
 	}
 
-	frank = alice.Invite(frank, 1)
-	grace = bob.Invite(grace, 1)
+	frank = alice.Invite(frank, chain.WithPosition(1))
+	grace = bob.Invite(grace, chain.WithPosition(1))
 	//                  root1
 	//                  /
 	//                \/

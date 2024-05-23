@@ -73,7 +73,7 @@ func (n Node) InviteWithRotateKey(
 	inviteesNode Node,
 	inviterOrg, inviterNew key.Handle,
 	invitee key.Info,
-	position int,
+	opts ...chain.Opts,
 ) (
 	rn Node,
 ) {
@@ -93,12 +93,8 @@ func (n Node) InviteWithRotateKey(
 		}
 
 		// inviter (n) has something that invitee dosen't belong yet
-		newChain := c.Invite(inviterOrg,
-			key.InfoFromHandle(inviterNew), chain.WithPosition(position))
-
-		newChain = newChain.Invite(inviterNew, invitee,
-			chain.WithPosition(position))
-
+		newChain := c.Invite(inviterOrg, key.InfoFromHandle(inviterNew), opts...)
+		newChain = newChain.Invite(inviterNew, invitee, opts...)
 		rn.InviteeChains = append(rn.InviteeChains, newChain)
 	}
 	return rn
@@ -116,7 +112,7 @@ func (n Node) Invite(
 	inviteesNode Node,
 	inviter key.Handle,
 	invitee key.Info,
-	position int,
+	opts ...chain.Opts,
 ) (
 	rn Node,
 ) {
@@ -136,8 +132,7 @@ func (n Node) Invite(
 		}
 
 		// inviter (n) has something that invitee dosen't belong yet
-		newChain := c.Invite(inviter, invitee,
-			chain.WithPosition(position))
+		newChain := c.Invite(inviter, invitee, opts...)
 		rn.InviteeChains = append(rn.InviteeChains, newChain)
 	}
 	return rn

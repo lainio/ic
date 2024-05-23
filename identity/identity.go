@@ -72,25 +72,25 @@ func New(h key.Handle, flags ...chain.Opts) Identity {
 
 func (i Identity) InviteWithRotateKey(
 	rhs Identity,
-	position int,
+	opts ...chain.Opts,
 ) Identity {
 	newKH := key.New()
 	rhs.Node = i.Node.InviteWithRotateKey(
-		rhs.Node, i, newKH, key.InfoFromHandle(rhs.Handle), position)
+		rhs.Node, i, newKH, key.InfoFromHandle(rhs.Handle), opts...)
 	return rhs
 }
 
 // Invite invites other identity holder to all (decided later) our ICs.
 // TODO: position is given just as but we have chain.Options, maybe use them?
-func (i Identity) Invite(rhs Identity, position int) Identity {
-	rhs.Node = i.Node.Invite(rhs.Node, i, key.InfoFromHandle(rhs.Handle), position)
+func (i Identity) Invite(rhs Identity, opts ...chain.Opts) Identity {
+	rhs.Node = i.Node.Invite(rhs.Node, i, key.InfoFromHandle(rhs.Handle), opts...)
 	return rhs
 }
 
 func (i Identity) RotateKey(newKH key.Handle) Identity {
 	newInfo := New(newKH, chain.WithRotation())
 
-	newID := i.Invite(newInfo, 0)
+	newID := i.Invite(newInfo, chain.WithPosition(0))
 	return newID
 }
 
