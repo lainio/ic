@@ -414,3 +414,34 @@ func TestChallenge(t *testing.T) {
 		},
 	))
 }
+
+// TODO: lots of work still todo: order of these rotation functions cannot be
+// free!!
+
+func TestCreateBackupKeysAmount(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	dave.CreateBackupKeysAmount(3)
+	assert.SLen(dave.Node.BackupKeys.Blocks, 3)
+
+	frank.CreateBackupKeysAmount(3)
+	assert.SLen(frank.Node.BackupKeys.Blocks, 3)
+
+	grace.CreateBackupKeysAmount(2)
+	assert.SLen(grace.Node.BackupKeys.Blocks, 2)
+}
+
+func TestRotateToBackupKey(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	{
+		prevLen := dave.InviteeChains[0].Len()
+		dave = dave.RotateToBackupKey(2)
+		assert.SLen(dave.InviteeChains[0].Blocks, int(prevLen)+1)
+	}
+	{
+		prevLen := frank.InviteeChains[0].Len()
+		frank = frank.RotateToBackupKey(1)
+		assert.SLen(frank.InviteeChains[0].Blocks, int(prevLen)+1)
+	}
+}

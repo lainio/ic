@@ -1,6 +1,7 @@
 package node
 
 import (
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
@@ -64,6 +65,30 @@ func New(pubKey key.Info, flags ...chain.Opts) Node {
 func (n Node) AddChain(c chain.Chain) (rn Node) {
 	rn.InviteeChains = append(n.InviteeChains, c)
 	return rn
+}
+
+func (n *Node) CreateBackupKeysAmount(count int) {
+	// TODO: first block is the root block! take care of that.
+	assert.NotZero(count)
+	assert.NotEqual(count, 1, "two backup keys is minimum")
+	assert.SLen(n.BackupKeys.Blocks, 0)
+
+	inviterKH := key.New()
+	n.BackupKeys = chain.New(key.InfoFromHandle(inviterKH))
+	count = count - 1
+	for range count {
+		kh := key.New()
+		n.BackupKeys = n.BackupKeys.Invite(inviterKH, key.InfoFromHandle(kh))
+		inviterKH = kh
+	}
+}
+
+func (n Node) RotateToBackupKey(keyIndex int) (Node, key.Handle) {
+	bkHandle := n.getBackupKey(keyIndex)
+	rotationNode := New(key.InfoFromHandle(bkHandle), chain.WithRotation(), chain.WithPosition(0))
+
+	rotationNode = n.Invite(rotationNode, bkHandle, n.getIDK(), chain.WithRotation())
+	return rotationNode, bkHandle
 }
 
 // InviteWithRotateKey is method to add invitee's node's invitation chains (IC)
@@ -311,4 +336,17 @@ func (n Node) sharedRootPair(their chain.Chain) chain.Pair {
 		}
 	}
 	return chain.Pair{}
+}
+
+func (n Node) getBackupKey(keyIndex int) key.Handle {
+	assert.SLonger(n.BackupKeys.Blocks, keyIndex)
+
+	return key.NewFromInfo(n.BackupKeys.Blocks[keyIndex].Invitee)
+}
+
+func (n Node) getIDK() key.Info {
+	assert.SLonger(n.InviteeChains, 0)
+	assert.SLonger(n.InviteeChains[0].Blocks, 0)
+
+	return n.InviteeChains[0].LastBlock().Invitee
 }

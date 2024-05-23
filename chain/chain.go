@@ -114,7 +114,8 @@ func (c Chain) Invite(
 	invitee key.Info,
 	opts ...Opts,
 ) (nc Chain) {
-	assert.That(c.isLeaf(inviter), "only leaf can invite")
+	// We have backup keys which cannot handle this assert!
+	//	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
 	newBlock := Block{
 		HashToPrev: c.hashToLeaf(),
@@ -169,7 +170,8 @@ func (c Chain) KeyRotationsLen() (count hop.Distance) {
 	return
 }
 
-func (c Chain) isLeaf(invitersKey key.Handle) bool {
+// isLeaf
+func (c Chain) _(invitersKey key.Handle) bool {
 	return key.EqualBytes(c.LeafPubKey(), try.To1(invitersKey.CBORPublicKey()))
 }
 

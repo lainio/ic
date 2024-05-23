@@ -94,6 +94,16 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 	return newID
 }
 
+func (i Identity) RotateToBackupKey(keyIndex int) Identity {
+	newNode, newKH := i.Node.RotateToBackupKey(keyIndex)
+	newIdentity := Identity{Node: newNode, Handle: newKH}
+	return newIdentity
+}
+
+func (i *Identity) CreateBackupKeysAmount(count int) {
+	i.Node.CreateBackupKeysAmount(count)
+}
+
 func (i Identity) Resolver() string {
 	return i.Node.Resolver()
 }

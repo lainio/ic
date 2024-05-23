@@ -67,6 +67,12 @@ func New() Handle {
 	return try.To1(myStore.NewKeyHandle())
 }
 
+func NewFromInfo(info Info) Handle {
+	yes, kh := myStore.IsKeyHandle(info.ID)
+	assert.That(yes)
+	return kh
+}
+
 func RandInfo(n int) Info {
 	return Info{
 		ID:     RandSlice(32),
