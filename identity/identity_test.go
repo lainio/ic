@@ -440,8 +440,19 @@ func TestRotateToBackupKey(t *testing.T) {
 		assert.SLen(dave.InviteeChains[0].Blocks, int(prevLen)+1)
 	}
 	{
+		assert.SLen(frank.Node.BackupKeys.Blocks, 3)
 		prevLen := frank.InviteeChains[0].Len()
 		frank = frank.RotateToBackupKey(1)
+		assert.SLen(frank.Node.BackupKeys.Blocks, 3)
+		assert.That(frank.CheckIntegrity())
 		assert.SLen(frank.InviteeChains[0].Blocks, int(prevLen)+1)
+	}
+	{
+		assert.SLen(grace.Node.BackupKeys.Blocks, 2)
+		prevLen := grace.InviteeChains[0].Len()
+		grace = grace.RotateToBackupKey(1)
+		assert.SLen(grace.Node.BackupKeys.Blocks, 2)
+		assert.That(grace.CheckIntegrity())
+		assert.SLen(grace.InviteeChains[0].Blocks, int(prevLen)+1)
 	}
 }

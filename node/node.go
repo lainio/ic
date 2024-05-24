@@ -2,6 +2,7 @@ package node
 
 import (
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
@@ -85,10 +86,20 @@ func (n *Node) CreateBackupKeysAmount(count int) {
 
 func (n Node) RotateToBackupKey(keyIndex int) (Node, key.Handle) {
 	bkHandle := n.getBackupKey(keyIndex)
-	rotationNode := New(key.InfoFromHandle(bkHandle), chain.WithRotation(), chain.WithPosition(0))
 
-	rotationNode = n.Invite(rotationNode, bkHandle, n.getIDK(), chain.WithRotation())
+	rotationNode := New(key.InfoFromHandle(bkHandle),
+		chain.WithBackupKeyIndex(keyIndex), chain.WithRotation())
+
+	rotationNode = n.Invite(rotationNode, bkHandle, n.getIDK(),
+		chain.WithBackupKeyIndex(keyIndex), chain.WithRotation())
+
+	n.CopyBackupKeysTo(&rotationNode)
 	return rotationNode, bkHandle
+}
+
+func (n Node) CopyBackupKeysTo(tgt *Node) *Node {
+	tgt.BackupKeys = n.BackupKeys.Clone()
+	return tgt
 }
 
 // InviteWithRotateKey is method to add invitee's node's invitation chains (IC)
@@ -301,7 +312,8 @@ func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 // TODO: consider returning an error or even panicing an error, but maybe caller
 // can do that?
 func (n Node) CheckIntegrity() bool {
-	if len(n.InviteeChains) == 0 || !n.InviteeChains[0].VerifySign() {
+	if len(n.InviteeChains) == 0 ||
+		!n.InviteeChains[0].VerifySignExtended(n.getBKPublic) {
 		return false
 	}
 
@@ -309,7 +321,7 @@ func (n Node) CheckIntegrity() bool {
 
 	for _, c := range n.InviteeChains[1:] {
 		notOK := !(key.EqualBytes(c.LastBlock().Invitee.Public, IDK) && c.VerifySign())
-		if notOK {
+		if notOK { // TODO: ^ VerifySignExtended maybe?
 			return false
 		}
 	}
@@ -336,6 +348,10 @@ func (n Node) sharedRootPair(their chain.Chain) chain.Pair {
 		}
 	}
 	return chain.Pair{}
+}
+
+func (n Node) getBKPublic(keyIndex int) key.Public {
+	return try.To1(n.getBackupKey(keyIndex).CBORPublicKey())
 }
 
 func (n Node) getBackupKey(keyIndex int) key.Handle {

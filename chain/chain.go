@@ -189,6 +189,29 @@ func (c Chain) hashToLeaf() []byte {
 	return ha[:]
 }
 
+type getBackupKey func(int) key.Public
+
+func (c Chain) VerifySignExtended(getBKID getBackupKey) bool {
+	if c.Len() == 1 {
+		return true // root block is valid always
+	}
+
+	// start with the root key
+	invitersPubKey := c.firstBlock().Invitee.Public
+
+	for _, b := range c.Blocks[1:] {
+		if b.BackupKeyIndex != 0 {
+			invitersPubKey = getBKID(b.BackupKeyIndex)
+		}
+		if !b.VerifySign(invitersPubKey) {
+			return false
+		}
+		// the next block is signed with this block's pub key
+		invitersPubKey = b.Invitee.Public
+	}
+	return true
+}
+
 // VerifySign verifies chains signatures, from root to the leaf.
 // TODO: merge with the next, refactoring.
 func (c Chain) VerifySign() bool {
