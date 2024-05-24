@@ -9,12 +9,7 @@ import (
 )
 
 type Node struct {
-	// TODO: implement use of these keys as rotated. The existing Chain Will
-	// break, how to keep everything simple? Draw?
 	BackupKeys chain.Chain // The Name of chain is enough
-
-	// TODO: should we have myltiple IDChains? or just one or all in the same?
-	// TODO: we should have backup key chain or ID key chain. Now, what direct?
 
 	InviteeChains []chain.Chain
 
@@ -68,8 +63,17 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 	return rn
 }
 
+// CreateBackupKeysAmount creates backup keys for this Node.
+// Note that:
+//   - It can be done only once.
+//   - Minimum amount is two (2).
+//   - Maximum amount is two (12).
 func (n *Node) CreateBackupKeysAmount(count int) {
 	// TODO: first block is the root block! take care of that.
+	// first key in this chain is the genesis key for the whole Identity so
+	// it's a key that cannot be used for rotation! We should think about the
+	// API again. Maybe index is correct term later but we should explain what
+	// the count here means.
 	assert.NotZero(count)
 	assert.NotEqual(count, 1, "two backup keys is minimum")
 	assert.SLen(n.BackupKeys.Blocks, 0)
