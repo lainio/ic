@@ -320,8 +320,9 @@ func (n Node) CheckIntegrity() bool {
 	IDK := n.InviteeChains[0].LastBlock().Invitee.Public
 
 	for _, c := range n.InviteeChains[1:] {
-		notOK := !(key.EqualBytes(c.LastBlock().Invitee.Public, IDK) && c.VerifySign())
-		if notOK { // TODO: ^ VerifySignExtended maybe?
+		notOK := !(key.EqualBytes(c.LastBlock().Invitee.Public, IDK) &&
+			c.VerifySignExtended(n.getBKPublic))
+		if notOK {
 			return false
 		}
 	}

@@ -212,28 +212,20 @@ func (c Chain) VerifySignExtended(getBKID getBackupKey) bool {
 	return true
 }
 
+func emptyBKImpl(int) key.Public {
+	assert.NotImplemented()
+	return nil
+}
+
 // VerifySign verifies chains signatures, from root to the leaf.
 // TODO: merge with the next, refactoring.
 func (c Chain) VerifySign() bool {
-	if c.Len() == 1 {
-		return true // root block is valid always
-	}
-
-	// start with the root key
-	invitersPubKey := c.firstBlock().Invitee.Public
-
-	for _, b := range c.Blocks[1:] {
-		if !b.VerifySign(invitersPubKey) {
-			return false
-		}
-		// the next block is signed with this block's pub key
-		invitersPubKey = b.Invitee.Public
-	}
-	return true
+	return c.VerifySignExtended(emptyBKImpl)
 }
 
 // VerifyIDChain is tool to verify whole ID chain, i.e., chain sipnatures hold
 // and Rotation flag is true in every Block.
+// TODO: we don't know anymore for what this is meant.. we shall see..
 func (c Chain) VerifyIDChain() bool {
 	if c.Len() == 1 {
 		return c.firstBlock().Rotation // root block is valid always

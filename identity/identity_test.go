@@ -429,6 +429,9 @@ func TestCreateBackupKeysAmount(t *testing.T) {
 
 	grace.CreateBackupKeysAmount(2)
 	assert.SLen(grace.Node.BackupKeys.Blocks, 2)
+
+	eve.CreateBackupKeysAmount(2)
+	assert.SLen(eve.Node.BackupKeys.Blocks, 2)
 }
 
 func TestRotateToBackupKey(t *testing.T) {
@@ -454,5 +457,25 @@ func TestRotateToBackupKey(t *testing.T) {
 		assert.SLen(grace.Node.BackupKeys.Blocks, 2)
 		assert.That(grace.CheckIntegrity())
 		assert.SLen(grace.InviteeChains[0].Blocks, int(prevLen)+1)
+	}
+
+	// eve has most complex situation before RotateToBackupKey, and it's best
+	// version to be used for table testing
+	{
+		assert.SLen(eve.Node.BackupKeys.Blocks, 2)
+		prevLenghts := make([]int, eve.InviteeChains[0].Len())
+		prevChainsLen := len(eve.InviteeChains)
+		for i := range prevChainsLen {
+			prevLenghts[i] = int(eve.InviteeChains[i].Len())
+		}
+		eve = eve.RotateToBackupKey(1)
+		assert.SLen(eve.Node.BackupKeys.Blocks, 2)
+		assert.SLen(eve.InviteeChains, prevChainsLen)
+
+		assert.That(eve.CheckIntegrity())
+
+		for i := range prevChainsLen {
+			assert.Equal(int(eve.InviteeChains[i].Len()), prevLenghts[i]+1)
+		}
 	}
 }
