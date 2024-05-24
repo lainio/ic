@@ -10,24 +10,24 @@ import (
 
 // WIP: we need to have ID chain that allows us to RotateKey even when we don't
 // have the original private key in our control. How we can do that? We'll have
-// our backup keys in the onen chain in our Node. TODO: Stupid! who ever could
-// add this IDK chain after or could they.. No they couldn't with out having the
+// our backup keys in the one chain in our Node. TODO: Stupid! who ever could
+// add this IDK chain after or could they.. No they couldn't without having the
 // original IDK in their control. We don't have hided Master Key, OR
 // actually we could have if we start everything with one rotation, but the
 // question is what good does it give to us? The question is that what direction
-// we should use the backup key chain?
+// we should use the backup key chain? It doesn't either 
 
 // When normally we'll rotate key
 // just by adding a new block to all of the Node's chains (Type is Rotation).
 // Now we don't have a key to do that but when have a related key. Maybe we must
-// fork the chain? Is this so important... Maybe it is because disastorous
-// things happen but the question is where we should handle thouse things? In
-// the cain, or in the some where else?
+// fork the chain? Is this so important... Maybe it is because disastrous
+// things happen but the question is where we should handle those things? In
+// the chain, or in the some where else? NOTE: done!
 
 // TODO: however, key rotation chain blocks should not be calculated when web of
 // trust calculations are executed. NOTE: this is not so simple as it seems at
 // the first sight. Also we *don't need to do it too complex*. Key rotation
-// should be limited to happen only chain roots, not later!! we could even think
+// should be limited to happen only chain roots, not later!! We could even think
 // that it's allowed only when no invitations are done for us, i.e., that key
 // rotation should be done during the setup, not later. Why we did it later, if
 // we still control the key pair, we would loose all of our ICs? If we use key
@@ -36,7 +36,7 @@ import (
 // do something. Now we have the position property to categorize our blocks, but
 // how important it really is.
 
-// TODO: key rotation need the concept of the Root Chain, i.e., the cain that's
+// TODO: key rotation need the concept of the Root Chain, i.e., the chain that's
 // block are all under our control AND every block type is Rotation! Another
 // name could be Identity Chain (like Identity Matrix)
 
@@ -46,7 +46,7 @@ import (
 // how it would affect to our control algorithms? Now everything suspects that we
 // have one identity key.Handle that controls everything we are doing. but how
 // about if we could have multiple key.handles and the control would go thru
-// parent/child thru IC?
+// parent/child thru IC? NOTE: done.
 
 type Identity struct {
 	node.Node // chains inside these share the same key.ID&Public
@@ -55,7 +55,7 @@ type Identity struct {
 	// we will have dynamic rotation (RotateKey), and we'll have ID chain later
 	// that's used for catastrophes, i.e., we have lost the control of our
 	// private key. Then we need a backup key. Backup keys are stored in ID
-	// Chain. Because we can sign nothing, we need a backup route where will
+	// Chain. Because now we can sign nothing, we need a backup route where will
 	// tell that use this key form this id chain. All of the ID Chains have the
 	// same original root. Even when we don't have root key (genesis key) any
 	// more chain's validity can be proofed.
