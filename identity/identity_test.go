@@ -68,7 +68,23 @@ func setup() {
 	root3 = New(root3, chain.WithEndpoint(endpointValueRoot3, true))
 }
 
-func TestNewIdentity(t *testing.T) {
+func TestIdentity_All(t *testing.T) {
+	defer assert.PushTester(t)()
+	
+	t.Run("new identity", testNewIdentity)
+	t.Run("invite", testIdentity_Invite)
+	t.Run("rotate key", testRotateKey)
+	t.Run("rotate and invite", testRotateAndInvite)
+	t.Run("trust level", testTrustLevel)
+	t.Run("endpoint", testEndpoint)
+	t.Run("resolver", testResolver)
+	t.Run("web of trust", testWebOfTrust)
+	t.Run("challenge", testChallenge)
+	t.Run("great backup keys", testCreateBackupKeysAmount)
+	t.Run("rotate backup key", testRotateToBackupKey)
+}
+
+func testNewIdentity(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	aliceID := New(alice)
@@ -79,7 +95,7 @@ func TestNewIdentity(t *testing.T) {
 	assert.SLen(bobID.InviteeChains, 1)
 }
 
-func TestIdentity_Invite(t *testing.T) {
+func testIdentity_Invite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
@@ -151,7 +167,7 @@ func TestIdentity_Invite(t *testing.T) {
 	assert.SNotNil(common.Blocks)
 }
 
-func TestRotateKey(t *testing.T) {
+func testRotateKey(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// NOTE! this test has dependency to the previous.
@@ -176,7 +192,7 @@ func TestRotateKey(t *testing.T) {
 	}
 }
 
-func TestRotateAndInvite(t *testing.T) {
+func testRotateAndInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// root3 --> ivan --> mike
@@ -224,14 +240,14 @@ func TestRotateAndInvite(t *testing.T) {
 	}
 }
 
-func TestTrustLevel(t *testing.T) {
+func testTrustLevel(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	lvl := dave.TrustLevel()
 	assert.Equal(lvl, 0)
 }
 
-func TestEndpoint(t *testing.T) {
+func testEndpoint(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	//                  root2
@@ -258,7 +274,7 @@ func TestEndpoint(t *testing.T) {
 	}
 }
 
-func TestResolver(t *testing.T) {
+func testResolver(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	{
@@ -282,19 +298,16 @@ func TestResolver(t *testing.T) {
 	}
 }
 
-func TestWebOfTrust(t *testing.T) {
+func testWebOfTrust(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	//                  root2
-	//                  /    \
-	//                \/     \/
-	//              carol    dave-2-chains
-	//                   \       //
-	//                   \/     \/
-	//                  eve(root-is-dave)
-	//                  /
-	//                \/
-	//               eve(key-rotated)
+	//         ┌ root2  ┐
+	//         ↓        ↓
+	//       carol    dave-2-chains
+	//            ↓     ↓
+	//           eve(root-is-dave)
+	//           ↓
+	//        eve(key-rotated)
 	{
 		wot := root2.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 3)
@@ -330,13 +343,11 @@ func TestWebOfTrust(t *testing.T) {
 
 	frank = alice.Invite(frank, chain.WithPosition(1))
 	grace = bob.Invite(grace, chain.WithPosition(1))
-	//                  root1
-	//                  /
-	//                \/
-	//              alice -->   bob
-	//               \            \
-	//               \/            \/
-	//              frank         grace
+	//      root1
+	//        ↓       
+	//      alice -> bob
+	//        ↓       ↓
+	//      frank   grace
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 3)
@@ -347,16 +358,13 @@ func TestWebOfTrust(t *testing.T) {
 		assert.Equal(wot.Hops, 1)
 		assert.Equal(wot.CommonInviterLevel, 1)
 	}
-	//                  root1
-	//                  /
-	//                \/
-	//              alice -->   bob
-	//               \            \
-	//               \/            \/
-	//              frank         grace
-	//              /
-	//            \/
-	//           frank(when-key-rotated)
+	//      root1
+	//        ↓       
+	//      alice -> bob
+	//        ↓       ↓
+	//      frank   grace
+	//        ↓
+	//      frank(when-key-rotated)
 	frank = frank.RotateKey(key.New())
 	{
 		wot := frank.WebOfTrust(grace)
@@ -365,7 +373,7 @@ func TestWebOfTrust(t *testing.T) {
 	}
 }
 
-func TestChallenge(t *testing.T) {
+func testChallenge(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// When let's say Bob have received Alice's Identity he can use Challenge
@@ -418,7 +426,7 @@ func TestChallenge(t *testing.T) {
 // TODO: lots of work still todo: order of these rotation functions cannot be
 // free!!
 
-func TestCreateBackupKeysAmount(t *testing.T) {
+func testCreateBackupKeysAmount(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	dave.CreateBackupKeysAmount(3)
@@ -434,7 +442,7 @@ func TestCreateBackupKeysAmount(t *testing.T) {
 	assert.SLen(eve.Node.BackupKeys.Blocks, 2)
 }
 
-func TestRotateToBackupKey(t *testing.T) {
+func testRotateToBackupKey(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	{
