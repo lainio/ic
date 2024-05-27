@@ -10,6 +10,7 @@ SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 
 GO := go
 #GO := go1.18beta1
+TEST_ARGS ?= -benchmem
 
 check: lint test
 
@@ -20,37 +21,37 @@ deps:
 	@$(GO) get -t ./...
 
 test1:
-	$(GO) test $(PKG1)
+	$(GO) test $(TEST_ARGS) $(PKG1)
 
 test2:
-	$(GO) test $(PKG2)
+	$(GO) test $(TEST_ARGS) $(PKG2)
 
 test3:
-	$(GO) test $(PKG3)
+	$(GO) test $(TEST_ARGS) $(PKG3)
 
 test4:
-	$(GO) test $(PKG4)
+	$(GO) test $(TEST_ARGS) $(PKG4)
 
 test:
-	$(GO) test $(PKGS)
+	$(GO) test $(TEST_ARGS) $(PKGS)
 
 testv:
-	$(GO) test $(PKGS) -v
+	$(GO) test $(TEST_ARGS) $(PKGS) -v
 
 testj:
-	$(GO) test $(PKGS) -json
+	$(GO) test $(TEST_ARGS) $(PKGS) -json
 
 bench:
-	@$(GO) test -bench=. $(PKGS)
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKGS)
 
 bench1:
-	@$(GO) test -bench=. $(PKG1)
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG1)
 
 bench2:
-	@$(GO) test -bench=. $(PKG2)
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG2)
 
 bench3:
-	@$(GO) test -bench=. $(PKG3)
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG3)
 
 vet: | test
 	@$(GO) vet $(PKGS)
