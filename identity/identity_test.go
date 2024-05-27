@@ -70,9 +70,9 @@ func setup() {
 
 func TestIdentity_All(t *testing.T) {
 	defer assert.PushTester(t)()
-	
+
 	t.Run("new identity", testNewIdentity)
-	t.Run("invite", testIdentity_Invite)
+	t.Run("invite", testIdentityInvite)
 	t.Run("rotate key", testRotateKey)
 	t.Run("rotate and invite", testRotateAndInvite)
 	t.Run("trust level", testTrustLevel)
@@ -95,7 +95,7 @@ func testNewIdentity(t *testing.T) {
 	assert.SLen(bobID.InviteeChains, 1)
 }
 
-func testIdentity_Invite(t *testing.T) {
+func testIdentityInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
@@ -344,7 +344,7 @@ func testWebOfTrust(t *testing.T) {
 	frank = alice.Invite(frank, chain.WithPosition(1))
 	grace = bob.Invite(grace, chain.WithPosition(1))
 	//      root1
-	//        ↓       
+	//        ↓
 	//      alice -> bob
 	//        ↓       ↓
 	//      frank   grace
@@ -359,7 +359,7 @@ func testWebOfTrust(t *testing.T) {
 		assert.Equal(wot.CommonInviterLevel, 1)
 	}
 	//      root1
-	//        ↓       
+	//        ↓
 	//      alice -> bob
 	//        ↓       ↓
 	//      frank   grace
