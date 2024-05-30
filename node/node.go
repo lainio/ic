@@ -321,10 +321,10 @@ func (n Node) CheckIntegrity() bool {
 		return false
 	}
 
-	IDK := n.InviteeChains[0].LastBlock().Invitee.Public
+	IDK := n.InviteeChains[0].LastBlock().Public()
 
 	for _, c := range n.InviteeChains[1:] {
-		notOK := !(key.EqualBytes(c.LastBlock().Invitee.Public, IDK) &&
+		notOK := !(key.EqualBytes(c.LastBlock().Public(), IDK) &&
 			c.VerifySignExtended(n.getBKPublic))
 		if notOK {
 			return false

@@ -33,7 +33,7 @@ func (p Pair) OneHop() bool {
 // CommonInviterIDKey returns IDKey aka pubkey of common inviter by root level.
 func (p Pair) CommonInviterIDKey(lvl hop.Distance) key.Public {
 	block := p.Chain1.Blocks[lvl]
-	return block.Invitee.Public
+	return block.Public()
 }
 
 // SameRoot not needed yet.

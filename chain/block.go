@@ -75,8 +75,8 @@ func (b Block) excludeSign() Block {
 
 func EqualBlocks(b1, b2 Block) bool {
 	return key.EqualBytes(b1.HashToPrev, b2.HashToPrev) &&
-		key.EqualBytes(b1.Invitee.ID, b2.Invitee.ID) &&
-		key.EqualBytes(b1.Invitee.Public, b2.Invitee.Public) &&
+		key.EqualBytes(b1.ID(), b2.ID()) &&
+		key.EqualBytes(b1.Public(), b2.Public()) &&
 		key.EqualBytes(b1.InvitersSignature, b2.InvitersSignature) &&
 		b1.Position == b2.Position &&
 		b1.Rotation == b2.Rotation
@@ -88,4 +88,12 @@ func (b Block) VerifySign(invitersPubKey key.Public) bool {
 		b.ExcludeBytes(),
 		b.InvitersSignature,
 	)
+}
+
+func (b Block) ID() key.ID {
+	return b.Invitee.ID
+}
+
+func (b Block) Public() key.Public {
+	return b.Invitee.Public
 }

@@ -178,7 +178,7 @@ func (c Chain) _(invitersKey key.Handle) bool {
 func (c Chain) LeafPubKey() key.Public {
 	assert.That(c.Len() > 0, "chain cannot be empty")
 
-	return c.LastBlock().Invitee.Public
+	return c.LastBlock().Public()
 }
 
 func (c Chain) hashToLeaf() []byte {
@@ -197,7 +197,7 @@ func (c Chain) VerifySignExtended(getBKID getBackupKey) bool {
 	}
 
 	// start with the root key
-	invitersPubKey := c.firstBlock().Invitee.Public
+	invitersPubKey := c.firstBlock().Public()
 
 	for _, b := range c.Blocks[1:] {
 		if b.BackupKeyIndex != 0 {
@@ -207,7 +207,7 @@ func (c Chain) VerifySignExtended(getBKID getBackupKey) bool {
 			return false
 		}
 		// the next block is signed with this block's pub key
-		invitersPubKey = b.Invitee.Public
+		invitersPubKey = b.Public()
 	}
 	return true
 }
@@ -232,14 +232,14 @@ func (c Chain) VerifyIDChain() bool {
 	}
 
 	// start with the root key
-	invitersPubKey := c.firstBlock().Invitee.Public
+	invitersPubKey := c.firstBlock().Public()
 
 	for _, b := range c.Blocks[1:] {
 		if !b.Rotation || !b.VerifySign(invitersPubKey) {
 			return false
 		}
 		// the next block is signed with this block's pub key
-		invitersPubKey = b.Invitee.Public
+		invitersPubKey = b.Public()
 	}
 	return true
 }
@@ -263,7 +263,7 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 // Find finds Block from Chain if it exists.
 func (c Chain) Find(IDK key.Public) (b Block, found bool) {
 	for _, block := range c.Blocks {
-		if key.EqualBytes(block.Invitee.Public, IDK) {
+		if key.EqualBytes(block.Public(), IDK) {
 			return block, true
 		}
 	}
@@ -282,7 +282,7 @@ func (c Chain) Resolver() (endpoint string) {
 
 func (c Chain) FindLevel(IDK key.Public) (lvl hop.Distance) {
 	for i, block := range c.Blocks {
-		if key.EqualBytes(block.Invitee.Public, IDK) {
+		if key.EqualBytes(block.Public(), IDK) {
 			return hop.Distance(i)
 		}
 	}
@@ -294,7 +294,7 @@ func (c Chain) FindLevel(IDK key.Public) (lvl hop.Distance) {
 // it calls other party over the network to sign the challenge which is readily
 // build and randomized.
 func (c Chain) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
-	pubKey := c.LastBlock().Invitee.Public
+	pubKey := c.LastBlock().Public()
 	challengeBlock, sigBlock := NewVerifyBlock(pinCode)
 	sig := f(challengeBlock.Bytes())
 	return key.VerifySign(pubKey, sigBlock.Bytes(), sig)
