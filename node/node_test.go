@@ -198,13 +198,13 @@ func testFind(t *testing.T) {
 		pubkey := try.To1(dave.CBORPublicKey())
 		block, found := eve.Find(pubkey)
 		assert.That(found)
-		assert.DeepEqual(block.Invitee.Public, pubkey)
+		assert.DeepEqual(block.Public(), pubkey)
 	}
 	{
 		pubkey := try.To1(root2.CBORPublicKey())
 		block, found := eve.Find(pubkey)
 		assert.That(found)
-		assert.DeepEqual(block.Invitee.Public, pubkey)
+		assert.DeepEqual(block.Public(), pubkey)
 	}
 
 	// not found:
@@ -373,7 +373,7 @@ func testCheckIntegrity(t *testing.T) {
 
 	// - Not OK ruined version:
 	// - this very bad test but until we have better...
-	grace.InviteeChains[0].Blocks[0].Invitee.Public[30] = 0
+	grace.InviteeChains[0].Blocks[0].Public()[30] = 0
 	ok = grace.CheckIntegrity()
 	assert.ThatNot(ok, "see 2 lines above ^")
 }
