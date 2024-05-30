@@ -76,7 +76,22 @@ func setup() {
 		WithPosition(1))
 }
 
-func TestNewChain(t *testing.T) {
+func Test_all(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	t.Run("new chain", testNewChain)
+	t.Run("read", testRead)
+	t.Run("verify chain fail", testVerifyChainFail)
+	t.Run("verify chain", testVerifyChain)
+	t.Run("invitation", testInvitation)
+	t.Run("common inviter level", testCommonInviterLevel)
+	t.Run("same inviter", testSameInviter)
+	t.Run("hops", testHops)
+	t.Run("find", testFind)
+	t.Run("challenge invitee", testChallengeInvitee)
+}
+
+func testNewChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	k := key.New()
@@ -103,7 +118,7 @@ func TestNewChain(t *testing.T) {
 	//assert.Equal(c.AbsLen(), 1)
 }
 
-func TestRead(t *testing.T) {
+func testRead(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	c2 := testChain.Clone()
@@ -111,7 +126,7 @@ func TestRead(t *testing.T) {
 	assert.That(c2.VerifySign())
 }
 
-func TestVerifyChainFail(t *testing.T) {
+func testVerifyChainFail(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	c2 := testChain.Clone()
@@ -124,7 +139,7 @@ func TestVerifyChainFail(t *testing.T) {
 	assert.That(!c2.VerifySign())
 }
 
-func TestVerifyChain(t *testing.T) {
+func testVerifyChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(testChain.Blocks, 2)
@@ -139,7 +154,7 @@ func TestVerifyChain(t *testing.T) {
 	assert.That(testChain.VerifySign())
 }
 
-func TestInvitation(t *testing.T) {
+func testInvitation(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(alice.Blocks, 3)
@@ -161,17 +176,15 @@ func TestInvitation(t *testing.T) {
 // common root : my distance, her distance
 
 // TestCommonInviterLevel tests that Chain owners have one common inviter
-func TestCommonInviterLevel(t *testing.T) {
+func testCommonInviterLevel(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// alice and bod have common root:
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//              alice   bob
+	//       rootMaster
+	//           ↓
+	//       ┌  root  ┐
+	//       ↓        ↓
+	//     alice     bob
 	cecilia := entity{
 		Handle: key.New(),
 	}
@@ -179,16 +192,13 @@ func TestCommonInviterLevel(t *testing.T) {
 	// bob intives cecilia
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
 		WithPosition(1))
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//              alice   bob
-	//                       \
-	//                       \/
-	//                      cecilia
+	//       rootMaster
+	//           ↓
+	//       ┌  root  ┐
+	//       ↓        ↓
+	//     alice     bob
+	//                ↓
+	//             cecilia
 	assert.SLen(cecilia.Blocks, 4)
 	assert.That(cecilia.Chain.VerifySign())
 
@@ -198,16 +208,13 @@ func TestCommonInviterLevel(t *testing.T) {
 	// alice invites david
 	david.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(david),
 		WithPosition(1))
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//              alice   bob
-	//               |        \
-	//              \/        \/
-	//            david      cecilia
+	//       rootMaster
+	//           ↓
+	//       ┌  root  ┐
+	//       ↓        ↓
+	//     alice     bob
+	//       ↓        ↓
+	//     david   cecilia
 	cinviter, sameIC := CommonInviterLevel(cecilia.Chain, david.Chain)
 	assert.Equal(cinviter, 1, "common inviter is root whos lvl is 1")
 	assert.ThatNot(sameIC)
@@ -217,16 +224,13 @@ func TestCommonInviterLevel(t *testing.T) {
 	}
 	edvin.Chain = alice.Invite(alice.Handle, key.InfoFromHandle(edvin),
 		WithPosition(1))
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//            alice     bob
-	//       ____/   |        \
-	//     \/       \/        \/
-	//  edvin     david      cecilia
+	//           rootMaster
+	//               ↓
+	//           ┌  root  ┐
+	//           ↓        ↓
+	//   ┌──── alice     bob
+	//   ↓       ↓        ↓
+	// edvin   david   cecilia
 	cinviter, sameIC = CommonInviterLevel(edvin.Chain, david.Chain)
 	assert.Equal(cinviter, 2,
 		"alice is at level 2 from chain's root and inviter of both")
@@ -234,16 +238,13 @@ func TestCommonInviterLevel(t *testing.T) {
 
 	edvin2Chain := alice.Chain.Invite(alice.Handle, key.InfoFromHandle(key.New()),
 		WithPosition(1))
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//            alice     bob
-	//       ____/   | \      \___
-	//     \/       \/  \/        \/
-	//  edvin  edvin2   david    cecilia
+	//           rootMaster
+	//               ↓
+	//           ┌  root  ──────────┐
+	//           ↓                  ↓
+	//   ┌──── alice ─────┐        bob
+	//   ↓       ↓        ↓         ↓
+	// edvin2  edvin    david    cecilia
 	cinviter, sameIC = CommonInviterLevel(edvin2Chain, david.Chain)
 	assert.Equal(cinviter, 2,
 		"alice is at level 2 from chain's root and inviter of both")
@@ -253,19 +254,15 @@ func TestCommonInviterLevel(t *testing.T) {
 		WithPosition(1))
 	fred2Chain := edvin.Invite(edvin.Handle, key.InfoFromHandle(key.New()),
 		WithPosition(1))
-	//                rootMaster                     lvl 0
-	//                    |
-	//                   \/
-	//                   root                        lvl 1
-	//                  /    \
-	//                \/     \/
-	//            alice     bob                      lvl 2
-	//       ____/   | \      \___
-	//     \/       \/  \/        \/
-	//  edvin  edvin2   david    cecilia             lvl 3
-	//  |   \__
-	// \/      \/
-	// fred1   fred2
+	//           rootMaster                          lvl 0
+	//               ↓
+	//           ┌  root  ──────────┐                lvl 1
+	//           ↓                  ↓
+	//   ┌──── alice ─────┐        bob               lvl 2
+	//   ↓       ↓        ↓         ↓
+	// edvin2  edvin ┐  david    cecilia             lvl 3
+	//         ↓     ↓
+	//      fred1   fred2                            lvl 4
 	cinviter, sameIC = CommonInviterLevel(fred2Chain, fred1Chain)
 	assert.Equal(cinviter, 3, "edvin is at level 3 from chain's root")
 	assert.ThatNot(sameIC)
@@ -284,7 +281,7 @@ func TestCommonInviterLevel(t *testing.T) {
 }
 
 // TestSameInviter test that two chain holders have same inviter.
-func TestSameInviter(t *testing.T) {
+func testSameInviter(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.That(SameInviter(alice.Chain, bob.Chain))
@@ -302,24 +299,21 @@ func TestSameInviter(t *testing.T) {
 }
 
 // TestHops test hop counts.
-func TestHops(t *testing.T) {
+func testHops(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	//                   root2
-	//                  /    \
-	//                \/     \/
-	//              alice2  bob2
+	//       ┌  root2  ┐
+	//       ↓         ↓
+	//     alice2     bob2
 	hop, cLevel := alice2.Hops(bob2.Chain)
 	assert.Equal(hop, 2, "alice2 and bob2 share common root (root2)")
 	assert.Equal(cLevel, 0, "alice's and bob's inviter is chain root!")
 
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//              alice   bob
+	//       rootMaster
+	//           ↓
+	//       ┌  root  ┐
+	//       ↓        ↓
+	//     alice     bob
 	hop, cLevel = alice.Hops(bob.Chain)
 	assert.Equal(hop, 2, "alice and bob share common root")
 	assert.Equal(cLevel, 1, "alice's and bob's inviter is ROTATED chain root")
@@ -329,16 +323,13 @@ func TestHops(t *testing.T) {
 	}
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
 		WithPosition(1))
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//              alice   bob
-	//                       \
-	//                       \/
-	//                      cecilia
+	//       rootMaster
+	//           ↓
+	//       ┌  root  ┐
+	//       ↓        ↓
+	//     alice     bob
+	//                ↓
+	//             cecilia
 	hop, cLevel = alice.Hops(cecilia.Chain)
 	assert.Equal(hop, 3, "alice has 1 hop to root, cecilia 2 hpos == 3")
 	assert.Equal(cLevel, 1, "the share inviter is chain root")
@@ -348,16 +339,13 @@ func TestHops(t *testing.T) {
 	}
 	david.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(david),
 		WithPosition(1))
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//              alice   bob
-	//                     |   \
-	//                    \/   \/
-	//                cecilia   david
+	//       rootMaster
+	//           ↓
+	//       ┌  root  ─┐
+	//       ↓         ↓
+	//     alice    ┌ bob ─┐
+	//              ↓      ↓
+	//          cecilia  david
 	hop, cLevel = david.Hops(cecilia.Chain)
 	assert.Equal(hop, 2, "david and cecilia share bod as inviter")
 	assert.Equal(cLevel, 2, "david's and cecilia's inviter bob is 1 hop from root")
@@ -367,19 +355,15 @@ func TestHops(t *testing.T) {
 	}
 	edvin.Chain = david.Invite(david.Handle, key.InfoFromHandle(edvin),
 		WithPosition(1))
-	//                rootMaster
-	//                    |
-	//                   \/
-	//                   root
-	//                  /    \
-	//                \/     \/
-	//              alice   bob
-	//                     |   \
-	//                    \/   \/
-	//                cecilia   david
-	//                           |
-	//                          \/
-	//                         edvin
+	//       rootMaster
+	//           ↓
+	//       ┌  root  ─┐
+	//       ↓         ↓
+	//     alice    ┌ bob ─┐
+	//              ↓      ↓
+	//          cecilia  david
+	//                     ↓
+	//                   edvin
 	hop, cLevel = edvin.Hops(cecilia.Chain)
 	assert.Equal(hop, 3, "cecilia has 1 hop to common inviter bob and edvin has 2 hops == 3")
 	assert.Equal(cLevel, 2, "common inviter of cecilia and edvin is bod that's 1 hop from chain root")
@@ -389,23 +373,23 @@ func TestHops(t *testing.T) {
 	assert.Equal(cLevel, 1, "alice's and edvin's common inviter root is chain root")
 }
 
-func TestFind(t *testing.T) {
+func testFind(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	{
-		foundBlock, found := edvin.Find(rootMaster.LastBlock().Invitee.Public)
+		foundBlock, found := edvin.Find(rootMaster.LastBlock().Public())
 		assert.That(found)
-		assert.DeepEqual(foundBlock.Invitee.ID, rootMaster.ID())
+		assert.DeepEqual(foundBlock.ID(), rootMaster.ID())
 	}
 	{
-		foundBlock, found := edvin.Find(bob.LastBlock().Invitee.Public)
+		foundBlock, found := edvin.Find(bob.LastBlock().Public())
 		assert.That(found)
-		assert.DeepEqual(foundBlock.Invitee.ID, bob.ID())
+		assert.DeepEqual(foundBlock.ID(), bob.ID())
 	}
 	{
-		rootBlock, found := edvin.Find(root.LastBlock().Invitee.Public)
+		rootBlock, found := edvin.Find(root.LastBlock().Public())
 		assert.That(found)
-		assert.DeepEqual(rootBlock.Invitee.ID, root.ID())
+		assert.DeepEqual(rootBlock.ID(), root.ID())
 	}
 }
 
@@ -414,7 +398,7 @@ func TestFind(t *testing.T) {
 // include any personal data, and we try to make sure that they won't include
 // any data which could be used to correlate the use of the chain. Chain is only
 // for the proofing the position in the Invitation Chain.
-func TestChallengeInvitee(t *testing.T) {
+func testChallengeInvitee(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// chain leaf is the only part who has the private key for the leaf, so
@@ -468,25 +452,3 @@ func TestChallengeInvitee(t *testing.T) {
 		},
 	))
 }
-
-// Issuer adds her own chain to every credential it's issuing, I haven't solved
-// the correlation yet. Yes we have! We suggest that everyone uses constructs
-// where they start with the master key and then they create as many sub keys as
-// they need to.
-
-// Is it an issue because chain doesn't include any identifiers. PubKey is
-// identifier, if we don't use PubKey as an identifier, it the only option to
-// use some other identifier and behind it similar to DIDDoc concept. How about
-// if chain holder creates new sub chains just to hide it's actual identity? For
-// what purpose we could use them? My current opinion is that this is not a big
-// problem. At least we know that we can get rid of it if we want.
-
-// Next important task is to design how the actual network is build. that means:
-// what happens when a party has invitation chain(s) in their 'wallet', but they
-// don't have any network node up and running by them selves?
-
-// TODO: how find connection server?
-// we can search it from our courrent ICs, if our design is made so that servers
-// are wiiling to serve everybody. lets assume that they are. lets assume that
-// we are building inclusive network from the beginning. later we could add some
-// icentive for the parties to by ready to serve.
