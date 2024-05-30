@@ -54,7 +54,18 @@ func setup() {
 	root2.Node = New(key.InfoFromHandle(root2), chain.WithEndpoint("root2", true))
 }
 
-func TestNewRootNode(t *testing.T) {
+func Test_all(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	t.Run("new root node", testNewRootNode)
+	t.Run("invite", testInvite)
+	t.Run("common chains", testCommonChains)
+	t.Run("find", testFind)
+	t.Run("web of trust info", testWebOfTrustInfo)
+	t.Run("integrity", testCheckIntegrity)
+}
+
+func testNewRootNode(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	aliceNode := New(key.InfoFromHandle(alice))
@@ -65,16 +76,15 @@ func TestNewRootNode(t *testing.T) {
 	assert.SLen(bobNode.InviteeChains, 1)
 }
 
-func TestInvite(t *testing.T) {
+func testInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
 	alice.Node = root1.Invite(alice.Node, root1.Handle,
 		key.InfoFromHandle(alice), chain.WithPosition(1))
-	//                   root1
-	//                  /
-	//                \/
-	//              alice
+	//      root1
+	//        ↓
+	//      alice
 	assert.Equal(alice.Len(), 1)
 	{
 		c := alice.InviteeChains[0]
@@ -84,13 +94,9 @@ func TestInvite(t *testing.T) {
 
 	bob.Node = alice.Invite(bob.Node,
 		alice.Handle, key.InfoFromHandle(bob), chain.WithPosition(1))
-	//                   root1
-	//                  /
-	//                \/
-	//              alice
-	//              /
-	//             \/
-	//            bob
+	//      root1
+	//        ↓
+	//      alice -> bob
 	assert.Equal(bob.Len(), 1)
 	{
 		c := bob.InviteeChains[0]
@@ -106,10 +112,9 @@ func TestInvite(t *testing.T) {
 	// root2 invites Carol here
 	carol.Node = root2.Invite(carol.Node,
 		root2.Handle, key.InfoFromHandle(carol), chain.WithPosition(1))
-	//                  root2
-	//                  /
-	//                \/
-	//              carol
+	//     root2
+	//       ↓
+	//    carol
 	assert.Equal(carol.Len(), 1)
 	{
 		c := carol.InviteeChains[0]
@@ -125,10 +130,9 @@ func TestInvite(t *testing.T) {
 	dave.Node = New(key.InfoFromHandle(dave), chain.WithEndpoint("dave", true))
 	eve.Node = dave.Invite(eve.Node,
 		dave.Handle, key.InfoFromHandle(eve), chain.WithPosition(1))
-	//                 dave
-	//                 /
-	//               \/
-	//              eve
+	//     dave
+	//      ↓
+	//     eve
 	assert.Equal(eve.Len(), 1)
 	{
 		c := eve.InviteeChains[0]
@@ -140,13 +144,11 @@ func TestInvite(t *testing.T) {
 	// Eve! NOTE but when Dave invites new parties nowon they will get 2 chains
 	dave.Node = root2.Invite(dave.Node,
 		root2.Handle, key.InfoFromHandle(dave), chain.WithPosition(1))
-	//                  root2
-	//                  /    \
-	//                \/     \/
-	//              carol    dave-2-chains
-	//                      //
-	//                    \/
-	//                   eve(root-is-dave)
+	//         ┌ root2  ┐
+	//         ↓        ↓
+	//       carol    dave-2-chains
+	//                  ↓
+	//           eve(root-is-dave)
 	assert.Equal(dave.Len(), 2)
 	{
 		c := dave.InviteeChains[1]
@@ -163,13 +165,11 @@ func TestInvite(t *testing.T) {
 	// .. so Carol can invite Eve
 	eve.Node = carol.Invite(eve.Node,
 		carol.Handle, key.InfoFromHandle(eve), chain.WithPosition(1))
-	//                  root2
-	//                  /    \
-	//                \/     \/
-	//              carol    dave-2-chains
-	//                   \       //
-	//                   \/     \/
-	//                  eve(root-is-dave)
+	//         ┌ root2  ┐
+	//         ↓        ↓
+	//       carol    dave-2-chains
+	//            ↓     ↓
+	//           eve(root-is-dave)
 	assert.Equal(eve.Len(), 2, "has two chains")
 
 	// now Eve has common chain with Root2 as well
@@ -177,23 +177,21 @@ func TestInvite(t *testing.T) {
 	assert.SNotNil(common.Blocks)
 }
 
-func TestCommonChains(t *testing.T) {
+func testCommonChains(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	common := dave.CommonChains(eve.Node)
 	assert.SLen(common, 2)
 }
 
-func TestFind(t *testing.T) {
+func testFind(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	//                  root2
-	//                  /    \
-	//                \/     \/
-	//              carol    dave-2-chains
-	//                   \       //
-	//                   \/     \/
-	//                  eve(root-is-dave)
+	//         ┌ root2  ┐
+	//         ↓        ↓
+	//       carol    dave-2-chains
+	//            ↓     ↓
+	//           eve(root-is-dave)
 
 	// found ones:
 	{
@@ -217,7 +215,7 @@ func TestFind(t *testing.T) {
 	}
 }
 
-func TestWebOfTrustInfo(t *testing.T) {
+func testWebOfTrustInfo(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	common := dave.CommonChains(eve.Node)
@@ -252,14 +250,11 @@ func TestWebOfTrustInfo(t *testing.T) {
 		bob.Handle, key.InfoFromHandle(grace), chain.WithPosition(1))
 	assert.Equal(grace.Len(), 1)
 	assert.Equal(bob.Len(), 1)
-	//                   root1
-	//                  /
-	//                \/
-	//              alice -> frank
-	//              /
-	//             \/
-	//            bob -> grace
-
+	//      root1
+	//        ↓
+	//      alice -> bob
+	//        ↓       ↓
+	//      frank   grace
 	aliceIDK := try.To1(alice.CBORPublicKey())
 	root1IDK := try.To1(root1.CBORPublicKey())
 
@@ -337,14 +332,13 @@ func TestWebOfTrustInfo(t *testing.T) {
 		dave.Handle, key.InfoFromHandle(heidi), chain.WithPosition(1))
 	assert.Equal(heidi.Len(), heidiNodeLen)
 
-	//                  root2                     root3
-	//                  /    \                       \
-	//                \/     \/                       \
-	//              carol    dave-2-chains             \
-	//                   \       // (<- ROOT)           \
-	//                   \/     \/                      \/
-	//                  eve(root-is-dave) ----------->  heidi
-
+	//         ┌ root2  ┐                root3
+	//         ↓        ↓                  │
+	//       carol    dave-2-chains        │
+	//            ↓     ↓                  │
+	//           eve(root-is-dave)         │
+	//           ↓                         ↓
+	//        eve(key-rotated) ­─────────→ heidi
 	wot = NewWebOfTrust(eve.Node, heidi.Node)
 	assert.Equal(wot.CommonInviterLevel, 1, "common root is dave and eve is 1 from it")
 	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(eve.CBORPublicKey()))
@@ -354,7 +348,7 @@ func TestWebOfTrustInfo(t *testing.T) {
 	assert.That(heidi.OneHop(eve.Node))
 }
 
-func TestCheckIntegrity(t *testing.T) {
+func testCheckIntegrity(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// - OK versions
