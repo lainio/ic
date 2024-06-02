@@ -7,6 +7,7 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
 )
@@ -227,7 +228,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.DeepEqual(wot.CommonInviterPubKey, daveIDK)
 	assert.Equal(wot.Hops, 1)
 	assert.That(wot.SameChain)
-	digestDave := &chain.Digest{
+	digestDave := &digest.Digest{
 		IDK:     daveIDK,
 		RootIDK: daveIDK,
 		Hops:    0,
@@ -266,7 +267,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.Equal(h, 1)
 	assert.Equal(level, 0)
 
-	digestAlice := &chain.Digest{
+	digestAlice := &digest.Digest{
 		IDK:     aliceIDK,
 		RootIDK: root1IDK,
 		Hops:    1,
@@ -283,7 +284,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.That(wot2.SameChain)
 	assert.Equal(wot2.Hops, 4, "root was root1")
 
-	digestRoot1 := &chain.Digest{
+	digestRoot1 := &digest.Digest{
 		IDK:     root1IDK,
 		RootIDK: root1IDK,
 		Hops:    0,
@@ -371,9 +372,9 @@ func testCheckIntegrity(t *testing.T) {
 	ok = root2.CheckIntegrity()
 	assert.That(ok)
 
-	// - Not OK ruined version:
+	// - Not OK ruined version TODO:
 	// - this very bad test but until we have better...
-	grace.InviteeChains[0].Blocks[0].Public()[30] = 0
+	grace.InviteeChains[0].Blocks[0].Public()[32] = 0 // let's ruin one byte
 	ok = grace.CheckIntegrity()
 	assert.ThatNot(ok, "see 2 lines above ^")
 }

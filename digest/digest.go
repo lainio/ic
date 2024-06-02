@@ -1,4 +1,4 @@
-package chain
+package digest
 
 import (
 	"github.com/lainio/ic/hop"
