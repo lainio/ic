@@ -1,7 +1,6 @@
 package identity
 
 import (
-	"os"
 	"testing"
 
 	"github.com/lainio/err2/assert"
@@ -26,51 +25,18 @@ var (
 	root2, dave, eve Identity
 
 	// root3 --> ivan --> mike
-	//     \
-	//      --> judy --> olivia
+	//   │
+	//   └───-> judy --> olivia
 	root3, ivan, mike, judy, olivia Identity
 
 	// alice -> frank, bob -> grace
 	frank, grace Identity
 )
 
-func TestMain(m *testing.M) {
-	setup()
-	code := m.Run()
-	teardown()
-	os.Exit(code)
-}
-
-func teardown() {
-}
-
-func setup() {
-	// root, alice, bob setup
-	root1.Handle = key.New()
-	root2.Handle = key.New()
-	root3.Handle = key.New()
-	alice.Handle = key.New()
-	bob.Handle = key.New()
-	carol.Handle = key.New()
-	dave.Handle = key.New()
-	eve.Handle = key.New()
-	// TODO: comment frank init out to test err2
-	frank.Handle = key.New()
-	grace.Handle = key.New()
-
-	ivan.Handle = New(key.New())
-	mike.Handle = New(key.New())
-	judy.Handle = New(key.New())
-	olivia.Handle = New(key.New())
-
-	root1 = New(root1, chain.WithEndpoint(endpointValueRoot1, true))
-	root2 = New(root2, chain.WithEndpoint(endpointValueRoot2, true))
-	root3 = New(root3, chain.WithEndpoint(endpointValueRoot3, true))
-}
-
 func TestIdentity_All(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	t.Run("create all", testSetup)
 	t.Run("new identity", testNewIdentity)
 	t.Run("invite", testIdentityInvite)
 	t.Run("rotate key", testRotateKey)
@@ -84,14 +50,42 @@ func TestIdentity_All(t *testing.T) {
 	t.Run("rotate backup key", testRotateToBackupKey)
 }
 
+func testSetup(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	isResolver := true
+	root1 = New(key.New(), chain.WithEndpoint(endpointValueRoot1, isResolver))
+	assert.SLen(root1.InviteeChains, 1)
+	assert.SLen(root1.InviteeChains[0].Blocks, 1)
+
+	root2 = New(key.New(), chain.WithEndpoint(endpointValueRoot2, isResolver))
+	root3 = New(key.New(), chain.WithEndpoint(endpointValueRoot3, isResolver))
+	alice = New(key.New())
+	assert.SLen(alice.InviteeChains, 1)
+	assert.SLen(alice.InviteeChains[0].Blocks, 1)
+
+	bob = New(key.New())
+	carol = New(key.New())
+	assert.SLen(carol.InviteeChains, 1)
+	assert.SLen(carol.InviteeChains[0].Blocks, 1)
+
+	eve = New(key.New())
+	frank = New(key.New())
+	grace = New(key.New())
+	ivan = New(key.New())
+	mike = New(key.New())
+	judy = New(key.New())
+	olivia = New(key.New())
+}
+
 func testNewIdentity(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	aliceID := New(alice)
+	aliceID := New(key.New())
 	assert.SLen(aliceID.InviteeChains, 1)
 	assert.SLen(aliceID.InviteeChains[0].Blocks, 1)
 
-	bobID := New(bob)
+	bobID := New(key.New())
 	assert.SLen(bobID.InviteeChains, 1)
 }
 
@@ -99,19 +93,20 @@ func testIdentityInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// Root1 chains start here:
-	alice = root1.Invite(alice, chain.WithPosition(1))
 	assert.Equal(alice.Len(), 1)
+	alice = root1.Invite(alice, chain.WithPosition(1))
+	assert.Equal(alice.Len(), 2)
 	{
-		c := alice.InviteeChains[0]
+		c := alice.InviteeChains[1] // 0 is our ID chain
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.VerifySign())
 	}
 
 	bob = alice.Invite(bob, chain.WithPosition(1))
-	assert.Equal(bob.Len(), 1)
+	assert.Equal(bob.Len(), 3)
 	{
-		c := bob.InviteeChains[0]
-		assert.SLen(c.Blocks, 3) // we know how long the chain is now
+		c := bob.InviteeChains[2] // 2 is the last
+		assert.SLen(c.Blocks, 3)  // we know how long the chain is now
 		assert.That(c.VerifySign())
 	}
 
@@ -121,9 +116,9 @@ func testIdentityInvite(t *testing.T) {
 
 	// Root2 invites Carol here
 	carol = root2.Invite(carol, chain.WithPosition(1))
-	assert.Equal(carol.Len(), 1)
+	assert.Equal(carol.Len(), 2)
 	{
-		c := carol.InviteeChains[0]
+		c := carol.InviteeChains[1] // 1 is the last
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.VerifySign())
 	}
@@ -133,11 +128,11 @@ func testIdentityInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave = New(dave, chain.WithEndpoint(endpointValueDave, true))
+	dave = New(key.New(), chain.WithEndpoint(endpointValueDave, true))
 	eve = dave.Invite(eve, chain.WithPosition(1))
-	assert.Equal(eve.Len(), 1)
+	assert.Equal(eve.Len(), 2)
 	{
-		c := eve.InviteeChains[0]
+		c := eve.InviteeChains[1]
 		assert.SLen(c.Blocks, 2)
 		assert.That(c.VerifySign())
 	}
@@ -160,7 +155,7 @@ func testIdentityInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 	// .. so Carol can invite Eve
 	eve = carol.Invite(eve, chain.WithPosition(1))
-	assert.Equal(eve.Len(), 2)
+	assert.Equal(eve.Len(), 4)
 
 	// now Eve has common chain with Root1 as well
 	common = eve.CommonChain(root2.Node)
@@ -199,43 +194,43 @@ func testRotateAndInvite(t *testing.T) {
 	//     \
 	//      --> judy --> olivia
 	{
-		assert.SLen(ivan.InviteeChains, 0)
-		ivan = root3.InviteWithRotateKey(ivan, chain.WithPosition(1))
 		assert.SLen(ivan.InviteeChains, 1)
-		assert.SLen(ivan.InviteeChains[0].Blocks, 2+1,
+		ivan = root3.InviteWithRotateKey(ivan, chain.WithPosition(1))
+		assert.SLen(ivan.InviteeChains, 2)
+		assert.SLen(ivan.InviteeChains[1].Blocks, 2+1,
 			"2 parties + 1 rotation")
 	}
 	{
-		assert.SLen(judy.InviteeChains, 0)
+		assert.SLen(judy.InviteeChains, 1)
 		judy = root3.InviteWithRotateKey(judy, chain.WithPosition(1))
-		assert.SLen(judy.InviteeChains, 1)
-		assert.SLen(judy.InviteeChains[0].Blocks, 2+1,
+		assert.SLen(judy.InviteeChains, 2)
+		assert.SLen(judy.InviteeChains[1].Blocks, 2+1,
 			"2 parties + 1 rotation")
 	}
 	{
-		assert.SLen(mike.InviteeChains, 0)
-		mike = ivan.InviteWithRotateKey(mike, chain.WithPosition(1))
-		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(mike.InviteeChains, 1)
-		assert.SLen(mike.InviteeChains[0].Blocks, 3+1+1,
+		mike = ivan.InviteWithRotateKey(mike, chain.WithPosition(1))
+		assert.SLen(judy.InviteeChains, 2)
+		assert.SLen(mike.InviteeChains, 3)
+		assert.SLen(mike.InviteeChains[2].Blocks, 3+1+1,
 			"old length 3 + 1 new party + 1 rotation")
 	}
 	{
-		assert.SLen(olivia.InviteeChains, 0)
-		olivia = judy.InviteWithRotateKey(olivia, chain.WithPosition(1))
-		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(olivia.InviteeChains, 1)
-		assert.SLen(olivia.InviteeChains[0].Blocks, 3+1+1,
+		olivia = judy.InviteWithRotateKey(olivia, chain.WithPosition(1))
+		assert.SLen(judy.InviteeChains, 2)
+		assert.SLen(olivia.InviteeChains, 3)
+		assert.SLen(olivia.InviteeChains[2].Blocks, 3+1+1,
 			"old length 3 + 1 new party + 1 rotation")
 	}
 	// judy 'tries' to invite mike.
 	// mike is already invited to root3's chain, nothing happens
 	{
-		assert.SLen(mike.InviteeChains, 1, "1 IC already w/ same root")
+		assert.SLen(mike.InviteeChains, 3, "1 IC already w/ same root")
 		mike = judy.InviteWithRotateKey(mike, chain.WithPosition(1))
-		assert.SLen(judy.InviteeChains, 1, "nothing new")
-		assert.SLen(mike.InviteeChains, 1, "nothing new")
-		assert.SLen(mike.InviteeChains[0].Blocks, 3+1+1,
+		assert.SLen(judy.InviteeChains, 2, "nothing new")
+		assert.SLen(mike.InviteeChains, 4, "nothing new")
+		assert.SLen(mike.InviteeChains[2].Blocks, 3+1+1,
 			"old length 3 + 1 new party + 1 rotation")
 	}
 }
@@ -250,16 +245,13 @@ func testTrustLevel(t *testing.T) {
 func testEndpoint(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	//                  root2
-	//                  /    \
-	//                \/     \/
-	//              carol    dave-2-chains
-	//                   \       //
-	//                   \/     \/
-	//                  eve(root-is-dave)
-	//                  /
-	//                \/
-	//               eve(key-rotated)
+	//         ┌ root2  ┐
+	//         ↓        ↓
+	//       carol    dave-2-chains
+	//            ↓     ↓
+	//           eve(root-is-dave)
+	//           ↓
+	//        eve(key-rotated)
 	{
 		pubkey := try.To1(root2.CBORPublicKey())
 		ep := eve.Endpoint(pubkey)
@@ -282,10 +274,9 @@ func testResolver(t *testing.T) {
 		assert.NotEmpty(ep)
 		assert.Equal(ep, endpointValueRoot2)
 	}
-	//                  root1
-	//                  /
-	//                \/
-	//              alice -->   bob
+	//      root1
+	//        ↓
+	//      alice -> bob
 	{
 		ep := alice.Resolver()
 		assert.NotEmpty(ep)
@@ -317,13 +308,13 @@ func testWebOfTrust(t *testing.T) {
 	{
 		wot := carol.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 2)
-		assert.Equal(wot.CommonInviterLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 0)
 		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(carol.CBORPublicKey()))
 	}
 	{
 		wot := eve.WebOfTrust(carol)
 		assert.Equal(wot.Hops, 2)
-		assert.Equal(wot.CommonInviterLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 0)
 		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(carol.CBORPublicKey()))
 	}
 	{
@@ -351,12 +342,12 @@ func testWebOfTrust(t *testing.T) {
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 3)
-		assert.Equal(wot.CommonInviterLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 0)
 	}
 	{
 		wot := alice.WebOfTrust(bob)
 		assert.Equal(wot.Hops, 1)
-		assert.Equal(wot.CommonInviterLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 0)
 	}
 	//      root1
 	//        ↓
@@ -369,7 +360,7 @@ func testWebOfTrust(t *testing.T) {
 	{
 		wot := frank.WebOfTrust(grace)
 		assert.Equal(wot.Hops, 4)
-		assert.Equal(wot.CommonInviterLevel, 1)
+		assert.Equal(wot.CommonInviterLevel, 0)
 	}
 }
 
@@ -469,9 +460,9 @@ func testRotateToBackupKey(t *testing.T) {
 
 	// eve has most complex situation before RotateToBackupKey, and it's best
 	// version to be used for table testing
-	{
+	if true {
 		assert.SLen(eve.Node.BackupKeys.Blocks, 2)
-		prevLenghts := make([]int, eve.InviteeChains[0].Len())
+		prevLenghts := make([]int, eve.Len())
 		prevChainsLen := len(eve.InviteeChains)
 		for i := range prevChainsLen {
 			prevLenghts[i] = int(eve.InviteeChains[i].Len())

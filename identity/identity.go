@@ -8,18 +8,32 @@ import (
 	"github.com/lainio/ic/node"
 )
 
+// Identity is high level entity to encabsulate all the needed information to
+// present either our own identity or their identity. When we handle their
+// identity our [key.Handle] is in read-only mode. TODO
 type Identity struct {
 	node.Node // chains inside these share the same key.ID&Public
 
-	key.Handle
+	key.Hand
 }
 
-// New creates a Identity object. NOTE that this far too simple for production
-// use when we need to setup many keys (propably) for the backup keys, etc. NOTE
-// we can create new backup keys as long as we own the previous one.
+// New creates a Identity object.
+//
+// TODO: we need Two (2) of these! NewRoot and New
+//
+// NOTE that this far too simple for production use when we need to setup many
+// keys (propably) for the backup keys, etc.
+//
+// NOTE that we can create new backup keys as long as we own the previous one.
 func New(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
-	return Identity{Node: node.New(info, flags...), Handle: h}
+	return Identity{
+		Node: node.New(info, flags...),
+		Hand: key.Hand{
+			Handle: h,
+			Info:   &info,
+		},
+	}
 }
 
 func (i Identity) InviteWithRotateKey(
@@ -28,13 +42,16 @@ func (i Identity) InviteWithRotateKey(
 ) Identity {
 	newKH := key.New()
 	rhs.Node = i.Node.InviteWithRotateKey(
-		rhs.Node, i, newKH, key.InfoFromHandle(rhs.Handle), opts...)
+		rhs.Node, i.Hand.Handle, newKH, key.InfoFromHandle(rhs.Handle), opts...)
 	return rhs
 }
 
 // Invite invites other identity holder to all (decided later) our ICs.
 func (i Identity) Invite(rhs Identity, opts ...chain.Opts) Identity {
-	rhs.Node = i.Node.Invite(rhs.Node, i, key.InfoFromHandle(rhs.Handle), opts...)
+	assert.INotNil(i.Handle)
+	assert.NotNil(rhs.Info)
+
+	rhs.Node = i.Node.Invite(rhs.Node, i.Handle, *rhs.Info, opts...)
 	return rhs
 }
 
@@ -47,7 +64,7 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 
 func (i Identity) RotateToBackupKey(keyIndex int) Identity {
 	newNode, newKH := i.Node.RotateToBackupKey(keyIndex)
-	newIdentity := Identity{Node: newNode, Handle: newKH}
+	newIdentity := Identity{Node: newNode, Hand: key.NewHand(newKH)}
 	return newIdentity
 }
 
