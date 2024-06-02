@@ -8,19 +8,21 @@ import (
 	"github.com/lainio/ic/node"
 )
 
-// Identity is high level entity to encabsulate all the needed information to
+// Identity is high level entity to encapsulate all the needed information to
 // present either our own identity or their identity. When we handle their
-// identity our [key.Handle] is in read-only mode. TODO
+// identity our [key.Hand] is in read-only mode, i.e., we don't have full
+// [key.Handle] but [key.Info] only.
 type Identity struct {
 	node.Node // chains inside these share the same key.ID&Public
 
-	key.Hand
+	key.Hand // if ours, we have full [key.Handle] if not only [key.Info]
 }
 
-// New creates a new Joining Identity with the given [key.Handle].
-// NOTE that this is not a Root Identity because it doesn't have any ICs. It's
-// an identity ready to join other's ICs, which is the preferred way.
-func New(h key.Handle, flags ...chain.Opts) Identity {
+// New creates a new joining identity with the given [key.Handle]. The 'joining'
+// means that we'll wait other party to invite us, and then we'll get our IC.
+// See [NewRoot] for the cases where we want to start our own chain.
+// NOTE that this is the preferred way to create Identity and join the network.
+func New(h key.Handle) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{
 		Node: node.Node{},
@@ -31,9 +33,11 @@ func New(h key.Handle, flags ...chain.Opts) Identity {
 	}
 }
 
-// NewRoot creates a Root Identity object.
+// NewRoot creates a Root Identity object, which allows us to start a whole new
+// IC. Please prefer [New] function over this to maximize connectivity in the
+// network.
 // NOTE that this far too simple for production use when we need to setup many
-// keys (propably) for the backup keys, etc.
+// keys (probably) for the backup keys, etc.
 // NOTE that we can create new backup keys as long as we own the previous one.
 func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
@@ -66,10 +70,10 @@ func (i Identity) Invite(rhs Identity, opts ...chain.Opts) Identity {
 }
 
 func (i Identity) RotateKey(newKH key.Handle) Identity {
-	// TODO: Select NewXX() function, how?
-	newInfo := NewRoot(newKH, chain.WithRotation())
+	assert.SLonger(i.InviteeChains, 0)
+	newInfo := New(newKH)
 
-	newID := i.Invite(newInfo, chain.WithPosition(0))
+	newID := i.Invite(newInfo, chain.WithRotation(), chain.WithPosition(0))
 	return newID
 }
 
