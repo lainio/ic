@@ -1,9 +1,12 @@
 package node
 
 import (
+	"errors"
+
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
 )
@@ -199,7 +202,7 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 	return common
 }
 
-func (n Node) WoT(digest *chain.Digest) *WebOfTrust {
+func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 	var (
 		found bool
 		hops  = hop.NewNotConnected()
@@ -308,30 +311,33 @@ func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 	return
 }
 
+var (
+	ErrWrongKey  = errors.New("wrong public key")
+	ErrSignature = errors.New("wrong signature")
+)
+
 // CheckIntegrity checks your Node's integrity, which means that all of the
 // InviteeChains must be signed properly and their LastBlock shares same IDK.
 // The last part is the logical binging under the Node structure.
-//
 // NOTE that you cannot trust the Node who's integrity is violated!
-//
-// TODO: consider returning an error or even panicing an error, but maybe caller
-// can do that?
-func (n Node) CheckIntegrity() bool {
-	if len(n.InviteeChains) == 0 ||
-		!n.InviteeChains[0].VerifySignExtended(n.getBKPublic) {
-		return false
+func (n Node) CheckIntegrity() error {
+	if n.Len() == 0 { // empty non Root Node is fine.
+		return nil
 	}
 
+	// use 1st ICs PubKey for our IDK, all the rest must use the same
 	IDK := n.InviteeChains[0].LastBlock().Public()
 
-	for _, c := range n.InviteeChains[1:] {
-		notOK := !(key.EqualBytes(c.LastBlock().Public(), IDK) &&
-			c.VerifySignExtended(n.getBKPublic))
-		if notOK {
-			return false
+	for _, c := range n.InviteeChains {
+		if !key.EqualBytes(c.LastBlock().Public(), IDK) {
+			return ErrWrongKey
+		}
+
+		if !c.VerifySignExtended(n.getBKPublic) {
+			return ErrSignature
 		}
 	}
-	return true
+	return nil
 }
 
 func (n Node) Len() int {

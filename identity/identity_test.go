@@ -458,7 +458,7 @@ func testRotateToBackupKey(t *testing.T) {
 		prevLen := frank.InviteeChains[0].Len()
 		frank = frank.RotateToBackupKey(1)
 		assert.SLen(frank.Node.BackupKeys.Blocks, 3)
-		assert.That(frank.CheckIntegrity())
+		try.To(frank.CheckIntegrity())
 		assert.SLen(frank.InviteeChains[0].Blocks, int(prevLen)+1)
 	}
 	{
@@ -466,7 +466,7 @@ func testRotateToBackupKey(t *testing.T) {
 		prevLen := grace.InviteeChains[0].Len()
 		grace = grace.RotateToBackupKey(1)
 		assert.SLen(grace.Node.BackupKeys.Blocks, 2)
-		assert.That(grace.CheckIntegrity())
+		try.To(grace.CheckIntegrity())
 		assert.SLen(grace.InviteeChains[0].Blocks, int(prevLen)+1)
 	}
 
@@ -483,7 +483,7 @@ func testRotateToBackupKey(t *testing.T) {
 		assert.SLen(eve.Node.BackupKeys.Blocks, 2)
 		assert.SLen(eve.InviteeChains, prevChainsLen)
 
-		assert.That(eve.CheckIntegrity())
+		try.To(eve.CheckIntegrity())
 
 		for i := range prevChainsLen {
 			assert.Equal(int(eve.InviteeChains[i].Len()), prevLenghts[i]+1)
