@@ -19,24 +19,28 @@ import (
 
 // TODO: from where we get the key! In the server this is ordinary secret. We
 // can still think this when we have our UI app ready.
-// TODO: how we should handle and store these keys! this solves so much!
 var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50ac2f32856844")
 
 type Public = []byte
 type ID = []byte
 
-// Hand is hand holding a full [Handle] or key [Info]. This structure allows us
-// to abstract easily ours and theirs.
+// Hand is hand holding a key pair: a full [Handle] or key [Info]. This
+// structure allows us to abstract key pairs to ours and theirs. We always have
+// a key pair in our hand, and the Hand decides is it a full key pair that is
+// capable signing or is it a public key pair only for challenging and
+// verifying.
 type Hand struct {
 	Handle // is interface, so it can be nil
 	*Info  // can be nil, that's why we need pointer
 }
 
+// NewHand creates a hand holding a [Handle] and [Info].
 func NewHand(h Handle) Hand {
 	info := InfoFromHandle(h)
 	return Hand{Handle: h, Info: &info}
 }
 
+// NewHandInfo creates a hand holding only a [Info].
 func NewHandInfo(i *Info) Hand {
 	return Hand{Info: i}
 }
@@ -56,10 +60,10 @@ func (h Hand) Valid() bool {
 type Handle = enclave.KeyHandle
 
 // Info is key.Info that binds and transport both key's ID and its public key
-// together.
+// together. Info is like a public version of key pair.
 type Info struct {
-	ID
-	Public
+	ID     // The key ID
+	Public // The Public Key
 }
 
 func InfoFromHandle(h Handle) Info {
