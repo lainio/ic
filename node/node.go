@@ -49,7 +49,8 @@ func NewWebOfTrust(n1, n2 Node) *WebOfTrust {
 	return n1.WebOfTrustInfo(n2)
 }
 
-// New constructs a new node.
+// New constructs a new Root Node.
+//   - it's root node because it has a IC!
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
 func New(pubKey key.Info, flags ...chain.Opts) Node {

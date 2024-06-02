@@ -17,15 +17,25 @@ type Identity struct {
 	key.Hand
 }
 
-// New creates a Identity object.
-//
-// TODO: we need Two (2) of these! NewRoot and New
-//
+// New creates a new Joining Identity with the given [key.Handle].
+// NOTE that this is not a Root Identity because it doesn't have any ICs. It's
+// an identity ready to join other's ICs, which is the preferred way.
+func New(h key.Handle, flags ...chain.Opts) Identity {
+	info := key.InfoFromHandle(h)
+	return Identity{
+		Node: node.Node{},
+		Hand: key.Hand{
+			Handle: h,
+			Info:   &info,
+		},
+	}
+}
+
+// NewRoot creates a Root Identity object.
 // NOTE that this far too simple for production use when we need to setup many
 // keys (propably) for the backup keys, etc.
-//
 // NOTE that we can create new backup keys as long as we own the previous one.
-func New(h key.Handle, flags ...chain.Opts) Identity {
+func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{
 		Node: node.New(info, flags...),
@@ -56,7 +66,8 @@ func (i Identity) Invite(rhs Identity, opts ...chain.Opts) Identity {
 }
 
 func (i Identity) RotateKey(newKH key.Handle) Identity {
-	newInfo := New(newKH, chain.WithRotation())
+	// TODO: Select NewXX() function, how?
+	newInfo := NewRoot(newKH, chain.WithRotation())
 
 	newID := i.Invite(newInfo, chain.WithPosition(0))
 	return newID
