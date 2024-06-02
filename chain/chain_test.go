@@ -99,7 +99,6 @@ func testNewChain(t *testing.T) {
 
 	assert.SLen(c.Blocks, 1)
 	assert.Equal(c.Len(), 1)
-	assert.That(c.VerifyIDChain())
 	assert.Equal(c.KeyRotationsLen(), 1)
 	//assert.Equal(c.AbsLen(), 1)
 
@@ -107,14 +106,12 @@ func testNewChain(t *testing.T) {
 	c = c.Invite(k, key.InfoFromHandle(k2), WithRotation(), WithPosition(1))
 	assert.Equal(c.Len(), 2, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 2)
-	assert.That(c.VerifyIDChain())
 	//assert.Equal(c.AbsLen(), 1)
 
 	k3 := key.New()
 	c = c.Invite(k2, key.InfoFromHandle(k3), WithRotation(), WithPosition(1))
 	assert.Equal(c.Len(), 3, "naturally +1 from previous")
 	assert.Equal(c.KeyRotationsLen(), 3)
-	assert.That(c.VerifyIDChain())
 	//assert.Equal(c.AbsLen(), 1)
 }
 

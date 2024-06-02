@@ -223,27 +223,6 @@ func (c Chain) VerifySign() bool {
 	return c.VerifySignExtended(emptyBKImpl)
 }
 
-// VerifyIDChain is tool to verify whole ID chain, i.e., chain sipnatures hold
-// and Rotation flag is true in every Block.
-// TODO: we don't know anymore for what this is meant.. we shall see..
-func (c Chain) VerifyIDChain() bool {
-	if c.Len() == 1 {
-		return c.firstBlock().Rotation // root block is valid always
-	}
-
-	// start with the root key
-	invitersPubKey := c.firstBlock().Public()
-
-	for _, b := range c.Blocks[1:] {
-		if !b.Rotation || !b.VerifySign(invitersPubKey) {
-			return false
-		}
-		// the next block is signed with this block's pub key
-		invitersPubKey = b.Public()
-	}
-	return true
-}
-
 func (c Chain) Clone() Chain {
 	return NewChainFromData(c.Bytes())
 }
