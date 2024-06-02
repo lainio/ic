@@ -25,6 +25,26 @@ var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50a
 type Public = []byte
 type ID = []byte
 
+// Hand is hand holding a full [Handle] or key [Info]. This structure allows us
+// to abstract easily ours and theirs.
+type Hand struct {
+	Handle // is interface, so it can be nil
+	*Info  // can be nil, that's why we need pointer
+}
+
+func NewHand(h Handle) Hand {
+	info := InfoFromHandle(h)
+	return Hand{Handle: h, Info: &info}
+}
+
+func NewHandInfo(i *Info) Hand {
+	return Hand{Info: i}
+}
+
+func (h Hand) Valid() bool {
+	return h.Handle != nil || h.Info != nil
+}
+
 // Handle is key.Handle that has secure access to private key as well. But
 // private key is always hided. And that's why we have only Handle to key pair.
 //
@@ -32,7 +52,7 @@ type ID = []byte
 // them, i.e., if we have created the Handle, we can use it thru its ID.
 //
 // Handle also allows us decided what kind of key storage we are using and it
-// simplyfies key management A LOT.
+// simplifies key management A LOT.
 type Handle = enclave.KeyHandle
 
 // Info is key.Info that binds and transport both key's ID and its public key
