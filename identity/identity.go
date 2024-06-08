@@ -25,7 +25,7 @@ type Identity struct {
 func New(h key.Handle) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{
-		Node: node.Node{},
+		Node: node.Node{}, // Just empty Node! Important, no root IC.
 		Hand: key.Hand{
 			Handle: h,
 			Info:   &info,
@@ -50,13 +50,15 @@ func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	}
 }
 
-func (i Identity) InviteWithRotateKey(
+func (i Identity) InviteWithRotateKey( // TODO: rename ..WithRotatedKey()
 	rhs Identity,
 	opts ...chain.Opts,
 ) Identity {
-	newKH := key.New()
-	rhs.Node = i.Node.InviteWithRotateKey(
-		rhs.Node, i.Hand.Handle, newKH, key.InfoFromHandle(rhs.Handle), opts...)
+	rotatingKeyHandle := key.New()
+	rhs.Node = i.Node.InviteWithRotateKey(rhs.Node,
+		i.Handle, rotatingKeyHandle,
+		key.InfoFromHandle(rhs.Handle), opts...,
+	)
 	return rhs
 }
 
