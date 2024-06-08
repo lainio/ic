@@ -202,6 +202,12 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 	return common
 }
 
+// WoT returns web of trust information for the given [digest.Digest]. The
+// digest includes the minimal amount of information without the actual IC to
+// allow us to calculate WoT if our Node includes enough information to do it,
+// i.e., ICs including a correct RootIDK. If not returns nil.
+//
+// See [WebOfTrustInfo] for cases where you have both [Node]s.
 func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 	var (
 		found bool
@@ -232,7 +238,7 @@ func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 }
 
 // WebOfTrustInfo returns web-of-trust information of two nodes if they share a
-// trust chain. If not the Hops field is hop.NotConnected.
+// trust chain (common root). If not returns nil.
 func (n Node) WebOfTrustInfo(their Node) *WebOfTrust {
 	chainPairs := n.CommonChains(their)
 
@@ -259,6 +265,7 @@ func (n Node) WebOfTrustInfo(their Node) *WebOfTrust {
 	}
 }
 
+// IsInviterFor tells if we are an inviter for a given node.
 func (n Node) IsInviterFor(their Node) bool {
 	chainPairs := n.CommonChains(their)
 
@@ -270,6 +277,7 @@ func (n Node) IsInviterFor(their Node) bool {
 	return false
 }
 
+// OneHop returns true if two nodes are from one hop away.
 func (n Node) OneHop(their Node) bool {
 	chainPairs := n.CommonChains(their)
 
@@ -281,6 +289,7 @@ func (n Node) OneHop(their Node) bool {
 	return false
 }
 
+// CommonChain returns the [chain.Chain] that's common for nodes.
 func (n Node) CommonChain(their Node) chain.Chain {
 	for _, my := range n.InviteeChains {
 		if their.sharedRoot(my) {
@@ -290,6 +299,7 @@ func (n Node) CommonChain(their Node) chain.Chain {
 	return chain.Nil
 }
 
+// Resolver returns an endpoint to the resolver if it's accessible.
 func (n Node) Resolver() (endpoint string) {
 	for _, c := range n.InviteeChains {
 		endpoint = c.Resolver()
