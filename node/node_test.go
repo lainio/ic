@@ -211,7 +211,7 @@ func testFind(t *testing.T) {
 	// not found:
 	{
 		pubkey := try.To1(root1.CBORPublicKey())
-		_, found := eve.Find(pubkey) // eve is invited only by root1 chains
+		_, found := eve.Find(pubkey) // eve is invited only by root2 chains
 		assert.ThatNot(found)
 	}
 }
@@ -346,7 +346,9 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot.Hops, 1, "dave invites heidi")
 	assert.That(wot.SameChain)
 	assert.That(eve.IsInviterFor(heidi.Node))
+	assert.That(root3.IsInviterFor(heidi.Node))
 	assert.That(heidi.OneHop(eve.Node))
+	assert.That(eve.OneHop(heidi.Node))
 }
 
 func testCheckIntegrity(t *testing.T) {
