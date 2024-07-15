@@ -50,7 +50,10 @@ func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	}
 }
 
-func (i Identity) InviteWithRotateKey( // TODO: rename ..WithRotatedKey()
+// InviteWithRotateKey we first create new key for this specefic invitation.
+// this is like double blinding. minimize correlation. TODO: does this still
+// work is the real world,
+func (i Identity) InviteWithRotateKey( // TODO: rename ..WithRotatedKey() <- donne already
 	rhs Identity,
 	opts ...chain.Opts,
 ) Identity {
@@ -79,6 +82,10 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 	return newID
 }
 
+// RotateToBackupKey plah, ... TODO: should we put the keyIndex somewhere that
+// wen know that rotation to that key is already doone? And we don't try that
+// key again, etc.? Of course, we can manually find that information, but still
+// is it something that we should do?
 func (i Identity) RotateToBackupKey(keyIndex int) Identity {
 	newNode, newKH := i.Node.RotateToBackupKey(keyIndex)
 	newIdentity := Identity{Node: newNode, Hand: key.NewHand(newKH)}
