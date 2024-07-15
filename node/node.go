@@ -112,10 +112,11 @@ func (n Node) CopyBackupKeysTo(tgt *Node) *Node {
 
 // InviteWithRotateKey is method to add invitee's node's invitation chains (IC)
 // to all of those ICs of us (n Node) that invitee doesn't yet belong.
+//   - if iviter, inviterNew are the same this normal Invite
 func (n Node) InviteWithRotateKey(
 	// TODO: order of the arguments?
 	inviteesNode Node,
-	inviterOrg, inviterNew key.Handle,
+	inviter, inviterNew key.Handle,
 	invitee key.Info,
 	opts ...chain.Opts,
 ) (
@@ -137,20 +138,24 @@ func (n Node) InviteWithRotateKey(
 		}
 
 		// inviter (n) has something that invitee dosen't belong yet
-		newChain := c.Invite(inviterOrg, key.InfoFromHandle(inviterNew), opts...)
-		newChain = newChain.Invite(inviterNew, invitee, opts...)
+		var newChain chain.Chain
+		if key.EqualBytes(inviter.ID(), inviterNew.ID()) {
+			newChain = c.Invite(inviter, invitee, opts...)
+		} else {
+			newChain = c.Invite(inviter, key.InfoFromHandle(inviterNew), opts...)
+			newChain = newChain.Invite(inviterNew, invitee, opts...)
+		}
 		rn.InviteeChains = append(rn.InviteeChains, newChain)
 	}
 	return rn
 }
 
-// TODO: merge these 2 functions to one, refactoring.
-
 // Invite is method to add invitee's node's invitation chains (IC) to all of
 // those ICs of us (n Node) that invitee doesn't yet belong.
 // NOTE! Use identity.Invite at the API lvl.
 // This has worked since we started, but at the identity level we need symmetric
-// invitation system.
+// invitation system. TODO: <- check what this comment means!
+// TODO: move chain, crypto, and node to internal
 func (n Node) Invite(
 	// TODO: order of the arguments?
 	inviteesNode Node,
@@ -160,26 +165,7 @@ func (n Node) Invite(
 ) (
 	rn Node,
 ) {
-	rn.InviteeChains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
-
-	// keep all the existing web-of-trust chains if not rotation case
-	if !inviteesNode.rotationChain() {
-		rn.InviteeChains = append(rn.InviteeChains, inviteesNode.InviteeChains...)
-	}
-
-	// add only those which invitee isn't member already
-	for _, c := range n.InviteeChains {
-		// if inviteesNode already is inivited to same web-of-trust
-		if inviteesNode.sharedRoot(c) {
-			// only keep it
-			continue
-		}
-
-		// inviter (n) has something that invitee dosen't belong yet
-		newChain := c.Invite(inviter, invitee, opts...)
-		rn.InviteeChains = append(rn.InviteeChains, newChain)
-	}
-	return rn
+	return n.InviteWithRotateKey(inviteesNode, inviter, inviter, invitee, opts...)
 }
 
 func (n Node) rotationChain() (yes bool) {
