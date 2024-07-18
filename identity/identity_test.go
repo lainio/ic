@@ -432,15 +432,19 @@ func testChallenge(t *testing.T) {
 func testCreateBackupKeysAmount(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	assert.SLen(dave.Node.BackupKeys.Blocks, 0)
 	dave.CreateBackupKeysAmount(3)
 	assert.SLen(dave.Node.BackupKeys.Blocks, 3)
 
+	assert.SLen(frank.Node.BackupKeys.Blocks, 0)
 	frank.CreateBackupKeysAmount(3)
 	assert.SLen(frank.Node.BackupKeys.Blocks, 3)
 
+	assert.SLen(grace.Node.BackupKeys.Blocks, 0)
 	grace.CreateBackupKeysAmount(2)
 	assert.SLen(grace.Node.BackupKeys.Blocks, 2)
 
+	assert.SLen(eve.Node.BackupKeys.Blocks, 0)
 	eve.CreateBackupKeysAmount(2)
 	assert.SLen(eve.Node.BackupKeys.Blocks, 2)
 }
