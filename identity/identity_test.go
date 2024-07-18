@@ -265,13 +265,13 @@ func testEndpoint(t *testing.T) {
 	//           ↓
 	//        eve(key-rotated)
 	{
-		pubkey := try.To1(root2.CBORPublicKey())
+		pubkey := root2.PubKey()
 		ep := eve.Endpoint(pubkey)
 		assert.NotEmpty(ep)
 		assert.Equal(ep, endpointValueRoot2)
 	}
 	{
-		pubkey := try.To1(dave.CBORPublicKey())
+		pubkey := dave.PubKey()
 		ep := eve.Endpoint(pubkey)
 		assert.NotEmpty(ep)
 		assert.Equal(ep, endpointValueDave)
@@ -315,25 +315,25 @@ func testWebOfTrust(t *testing.T) {
 		wot := root2.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 3)
 		assert.Equal(wot.CommonInviterLevel, 0)
-		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(root2.CBORPublicKey()))
+		assert.DeepEqual(wot.CommonInviterPubKey, root2.PubKey())
 	}
 	{
 		wot := carol.WebOfTrust(eve)
 		assert.Equal(wot.Hops, 2)
 		assert.Equal(wot.CommonInviterLevel, 1)
-		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(carol.CBORPublicKey()))
+		assert.DeepEqual(wot.CommonInviterPubKey, carol.PubKey())
 	}
 	{
 		wot := eve.WebOfTrust(carol)
 		assert.Equal(wot.Hops, 2)
 		assert.Equal(wot.CommonInviterLevel, 1)
-		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(carol.CBORPublicKey()))
+		assert.DeepEqual(wot.CommonInviterPubKey, carol.PubKey())
 	}
 	{
 		wot := eve.WebOfTrust(root2)
 		assert.Equal(wot.Hops, 3)
 		assert.Equal(wot.CommonInviterLevel, 0)
-		assert.DeepEqual(wot.CommonInviterPubKey, try.To1(root2.CBORPublicKey()))
+		assert.DeepEqual(wot.CommonInviterPubKey, root2.PubKey())
 	}
 	{
 		wot := eve.WebOfTrust(dave)
@@ -341,7 +341,7 @@ func testWebOfTrust(t *testing.T) {
 		assert.Equal(wot.CommonInviterLevel, 0)
 
 		assert.DeepEqual(wot.CommonInviterPubKey,
-			try.To1(dave.CBORPublicKey()), "dave invited originally eve!")
+			dave.PubKey(), "dave invited originally eve!")
 	}
 
 	frank = alice.Invite(frank, chain.WithPosition(1))

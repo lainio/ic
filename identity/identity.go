@@ -67,8 +67,8 @@ func (i Identity) InviteWithRotateKey( // TODO: rename ..WithRotatedKey() <- don
 
 // Invite invites other identity holder to all (decided later) our ICs.
 func (i Identity) Invite(rhs Identity, opts ...chain.Opts) Identity {
-	assert.INotNil(i.Handle)
-	assert.NotNil(rhs.Info)
+	assert.That(i.ValidHandle())
+	assert.That(rhs.ValidInfo())
 
 	rhs.Node = i.Node.Invite(rhs.Node, i.Handle, *rhs.Info, opts...)
 	return rhs
