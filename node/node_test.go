@@ -25,7 +25,7 @@ var (
 
 type entity struct {
 	Node
-	key.Handle
+	key.Handle // TODO: use key.Hand?
 }
 
 func TestMain(m *testing.M) {
