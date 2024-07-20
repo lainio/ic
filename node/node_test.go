@@ -25,7 +25,7 @@ var (
 
 type entity struct {
 	Node
-	key.Handle
+	key.Handle // TODO: use key.Hand?
 }
 
 func TestMain(m *testing.M) {
@@ -355,29 +355,20 @@ func testCheckIntegrity(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// - OK versions
-	err := alice.CheckIntegrity()
-	assert.NoError(err)
-	err = bob.CheckIntegrity()
-	assert.NoError(err)
-	err = carol.CheckIntegrity()
-	assert.NoError(err)
-	err = dave.CheckIntegrity()
-	assert.NoError(err)
-	err = eve.CheckIntegrity()
-	assert.NoError(err)
-	err = frank.CheckIntegrity()
-	assert.NoError(err)
-	err = grace.CheckIntegrity()
-	assert.NoError(err)
-	err = root1.CheckIntegrity()
-	assert.NoError(err)
-	err = root2.CheckIntegrity()
-	assert.NoError(err)
+	try.To(alice.CheckIntegrity())
+	try.To(bob.CheckIntegrity())
+	try.To(carol.CheckIntegrity())
+	try.To(dave.CheckIntegrity())
+	try.To(eve.CheckIntegrity())
+	try.To(frank.CheckIntegrity())
+	try.To(grace.CheckIntegrity())
+	try.To(root1.CheckIntegrity())
+	try.To(root2.CheckIntegrity())
 
 	// - Not OK ruined version TODO:
 	// - this very bad test but until we have better...
 	grace.InviteeChains[0].Blocks[0].Public()[32] = 0 // let's ruin one byte
-	err = grace.CheckIntegrity()
+	err := grace.CheckIntegrity()
 	assert.Error(err, "see 2 lines above ^")
 	assert.ThatNot(err == ErrWrongKey)
 	assert.That(err == ErrSignature)

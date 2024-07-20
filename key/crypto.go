@@ -45,8 +45,26 @@ func NewHandInfo(i *Info) Hand {
 	return Hand{Info: i}
 }
 
+func (h Hand) ValidHandle() bool {
+	return h.Handle != nil
+}
+
+func (h Hand) ValidInfo() bool {
+	return h.Info != nil
+}
+
 func (h Hand) Valid() bool {
-	return h.Handle != nil || h.Info != nil
+	return h.ValidHandle() || h.ValidInfo()
+}
+
+// PubKey returns pubkey. If error occurs it panics. See err2.Handle and Catch.
+func (h Hand) PubKey() []byte {
+	if h.ValidInfo() {
+		return h.Public
+	}
+	assert.That(h.ValidHandle())
+
+	return try.To1(h.CBORPublicKey())
 }
 
 // Handle is key.Handle that has secure access to private key as well. But
