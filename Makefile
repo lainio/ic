@@ -56,6 +56,9 @@ bench3:
 vet: | test
 	@$(GO) vet $(PKGS)
 
+fmt:
+	@golines -t 5 -w -m 80 --ignore-generated .
+
 gofmt:
 	@echo Checking code is gofmted
 	@test -z "$(shell gofmt -s -l -d -e $(SRCDIRS) | tee /dev/stderr)"
