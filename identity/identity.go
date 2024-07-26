@@ -15,6 +15,9 @@ import (
 type Identity struct {
 	node.Node // chains inside these share the same key.ID&Public
 
+	// TODO: should we start to use this in Node as well?
+	// TODO: should we refactor i.e. merge Node and Identity? why so
+	// complicated? Node will be mobed to internal pkg, but still?
 	key.Hand // if ours, we have full [key.Handle] if not only [key.Info]
 }
 
@@ -97,10 +100,15 @@ func (i *Identity) CreateBackupKeysAmount(count int) {
 	i.Node.CreateBackupKeysAmount(count)
 }
 
+// Resolver finds and returns a Resolver Endpoint for the Identity if available.
 func (i Identity) Resolver() string {
 	return i.Node.Resolver()
 }
 
+// Endpoint finds endpoint for the pubkey if available. Endpoint is one of the
+// opts that can be stored to chain blocks. Endpoint is used to communicate thru
+// that pubkey. What kind of communication is possible depends on the identity
+// node behind then pubkey.
 func (i Identity) Endpoint(pubkey key.Public) string {
 	bl, found := i.Find(pubkey)
 	if found {
@@ -109,6 +117,8 @@ func (i Identity) Endpoint(pubkey key.Public) string {
 	return ""
 }
 
+// WebOfTrustInfo returns web-of-trust information of two identitys if they
+// share a trust chain (common root). If not returns nil.
 func (i Identity) WebOfTrust(rhs Identity) *node.WebOfTrust {
 	return i.WebOfTrustInfo(rhs.Node)
 }
@@ -120,6 +130,8 @@ func (i Identity) WebOfTrust(rhs Identity) *node.WebOfTrust {
 func (i Identity) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
 	assert.SLonger(i.InviteeChains, 0)
 	// All InviteeChains are equally useful for Challenge.
+	// TODO: should we still randomize the used index? it's now 0 but it could
+	// be any of the available?
 	return i.InviteeChains[0].Challenge(pinCode, f)
 }
 

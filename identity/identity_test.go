@@ -431,6 +431,10 @@ func testChallenge(t *testing.T) {
 
 // TODO: lots of work still todo: order of these rotation functions cannot be
 // free!!
+//
+// Yes, CreateBackupKeysAmount must be called before first invitation towards us
+// is made, and if we are a Root Identity, its constructor is the place for
+// that.
 
 func testCreateBackupKeysAmount(t *testing.T) {
 	defer assert.PushTester(t)()
