@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/lainio/err2/assert"
-	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/hop"
@@ -109,7 +108,7 @@ func (n *Node) CreateBackupKeysAmount(count int) {
 }
 
 func (n Node) RotateToBackupKey(keyIndex int) (Node, key.Handle) {
-	bkHandle := n.getBackupKey(keyIndex)
+	bkHandle := n.getBackupKeyHandle(keyIndex)
 
 	rotationNode := New(
 		key.InfoFromHandle(bkHandle),
@@ -351,7 +350,7 @@ func (n Node) CheckIntegrity() error {
 			return ErrWrongKey
 		}
 
-		if !c.VerifySignExtended(n.getBKPublic) {
+		if !c.VerifySignaturesWithGetBKID(n.getBKPublic) {
 			return ErrSignature
 		}
 	}
@@ -381,10 +380,10 @@ func (n Node) sharedRootPair(their chain.Chain) chain.Pair {
 }
 
 func (n Node) getBKPublic(keyIndex int) key.Public {
-	return try.To1(n.getBackupKey(keyIndex).CBORPublicKey())
+	return n.BackupKeys.Blocks[keyIndex].Invitee.Public
 }
 
-func (n Node) getBackupKey(keyIndex int) key.Handle {
+func (n Node) getBackupKeyHandle(keyIndex int) key.Handle {
 	assert.SLonger(n.BackupKeys.Blocks, keyIndex)
 
 	return key.NewFromInfo(n.BackupKeys.Blocks[keyIndex].Invitee)
