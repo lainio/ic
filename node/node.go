@@ -95,9 +95,19 @@ func (n *Node) CreateBackupKeysAmount(count int) {
 func (n Node) RotateToBackupKey(keyIndex int) (Node, key.Handle) {
 	bkHandle := n.getBackupKey(keyIndex)
 
-	rotationNode := New(key.InfoFromHandle(bkHandle), chain.WithBackupKeyIndex(keyIndex), chain.WithRotation())
+	rotationNode := New(
+		key.InfoFromHandle(bkHandle),
+		chain.WithBackupKeyIndex(keyIndex),
+		chain.WithRotation(),
+	)
 
-	rotationNode = n.Invite(bkHandle, rotationNode, n.getIDK(), chain.WithBackupKeyIndex(keyIndex), chain.WithRotation())
+	rotationNode = n.Invite(
+		bkHandle,
+		rotationNode,
+		n.getIDK(),
+		chain.WithBackupKeyIndex(keyIndex),
+		chain.WithRotation(),
+	)
 
 	n.CopyBackupKeysTo(&rotationNode)
 	return rotationNode, bkHandle
