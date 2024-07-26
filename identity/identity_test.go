@@ -309,30 +309,35 @@ func testWebOfTrust(t *testing.T) {
 	//        eve(key-rotated)
 	{
 		wot := root2.WebOfTrust(eve)
+		assert.NotNil(wot)
 		assert.Equal(wot.Hops, 3)
 		assert.Equal(wot.CommonInviterLevel, 0)
 		assert.DeepEqual(wot.CommonInviterPubKey, root2.PubKey())
 	}
 	{
 		wot := carol.WebOfTrust(eve)
+		assert.NotNil(wot)
 		assert.Equal(wot.Hops, 2)
 		assert.Equal(wot.CommonInviterLevel, 1)
 		assert.DeepEqual(wot.CommonInviterPubKey, carol.PubKey())
 	}
 	{
 		wot := eve.WebOfTrust(carol)
+		assert.NotNil(wot)
 		assert.Equal(wot.Hops, 2)
 		assert.Equal(wot.CommonInviterLevel, 1)
 		assert.DeepEqual(wot.CommonInviterPubKey, carol.PubKey())
 	}
 	{
 		wot := eve.WebOfTrust(root2)
+		assert.NotNil(wot)
 		assert.Equal(wot.Hops, 3)
 		assert.Equal(wot.CommonInviterLevel, 0)
 		assert.DeepEqual(wot.CommonInviterPubKey, root2.PubKey())
 	}
 	{
 		wot := eve.WebOfTrust(dave)
+		assert.NotNil(wot)
 		assert.Equal(wot.Hops, 1+1, "rotation 1+1")
 		assert.Equal(wot.CommonInviterLevel, 0)
 
@@ -349,6 +354,7 @@ func testWebOfTrust(t *testing.T) {
 	//      frank   grace
 	{
 		wot := frank.WebOfTrust(grace)
+		assert.NotNil(wot)
 		assert.Equal(wot.Hops, 3)
 		assert.Equal(wot.CommonInviterLevel, 1, "alice's lvl = 1")
 	}
@@ -367,6 +373,7 @@ func testWebOfTrust(t *testing.T) {
 	frank = frank.RotateKey(key.New())
 	{
 		wot := frank.WebOfTrust(grace)
+		assert.NotNil(wot)
 		assert.Equal(wot.Hops, 4)
 		assert.Equal(wot.CommonInviterLevel, 1, "alice's lvl = 1")
 	}
