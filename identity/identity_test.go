@@ -177,10 +177,6 @@ func testIdentityInvite(t *testing.T) {
 func testRotateKey(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	// NOTE! this test has dependency to the previous.
-	// TODO: merge them by using run!
-	// TODO: merge ALL similar dependency tests in other packages by using run!
-
 	length := eve.Len()
 	lengths := make([]hop.Distance, length)
 	for i, c := range eve.InviteeChains {
