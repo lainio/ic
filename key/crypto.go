@@ -89,22 +89,6 @@ func InfoFromHandle(h Handle) Info {
 	return Info{ID: h.ID(), Public: pubK}
 }
 
-func VerifySign(pubKey Public, msg []byte, sig Signature) bool {
-	var pubK webauthncose.EC2PublicKeyData
-	try.To(cbor.Unmarshal(pubKey, &pubK))
-
-	hash := crypto.SHA256.New()
-	try.To1(hash.Write(msg))
-
-	pk := &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     big.NewInt(0).SetBytes(pubK.XCoord),
-		Y:     big.NewInt(0).SetBytes(pubK.YCoord),
-	}
-
-	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)
-}
-
 func New() Handle {
 	return try.To1(myStore.NewKeyHandle())
 }
@@ -129,7 +113,24 @@ func RandSlice(n int) []byte {
 	return b
 }
 
-type Signature = []byte
+type Signature []byte
+
+func (sig Signature) Verify(pubKey Public, msg []byte) bool {
+	var pubK webauthncose.EC2PublicKeyData
+	try.To(cbor.Unmarshal(pubKey, &pubK))
+
+	hash := crypto.SHA256.New()
+	try.To1(hash.Write(msg))
+
+	pk := &ecdsa.PublicKey{
+		Curve: elliptic.P256(),
+		X:     big.NewInt(0).SetBytes(pubK.XCoord),
+		Y:     big.NewInt(0).SetBytes(pubK.YCoord),
+	}
+
+	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)
+}
+
 type Hash = []byte // TODO: [32]byte! we are using SHA256
 
 func EqualBytes(a, b []byte) bool {

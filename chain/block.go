@@ -83,10 +83,9 @@ func EqualBlocks(b1, b2 Block) bool {
 }
 
 func (b Block) VerifySign(invitersPubKey key.Public) bool {
-	return key.VerifySign(
+	return b.InvitersSignature.Verify(
 		invitersPubKey,
 		b.ExcludeBytes(),
-		b.InvitersSignature,
 	)
 }
 

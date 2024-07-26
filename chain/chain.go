@@ -275,8 +275,8 @@ func (c Chain) FindLevel(IDK key.Public) (lvl hop.Distance) {
 func (c Chain) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
 	pubKey := c.LastBlock().Public()
 	challengeBlock, sigBlock := NewVerifyBlock(pinCode)
-	sig := f(challengeBlock.Bytes())
-	return key.VerifySign(pubKey, sigBlock.Bytes(), sig)
+	signature := f(challengeBlock.Bytes())
+	return signature.Verify(pubKey, sigBlock.Bytes())
 }
 
 func (c Chain) firstBlock() Block {
