@@ -120,7 +120,7 @@ func testRead(t *testing.T) {
 
 	c2 := testChain.Clone()
 	assert.SLen(c2.Blocks, 2)
-	assert.That(c2.VerifySign())
+	assert.That(c2.VerifySignatures())
 }
 
 func testVerifyChainFail(t *testing.T) {
@@ -128,19 +128,19 @@ func testVerifyChainFail(t *testing.T) {
 
 	c2 := testChain.Clone()
 	assert.SLen(c2.Blocks, 2)
-	assert.That(c2.VerifySign())
+	assert.That(c2.VerifySignatures())
 
 	b2 := c2.Blocks[1]
 	b2.InvitersSignature[len(b2.InvitersSignature)-1] += 0x01
 
-	assert.That(!c2.VerifySign())
+	assert.That(!c2.VerifySignatures())
 }
 
 func testVerifyChain(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(testChain.Blocks, 2)
-	assert.That(testChain.VerifySign())
+	assert.That(testChain.VerifySignatures())
 
 	newInvitee := key.New()
 	level := 3
@@ -148,16 +148,16 @@ func testVerifyChain(t *testing.T) {
 		WithPosition(level))
 
 	assert.SLen(testChain.Blocks, 3)
-	assert.That(testChain.VerifySign())
+	assert.That(testChain.VerifySignatures())
 }
 
 func testInvitation(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(alice.Blocks, 3)
-	assert.That(alice.Chain.VerifySign())
+	assert.That(alice.Chain.VerifySignatures())
 	assert.SLen(bob.Blocks, 3)
-	assert.That(bob.Chain.VerifySign())
+	assert.That(bob.Chain.VerifySignatures())
 
 	cecilia := entity{
 		Handle: key.New(),
@@ -165,7 +165,7 @@ func testInvitation(t *testing.T) {
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
 		WithPosition(1))
 	assert.SLen(cecilia.Blocks, 4)
-	assert.That(cecilia.Chain.VerifySign())
+	assert.That(cecilia.Chain.VerifySignatures())
 	assert.That(!SameRoot(testChain, cecilia.Chain), "we have two different roots")
 	assert.That(SameRoot(alice.Chain, cecilia.Chain))
 }
@@ -197,7 +197,7 @@ func testCommonInviterLevel(t *testing.T) {
 	//                ↓
 	//             cecilia
 	assert.SLen(cecilia.Blocks, 4)
-	assert.That(cecilia.Chain.VerifySign())
+	assert.That(cecilia.Chain.VerifySignatures())
 
 	david := entity{
 		Handle: key.New(),
@@ -290,7 +290,7 @@ func testSameInviter(t *testing.T) {
 	cecilia.Chain = bob.Invite(bob.Handle, key.InfoFromHandle(cecilia),
 		WithPosition(1))
 	assert.SLen(cecilia.Blocks, 4)
-	assert.That(cecilia.Chain.VerifySign())
+	assert.That(cecilia.Chain.VerifySignatures())
 	assert.That(bob.IsInviterFor(cecilia.Chain))
 	assert.That(!alice.IsInviterFor(cecilia.Chain))
 }

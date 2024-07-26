@@ -92,7 +92,7 @@ func testInvite(t *testing.T) {
 	{
 		c := alice.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
-		assert.That(c.VerifySign())
+		assert.That(c.VerifySignatures())
 	}
 
 	bob.Node = alice.Invite(
@@ -106,7 +106,7 @@ func testInvite(t *testing.T) {
 	{
 		c := bob.InviteeChains[0]
 		assert.SLen(c.Blocks, 3) // we know how long the chain is now
-		assert.That(c.VerifySign())
+		assert.That(c.VerifySignatures())
 	}
 
 	// Bob and Alice share same chain root == Root1
@@ -126,7 +126,7 @@ func testInvite(t *testing.T) {
 	{
 		c := carol.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
-		assert.That(c.VerifySign())
+		assert.That(c.VerifySignatures())
 	}
 
 	// Alice is in Root1 chain and Carol in Root2 chain, so no common ground.
@@ -146,7 +146,7 @@ func testInvite(t *testing.T) {
 	{
 		c := eve.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
-		assert.That(c.VerifySign())
+		assert.That(c.VerifySignatures())
 	}
 
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
@@ -164,7 +164,7 @@ func testInvite(t *testing.T) {
 	{
 		c := dave.InviteeChains[1]
 		assert.SLen(c.Blocks, 2)
-		assert.That(c.VerifySign())
+		assert.That(c.VerifySignatures())
 	}
 	// Dave joins to Root2 but until now, that's why Eve is not member of Root2
 	common = root2.CommonChain(eve.Node)

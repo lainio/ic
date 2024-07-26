@@ -82,7 +82,7 @@ func EqualBlocks(b1, b2 Block) bool {
 		b1.Rotation == b2.Rotation
 }
 
-func (b Block) VerifySign(invitersPubKey key.Public) bool {
+func (b Block) VerifySignature(invitersPubKey key.Public) bool {
 	return b.InvitersSignature.Verify(
 		invitersPubKey,
 		b.ExcludeBytes(),
