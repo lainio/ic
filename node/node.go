@@ -12,6 +12,8 @@ import (
 )
 
 type Node struct {
+	// TODO: found a BUG:
+	//  - this chain must be created when the root Node is created. See New
 	BackupKeys chain.Chain // The Name of chain is enough
 
 	InviteeChains []chain.Chain
@@ -53,7 +55,7 @@ func NewWebOfTrust(n1, n2 Node) *WebOfTrust {
 }
 
 // New constructs a new Root Node.
-//   - it's root node because it has a IC!
+//   - it's root node because it has a IC! TODO: what this means??
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
 func New(pubKey key.Info, flags ...chain.Opts) Node {
@@ -74,13 +76,27 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 //   - Maximum amount is two (12).
 func (n *Node) CreateBackupKeysAmount(count int) {
 	// TODO: first block is the root block! take care of that.
+	//  - explain!! better!
+	//
 	// first key in this chain is the genesis key for the whole Identity so
 	// it's a key that cannot be used for rotation! We should think about the
 	// API again. Maybe index is correct term later but we should explain what
 	// the count here means.
+	//  - what this means? this isn't totally clear after break
+	// questions, TODO:
+	//  - is genesis block key stored here or not? should it be?
+	// possible answers, TODO:
+	//  = backup keys is one independent chain which type only binds it to the
+	//  node? That's why we don't need to bind genesis key with the other
+	//  genesis key or what ever it is?
+	//  = *remember* that we have two types of Nodes them who can invite and
+	//  them (most should be) who are waiting to be invited
+	// TODO: => backupkeys must be created before first invitation to us is
+	// made OR we cannot bind safe BackupKeys to this node and the rest of the
+	// chains.
+	assert.SLen(n.BackupKeys.Blocks, 0, "you can create backup keys only once")
 	assert.NotZero(count)
 	assert.NotEqual(count, 1, "two backup keys is minimum")
-	assert.SLen(n.BackupKeys.Blocks, 0)
 
 	inviterKH := key.New()
 	n.BackupKeys = chain.New(key.InfoFromHandle(inviterKH))
@@ -110,9 +126,9 @@ func (n Node) CopyBackupKeysTo(tgt *Node) *Node {
 	return tgt
 }
 
-// InviteWithRotateKey is method to add invitee's node's invitation chains (IC)
-// to all of those ICs of us (n Node) that invitee doesn't yet belong.
-//   - if iviter, inviterNew are the same this normal Invite
+// InviteWithRotateKey is method to add to all of those ICs of us (inviter, n
+// Node) that invitee doesn't yet belong.
+//   - if inviter == inviterNew then this's a normal Invite
 func (n Node) InviteWithRotateKey(
 	// TODO: order of the arguments?
 	inviteesNode Node,
@@ -150,8 +166,8 @@ func (n Node) InviteWithRotateKey(
 	return rn
 }
 
-// Invite is method to add invitee's node's invitation chains (IC) to all of
-// those ICs of us (n Node) that invitee doesn't yet belong.
+// Invite is method to add to those ICs of us (inviter, n Node) that invitee
+// doesn't yet belong.
 // NOTE! Use identity.Invite at the API lvl.
 // This has worked since we started, but at the identity level we need symmetric
 // invitation system. TODO: <- check what this comment means!
