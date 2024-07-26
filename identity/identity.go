@@ -58,8 +58,9 @@ func (i Identity) InviteWithRotateKey( // TODO: rename ..WithRotatedKey() <- don
 	opts ...chain.Opts,
 ) Identity {
 	rotatingKeyHandle := key.New()
-	rhs.Node = i.Node.InviteWithRotateKey(rhs.Node,
+	rhs.Node = i.Node.InviteWithRotateKey(
 		i.Handle, rotatingKeyHandle,
+		rhs.Node,
 		key.InfoFromHandle(rhs.Handle), opts...,
 	)
 	return rhs
@@ -70,7 +71,7 @@ func (i Identity) Invite(rhs Identity, opts ...chain.Opts) Identity {
 	assert.That(i.ValidHandle())
 	assert.That(rhs.ValidInfo())
 
-	rhs.Node = i.Node.Invite(rhs.Node, i.Handle, *rhs.Info, opts...)
+	rhs.Node = i.Node.Invite(i.Handle, rhs.Node, *rhs.Info, opts...)
 	return rhs
 }
 

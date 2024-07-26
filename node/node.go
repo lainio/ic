@@ -95,11 +95,19 @@ func (n *Node) CreateBackupKeysAmount(count int) {
 func (n Node) RotateToBackupKey(keyIndex int) (Node, key.Handle) {
 	bkHandle := n.getBackupKey(keyIndex)
 
-	rotationNode := New(key.InfoFromHandle(bkHandle),
-		chain.WithBackupKeyIndex(keyIndex), chain.WithRotation())
+	rotationNode := New(
+		key.InfoFromHandle(bkHandle),
+		chain.WithBackupKeyIndex(keyIndex),
+		chain.WithRotation(),
+	)
 
-	rotationNode = n.Invite(rotationNode, bkHandle, n.getIDK(),
-		chain.WithBackupKeyIndex(keyIndex), chain.WithRotation())
+	rotationNode = n.Invite(
+		bkHandle,
+		rotationNode,
+		n.getIDK(),
+		chain.WithBackupKeyIndex(keyIndex),
+		chain.WithRotation(),
+	)
 
 	n.CopyBackupKeysTo(&rotationNode)
 	return rotationNode, bkHandle
@@ -114,9 +122,8 @@ func (n Node) CopyBackupKeysTo(tgt *Node) *Node {
 // to all of those ICs of us (n Node) that invitee doesn't yet belong.
 //   - if iviter, inviterNew are the same this normal Invite
 func (n Node) InviteWithRotateKey(
-	// TODO: order of the arguments?
-	inviteesNode Node,
 	inviter, inviterNew key.Handle,
+	inviteesNode Node,
 	invitee key.Info,
 	opts ...chain.Opts,
 ) (
@@ -157,15 +164,14 @@ func (n Node) InviteWithRotateKey(
 // invitation system. TODO: <- check what this comment means!
 // TODO: move chain, crypto, and node to internal
 func (n Node) Invite(
-	// TODO: order of the arguments?
-	inviteesNode Node,
 	inviter key.Handle,
+	inviteesNode Node,
 	invitee key.Info,
 	opts ...chain.Opts,
 ) (
 	rn Node,
 ) {
-	return n.InviteWithRotateKey(inviteesNode, inviter, inviter, invitee, opts...)
+	return n.InviteWithRotateKey(inviter, inviter, inviteesNode, invitee, opts...)
 }
 
 func (n Node) rotationChain() (yes bool) {
