@@ -30,8 +30,13 @@ type ID = []byte
 // capable signing or is it a public key pair only for challenging and
 // verifying.
 type Hand struct {
-	Handle // is interface, so it can be nil
-	*Info  // can be nil, that's why we need pointer
+	Handle // is interface, so it can be nil already. TODO: should this be
+	// Maybe/Option/... to make this Hand to real enum type?
+
+	// can be nil, that's why we need pointer. TODO: better would be to have
+	// private info and accessor to info or to use somekind of Maybe, Option
+	// type. TODO: or should we make interface of Info, or then Hand?
+	*Info
 }
 
 // NewHand creates a hand holding a [Handle] and [Info].
