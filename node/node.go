@@ -1,9 +1,12 @@
 package node
 
 import (
+	"bytes"
+	"encoding/gob"
 	"errors"
 
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/hop"
@@ -60,6 +63,8 @@ func NewWebOfTrust(n1, n2 Node) *WebOfTrust {
 func New(pubKey key.Info, flags ...chain.Opts) Node {
 	n := Node{InviteeChains: make([]chain.Chain, 1, 12)}
 	n.InviteeChains[0] = chain.New(pubKey, flags...)
+	// TODO: how about BackupKeys? They much match our identity keys.
+	//  - we cannot creat BackupKeys if we lose control of our IDK (its privK)
 	return n
 }
 
@@ -73,10 +78,7 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 //   - It can be done only once.
 //   - Minimum amount is two (2).
 //   - Maximum amount is two (12).
-func (n *Node) CreateBackupKeysAmount(count int) {
-	// TODO: first block is the root block! take care of that.
-	//  - explain!! better!
-	//
+func (n *Node) CreateBackupKeysAmount(count int, inviterKH key.Handle) {
 	// first key in this chain is the genesis key for the whole Identity so
 	// it's a key that cannot be used for rotation! We should think about the
 	// API again. Maybe index is correct term later but we should explain what
@@ -97,7 +99,16 @@ func (n *Node) CreateBackupKeysAmount(count int) {
 	assert.NotZero(count)
 	assert.NotEqual(count, 1, "two backup keys is minimum")
 
-	inviterKH := key.New()
+	// we can create BackupKeys only if we still control our IDK or..
+	// we haven't been invited *yet*.
+	if len(n.InviteeChains) > 0 {
+		assert.INotNil(inviterKH)
+	} else {
+		// TODO: this is the one that must be used in invitation too
+		//  - it is when [Identity] is used to handle invitation
+		inviterKH = key.New()
+	}
+
 	n.BackupKeys = chain.New(key.InfoFromHandle(inviterKH))
 	count = count - 1
 	for range count {
@@ -359,6 +370,24 @@ func (n Node) CheckIntegrity() error {
 
 func (n Node) Len() int {
 	return len(n.InviteeChains)
+}
+
+// TODO: start to use CBOR? for everything, all add as format?
+
+// NewNodeFromData TODO:
+func NewNodeFromData(d []byte) (n Node) {
+	r := bytes.NewReader(d)
+	dec := gob.NewDecoder(r)
+	try.To(dec.Decode(&n))
+	return n
+}
+
+func (n Node) Bytes() []byte {
+	// TODO: CBOR type
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	try.To(enc.Encode(n))
+	return buf.Bytes()
 }
 
 func (n Node) sharedRoot(their chain.Chain) bool {
