@@ -25,7 +25,7 @@ var (
 
 type entity struct {
 	Node
-	key.Handle // TODO: use key.Hand?
+	key.Handle // TODO: use key.Hand? Yes!
 }
 
 func TestMain(m *testing.M) {
@@ -64,6 +64,7 @@ func Test_all(t *testing.T) {
 	t.Run("find", testFind)
 	t.Run("web of trust info", testWebOfTrustInfo)
 	t.Run("integrity", testCheckIntegrity)
+	t.Run("marshaling", testMarshaling)
 }
 
 func testNewRootNode(t *testing.T) {
@@ -396,4 +397,15 @@ func testCheckIntegrity(t *testing.T) {
 	assert.Error(err, "see 2 lines above ^")
 	assert.ThatNot(err == ErrWrongKey)
 	assert.That(err == ErrSignature)
+}
+
+func testMarshaling(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	{
+		b := alice.Bytes()
+		assert.SNotNil(b)
+		alice2 := NewNodeFromData(b)
+		try.To(alice2.CheckIntegrity())
+	}
 }
