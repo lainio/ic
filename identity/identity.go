@@ -97,7 +97,8 @@ func (i Identity) RotateToBackupKey(keyIndex int) Identity {
 }
 
 func (i *Identity) CreateBackupKeysAmount(count int) {
-	i.Node.CreateBackupKeysAmount(count)
+	assert.That(i.ValidHandle())
+	i.Node.CreateBackupKeysAmount(count, i.Handle)
 }
 
 // Resolver finds and returns a Resolver Endpoint for the Identity if available.
