@@ -38,7 +38,9 @@ func TestIdentity_All(t *testing.T) {
 
 	t.Run("create all", testSetup)
 	t.Run("new identity", testNewIdentity)
+	// TODO: new identity with BackupKeys aka before
 	t.Run("invite", testIdentityInvite)
+	// TODO: new invite with with simulated network communication
 	t.Run("rotate key", testRotateKey)
 	t.Run("rotate and invite", testRotateAndInvite)
 	t.Run("trust level", testTrustLevel)
@@ -47,7 +49,7 @@ func TestIdentity_All(t *testing.T) {
 	t.Run("web of trust", testWebOfTrust)
 	t.Run("challenge", testChallenge)
 	t.Run("great backup keys", testCreateBackupKeysAmount)
-	t.Run("rotate backup key", testRotateToBackupKey)
+	t.Run("rotate backup key after", testRotateToBackupKey)
 }
 
 func testSetup(t *testing.T) {
@@ -430,11 +432,11 @@ func testChallenge(t *testing.T) {
 }
 
 // TODO: lots of work still todo: order of these rotation functions cannot be
-// free!!
+// free!! WIP
 //
 // Yes, CreateBackupKeysAmount must be called before first invitation towards us
 // is made, and if we are a Root Identity, its constructor is the place for
-// that.
+// that. WIP
 
 func testCreateBackupKeysAmount(t *testing.T) {
 	defer assert.PushTester(t)()
