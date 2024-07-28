@@ -73,8 +73,8 @@ func Hops(lhs, rhs Chain) (hop.Distance, hop.Distance) {
 // chain with this. If it's a rotation block, the first one, we are creating
 // backup chain for several keys.
 //
-// NOTE: New is important part of key rotation and everything where we will
-// construct our key concepts from key pair.
+// NOTE: New is important part of key rotation and everything where we are
+// constructing key concepts from a key pair.
 func New(keyInfo key.Info, flags ...Opts) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
@@ -114,11 +114,11 @@ func (c Chain) Invite(
 	invitee key.Info,
 	opts ...Opts,
 ) (nc Chain) {
-	// We have backup keys which cannot handle this assert!
+	// We have *now* backup keys which cannot handle this assert!
 	//	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
 	newBlock := Block{
-		HashToPrev: c.hashToLeaf(),
+		HashToPrev: c.leafHash(),
 		Invitee:    invitee,
 	}
 	newBlock.Options = *NewOptions(opts...)
@@ -181,7 +181,7 @@ func (c Chain) LeafPubKey() key.Public {
 	return c.LastBlock().Public()
 }
 
-func (c Chain) hashToLeaf() []byte {
+func (c Chain) leafHash() []byte {
 	if c.Blocks == nil {
 		return nil
 	}
