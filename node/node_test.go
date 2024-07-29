@@ -408,4 +408,46 @@ func testMarshaling(t *testing.T) {
 		alice2 := NewNodeFromData(b)
 		try.To(alice2.CheckIntegrity())
 	}
+	{
+		b := bob.Bytes()
+		assert.SNotNil(b)
+		bob2 := NewNodeFromData(b)
+		try.To(bob2.CheckIntegrity())
+	}
+	{
+		b := carol.Bytes()
+		assert.SNotNil(b)
+		carol2 := NewNodeFromData(b)
+		try.To(carol2.CheckIntegrity())
+	}
+	{
+		b := dave.Bytes()
+		assert.SNotNil(b)
+		dave2 := NewNodeFromData(b)
+		try.To(dave2.CheckIntegrity())
+	}
+	{
+		b := eve.Bytes()
+		assert.SNotNil(b)
+		eve2 := NewNodeFromData(b)
+		try.To(eve2.CheckIntegrity())
+	}
+	{
+		b := frank.Bytes()
+		assert.SNotNil(b)
+		frank2 := NewNodeFromData(b)
+		try.To(frank2.CheckIntegrity())
+	}
+	{
+		b := root1.Bytes()
+		assert.SNotNil(b)
+		root12 := NewNodeFromData(b)
+		try.To(root12.CheckIntegrity())
+	}
+	{
+		b := root2.Bytes()
+		assert.SNotNil(b)
+		root22 := NewNodeFromData(b)
+		try.To(root22.CheckIntegrity())
+	}
 }
