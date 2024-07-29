@@ -39,7 +39,10 @@ func TestIdentity_All(t *testing.T) {
 	t.Run("create all", testSetup)
 	t.Run("new identity", testNewIdentity)
 	// TODO: new identity with BackupKeys aka before
+
 	t.Run("invite", testIdentityInvite)
+
+	t.Run("invite with clone firt: REAL version", testIdentityCloneFirstAndInvite) // TODO: replace in future
 	// TODO: new invite with with simulated network communication
 	t.Run("rotate key", testRotateKey)
 	t.Run("rotate and invite", testRotateAndInvite)
@@ -95,6 +98,40 @@ func testNewIdentity(t *testing.T) {
 	// -- joining one
 	bobID := New(key.New())
 	assert.SLen(bobID.InviteeChains, 0)
+}
+
+func testIdentityCloneFirstAndInvite(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	// Root1 chains start here:
+	alice2 := NewFromData(alice.Bytes())
+	//assert.Equal(alice2.Len(), 0, "=> is non-root identity")
+	alice2 = root3.Invite(alice2, chain.WithPosition(1))
+	//      root3
+	//        ↓
+	//      alice2
+	assert.Equal(alice2.Len(), 2)
+	{
+		c := alice2.InviteeChains[0]
+		assert.SLen(c.Blocks, 2)
+		assert.That(c.VerifySignatures())
+	}
+
+	bob2 := NewFromData(bob.Bytes())
+	bob2 = alice.Invite(bob2, chain.WithPosition(1))
+	//      root3
+	//        ↓
+	//      alice -> bob2
+	assert.Equal(bob2.Len(), 1)
+	{
+		c := bob2.InviteeChains[0]
+		assert.SLen(c.Blocks, 3) // we know how long the chain is now
+		assert.That(c.VerifySignatures())
+	}
+
+	// Bob and Alice share same chain root == Root1
+	common := alice.CommonChain(bob2.Node)
+	assert.SNotNil(common.Blocks)
 }
 
 func testIdentityInvite(t *testing.T) {

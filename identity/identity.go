@@ -55,6 +55,23 @@ func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	}
 }
 
+func NewFromData(d []byte) (i Identity) {
+	i.Node = node.NewFromData(d)
+	idk := i.Node.GetIDK() // TODO: If not Invited yet we need IDK!
+	i.Hand = key.Hand{
+		Handle: nil,
+		Info:   &idk,
+	}
+
+	return i
+}
+
+func (i Identity) Bytes() []byte {
+	// TODO: CBOR type
+	// It's enough to get Node data for read-only Identities
+	return i.Node.Bytes()
+}
+
 // InviteWithRotateKey we first create new key for this specefic invitation.
 // this is like double blinding. minimize correlation. TODO: does this still
 // work is the real world,
