@@ -87,6 +87,8 @@ func New(keyInfo key.Info, flags ...Opts) Chain {
 	return chain
 }
 
+// NewChainFromData creates a new Chain from byte data.
+// NOTE that [NewBlockFromData] creates a new Block.
 func NewChainFromData(d []byte) (c Chain) {
 	r := bytes.NewReader(d)
 	dec := gob.NewDecoder(r)
@@ -98,6 +100,7 @@ func (c Chain) IsNil() bool {
 	return c.Blocks == nil
 }
 
+// Bytes return Chain's public data for persistency.
 func (c Chain) Bytes() []byte {
 	// TODO: CBOR type
 	var buf bytes.Buffer
