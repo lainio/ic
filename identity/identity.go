@@ -9,16 +9,18 @@ import (
 )
 
 // Identity is high level entity to encapsulate all the needed information to
-// present either our own identity or their identity. When we handle their
-// identity our [key.Hand] is in read-only mode, i.e., we don't have full
-// [key.Handle] but [key.Info] only.
+// present either our own identity or their identity. With the their identity
+// the [key.Hand] is in read-only mode, i.e., we don't have full [key.Handle]
+// but [key.Info] only. Hand -> Handle -> Key, or Hand -> Info -> Key.Public
 type Identity struct {
-	node.Node // chains inside these share the same key.ID&Public
+	// Node is the persistent and public part of our Identity. Only our keys
+	// are private.
+	// chains inside these share the same key.ID&Public.
+	node.Node
 
-	// TODO: should we start to use this in Node as well?
-	// TODO: should we refactor i.e. merge Node and Identity? why so
-	// complicated? Node will be mobed to internal pkg, but still?
-	key.Hand // if ours, we have full [key.Handle] if not only [key.Info]
+	// Our key(s) are here. This private in away.
+	// However, if ours, we have full [key.Handle] if not only [key.Info]
+	key.Hand
 }
 
 // New creates a new joining identity with the given [key.Handle]. The 'joining'
