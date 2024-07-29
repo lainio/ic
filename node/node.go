@@ -130,7 +130,7 @@ func (n Node) RotateToBackupKey(keyIndex int) (Node, key.Handle) {
 	rotationNode = n.Invite(
 		bkHandle,
 		rotationNode,
-		n.getIDK(),
+		n.GetIDK(),
 		chain.WithBackupKeyIndex(keyIndex),
 		chain.WithRotation(),
 	)
@@ -374,8 +374,8 @@ func (n Node) Len() int {
 
 // TODO: start to use CBOR? for everything, all add as format?
 
-// NewNodeFromData TODO:
-func NewNodeFromData(d []byte) (n Node) {
+// NewFromData TODO:
+func NewFromData(d []byte) (n Node) {
 	r := bytes.NewReader(d)
 	dec := gob.NewDecoder(r)
 	try.To(dec.Decode(&n))
@@ -418,7 +418,8 @@ func (n Node) getBackupKeyHandle(keyIndex int) key.Handle {
 	return key.NewFromInfo(n.BackupKeys.Blocks[keyIndex].Invitee)
 }
 
-func (n Node) getIDK() key.Info {
+// GetIDK return Node's current IDK as [key.Info].
+func (n Node) GetIDK() key.Info {
 	assert.SLonger(n.InviteeChains, 0)
 	assert.SLonger(n.InviteeChains[0].Blocks, 0)
 
