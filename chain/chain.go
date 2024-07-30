@@ -22,7 +22,7 @@ type Chain struct {
 var Nil = Chain{Blocks: nil}
 
 func SameRoot(c1, c2 Chain) bool {
-	b1, b2 := c1.firstBlock(), c2.firstBlock()
+	b1, b2 := c1.FirstBlock(), c2.FirstBlock()
 	return EqualBlocks(b1, b2)
 }
 
@@ -200,7 +200,7 @@ func (c Chain) VerifySignaturesWithGetBKID(getBKID getBackupKey) bool {
 	}
 
 	// start with the root key
-	invitersPubKey := c.firstBlock().Public()
+	invitersPubKey := c.FirstBlock().Public()
 
 	for _, b := range c.Blocks[1:] {
 		if b.BackupKeyIndex != 0 {
@@ -282,7 +282,7 @@ func (c Chain) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
 	return signature.Verify(pubKey, sigBlock.Bytes())
 }
 
-func (c Chain) firstBlock() Block {
+func (c Chain) FirstBlock() Block {
 	return c.Blocks[0]
 }
 
