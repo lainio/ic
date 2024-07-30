@@ -232,6 +232,8 @@ func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 		hops  = hop.NewNotConnected()
 		lvl   = hop.NewNotConnected()
 	)
+
+	// find the shortest if possible
 	for _, c := range n.InviteeChains {
 		_, idkFound := c.Find(digest.RootIDK)
 		if idkFound {
@@ -239,7 +241,7 @@ func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 			if lvl.PickShorter(currentLvl) {
 				// locations are in the same IC: - 1 if for our own block
 				hops = c.Len() - 1 - lvl
-				found = idkFound
+				found = true
 			}
 		}
 	}
