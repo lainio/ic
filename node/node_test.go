@@ -402,52 +402,27 @@ func testCheckIntegrity(t *testing.T) {
 func testMarshaling(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	{
-		b := alice.Bytes()
-		assert.SNotNil(b)
-		alice2 := NewFromData(b)
-		try.To(alice2.CheckIntegrity())
+	tests := []struct {
+		name string
+		node Node
+	}{
+		{"alice", alice.Node},
+		{"bob", bob.Node},
+		{"carol", carol.Node},
+		{"dave", dave.Node},
+		{"eve", eve.Node},
+		{"frank", frank.Node},
+		{"root1", root1.Node},
+		{"root2", root2.Node},
 	}
-	{
-		b := bob.Bytes()
-		assert.SNotNil(b)
-		bob2 := NewFromData(b)
-		try.To(bob2.CheckIntegrity())
-	}
-	{
-		b := carol.Bytes()
-		assert.SNotNil(b)
-		carol2 := NewFromData(b)
-		try.To(carol2.CheckIntegrity())
-	}
-	{
-		b := dave.Bytes()
-		assert.SNotNil(b)
-		dave2 := NewFromData(b)
-		try.To(dave2.CheckIntegrity())
-	}
-	{
-		b := eve.Bytes()
-		assert.SNotNil(b)
-		eve2 := NewFromData(b)
-		try.To(eve2.CheckIntegrity())
-	}
-	{
-		b := frank.Bytes()
-		assert.SNotNil(b)
-		frank2 := NewFromData(b)
-		try.To(frank2.CheckIntegrity())
-	}
-	{
-		b := root1.Bytes()
-		assert.SNotNil(b)
-		root12 := NewFromData(b)
-		try.To(root12.CheckIntegrity())
-	}
-	{
-		b := root2.Bytes()
-		assert.SNotNil(b)
-		root22 := NewFromData(b)
-		try.To(root22.CheckIntegrity())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer assert.PushTester(t)()
+
+			b := tt.node.Bytes()
+			assert.SNotNil(b)
+			node2 := NewFromData(b)
+			try.To(node2.CheckIntegrity())
+		})
 	}
 }
