@@ -56,13 +56,13 @@ func NewWebOfTrust(n1, n2 Node) *WebOfTrust {
 	return n1.WebOfTrustInfo(n2)
 }
 
-// New constructs a new Root Node.
-//   - it's root node because it has a IC! TODO: what this means??
+// NewRoot constructs a new Root Node.
+//   - it's root node because it has a self started IC!
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
-func New(pubKey key.Info, flags ...chain.Opts) Node {
+func NewRoot(pubKey key.Info, flags ...chain.Opts) Node { // TODO: why key.Info
 	n := Node{InviteeChains: make([]chain.Chain, 1, 12)}
-	n.InviteeChains[0] = chain.New(pubKey, flags...)
+	n.InviteeChains[0] = chain.New(pubKey, flags...) // TODO: convert here?
 	// TODO: how about BackupKeys? They much match our identity keys.
 	//  - we cannot creat BackupKeys if we lose control of our IDK (its privK)
 	return n
@@ -121,7 +121,7 @@ func (n *Node) CreateBackupKeysAmount(count int, inviterKH key.Handle) {
 func (n Node) RotateToBackupKey(keyIndex int) (Node, key.Handle) {
 	bkHandle := n.getBackupKeyHandle(keyIndex)
 
-	rotationNode := New(
+	rotationNode := NewRoot(
 		key.InfoFromHandle(bkHandle),
 		chain.WithBackupKeyIndex(keyIndex),
 		chain.WithRotation(),
@@ -297,6 +297,15 @@ func (n Node) IsInviterFor(their Node) bool {
 	return false
 }
 
+func (n Node) IsRoot() bool {
+	return (n.Len() == 1 && n.InviteeChains[0].Len() == 1) ||
+		(n.Len() > 1 &&
+			key.EqualBytes(
+				n.InviteeChains[0].FirstBlock().Invitee.Public,
+				n.InviteeChains[1].LastBlock().Invitee.Public,
+			))
+}
+
 // OneHop returns true if two nodes are from one hop away.
 func (n Node) OneHop(their Node) bool {
 	chainPairs := n.CommonChains(their)
@@ -370,7 +379,7 @@ func (n Node) CheckIntegrity() error {
 	return nil
 }
 
-func (n Node) Len() int {
+func (n Node) Len() int { // TODO: rename -> ICLen
 	return len(n.InviteeChains)
 }
 

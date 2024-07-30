@@ -51,8 +51,8 @@ func setup() {
 	frank.Handle = key.New()
 	grace.Handle = key.New()
 
-	root1.Node = New(key.InfoFromHandle(root1), chain.WithEndpoint("root1", true))
-	root2.Node = New(key.InfoFromHandle(root2), chain.WithEndpoint("root2", true))
+	root1.Node = NewRoot(key.InfoFromHandle(root1), chain.WithEndpoint("root1", true))
+	root2.Node = NewRoot(key.InfoFromHandle(root2), chain.WithEndpoint("root2", true))
 }
 
 func Test_all(t *testing.T) {
@@ -65,16 +65,17 @@ func Test_all(t *testing.T) {
 	t.Run("web of trust info", testWebOfTrustInfo)
 	t.Run("integrity", testCheckIntegrity)
 	t.Run("marshaling", testMarshaling)
+	t.Run("is root", testIsRoot)
 }
 
 func testNewRootNode(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	aliceNode := New(key.InfoFromHandle(alice))
+	aliceNode := NewRoot(key.InfoFromHandle(alice))
 	assert.SLen(aliceNode.InviteeChains, 1)
 	assert.SLen(aliceNode.InviteeChains[0].Blocks, 1)
 
-	bobNode := New(key.InfoFromHandle(bob))
+	bobNode := NewRoot(key.InfoFromHandle(bob))
 	assert.SLen(bobNode.InviteeChains, 1)
 }
 
@@ -135,7 +136,7 @@ func testInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave.Node = New(key.InfoFromHandle(dave), chain.WithEndpoint("dave", true))
+	dave.Node = NewRoot(key.InfoFromHandle(dave), chain.WithEndpoint("dave", true))
 	eve.Node = dave.Invite(
 		dave.Handle,
 		eve.Node,
@@ -325,7 +326,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.ThatNot(wot.SameChain)
 
 	root3 := entity{Handle: key.New()}
-	root3.Node = New(key.InfoFromHandle(root3), chain.WithEndpoint("root3", true))
+	root3.Node = NewRoot(key.InfoFromHandle(root3), chain.WithEndpoint("root3", true))
 	heidi := entity{Handle: key.New()}
 	heidi.Node = root3.Invite(
 		root3.Handle,
@@ -423,6 +424,32 @@ func testMarshaling(t *testing.T) {
 			assert.SNotNil(b)
 			node2 := NewFromData(b)
 			try.To(node2.CheckIntegrity())
+		})
+	}
+}
+
+func testIsRoot(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	tests := []struct {
+		name    string
+		node    Node
+		wantYes bool
+	}{
+		{"root1", root1.Node, true},
+		{"root2", root2.Node, true},
+		{"dave", dave.Node, true},
+		{"alice", alice.Node, false},
+		{"bob", bob.Node, false},
+		{"eve", eve.Node, false},
+		{"grace", grace.Node, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer assert.PushTester(t)()
+
+			yes := tt.node.IsRoot()
+			assert.That(yes == tt.wantYes)
 		})
 	}
 }
