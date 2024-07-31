@@ -420,10 +420,16 @@ func testMarshaling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			defer assert.PushTester(t)()
 
+			length := tt.node.Len()
+			idk := tt.node.GetIDK().Public
+
 			b := tt.node.Bytes()
 			assert.SNotNil(b)
 			node2 := NewFromData(b)
+
 			try.To(node2.CheckIntegrity())
+			assert.Equal(node2.Len(), length)
+			assert.DeepEqual(node2.GetIDK().Public, idk)
 		})
 	}
 }
