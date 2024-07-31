@@ -74,38 +74,25 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 }
 
 // CreateBackupKeysAmount creates backup keys for this Node.
-// Note that:
+//
+// NOTE that:
+//   - The Node cannot be a Root.
 //   - It can be done only once.
-//   - Minimum amount is two (2).
-//   - Maximum amount is two (12).
+//   - Minimum amount is two (2), firt is the key we start the everything
+//   - Maximum amount is two (12). It could be what evernumber, but storage.
 func (n *Node) CreateBackupKeysAmount(count int, inviterKH key.Handle) {
-	// first key in this chain is the genesis key for the whole Identity so
-	// it's a key that cannot be used for rotation! We should think about the
-	// API again. Maybe index is correct term later but we should explain what
-	// the count here means.
-	//  - what this means? this isn't totally clear after break
-	// questions, TODO:
-	//  - is genesis block key stored here or not? should it be?
-	// possible answers, TODO:
-	//  = backup keys is one independent chain which type only binds it to the
-	//  node? That's why we don't need to bind genesis key with the other
-	//  genesis key or what ever it is?
-	//  = *remember* that we have two types of Nodes them who can invite and
-	//  them (most should be) who are waiting to be invited
-	// TODO: => backupkeys must be created before first invitation to us is
-	// made OR we cannot bind safe BackupKeys to this node and the rest of the
-	// chains.
+	assert.ThatNot(n.IsRoot())
 	assert.SLen(n.BackupKeys.Blocks, 0, "you can create backup keys only once")
-	assert.NotZero(count)
-	assert.NotEqual(count, 1, "two backup keys is minimum")
+	assert.Greater(count, 1, "two backup keys is minimum")
+	assert.Less(count, 12+1, "twelve backup keys is max")
 
 	// we can create BackupKeys only if we still control our IDK or..
 	// we haven't been invited *yet*.
 	if len(n.InviteeChains) > 0 {
 		assert.INotNil(inviterKH)
 	} else {
-		// TODO: this is the one that must be used in invitation too
-		//  - it is when [Identity] is used to handle invitation
+		// This is the one that must be used in invitation too
+		//  - and it is when [Identity] is used to handle invitation
 		inviterKH = key.New()
 	}
 
