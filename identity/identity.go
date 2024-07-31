@@ -47,7 +47,7 @@ func New(h key.Handle) Identity {
 func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{
-		Node: node.New(info, flags...),
+		Node: node.NewRoot(info, flags...),
 		Hand: key.Hand{
 			Handle: h,
 			Info:   &info,
@@ -55,11 +55,22 @@ func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	}
 }
 
-func NewFromData(d []byte) (i Identity) {
+// NewFromData creates new Identity from byte data.
+//
+// NOTE that key.Handle must be given if the data doesn't include ICs or this is
+// not a Root Identity. TODO: WIP
+func NewFromData(d []byte, kh key.Handle) (i Identity) {
 	i.Node = node.NewFromData(d)
-	idk := i.Node.GetIDK() // TODO: If not Invited yet we need IDK!
+
+	var idk key.Info
+	if kh == nil {
+		idk = i.Node.GetIDK()
+	} else {
+		idk = key.InfoFromHandle(kh)
+	}
+
 	i.Hand = key.Hand{
-		Handle: nil,
+		Handle: kh,
 		Info:   &idk,
 	}
 
@@ -72,10 +83,14 @@ func (i Identity) Bytes() []byte {
 	return i.Node.Bytes()
 }
 
+func (i Identity) Clone() Identity {
+	return NewFromData(i.Bytes(), i.Handle)
+}
+
 // InviteWithRotateKey we first create new key for this specefic invitation.
 // this is like double blinding. minimize correlation. TODO: does this still
 // work is the real world,
-func (i Identity) InviteWithRotateKey( // TODO: rename ..WithRotatedKey() <- donne already
+func (i Identity) InviteWithRotateKey(
 	rhs Identity,
 	opts ...chain.Opts,
 ) Identity {
@@ -110,13 +125,24 @@ func (i Identity) RotateKey(newKH key.Handle) Identity {
 // key again, etc.? Of course, we can manually find that information, but still
 // is it something that we should do?
 func (i Identity) RotateToBackupKey(keyIndex int) Identity {
+	assert.ThatNot(i.IsRoot())
+
 	newNode, newKH := i.Node.RotateToBackupKey(keyIndex)
 	newIdentity := Identity{Node: newNode, Hand: key.NewHand(newKH)}
 	return newIdentity
 }
 
+// TODO: How about Root Identities and backup keys? Root IDK is very important
+// over the time and for many IC holder. What happens if some of the main roots
+// needs to rotate their keys to backup keys? Next invitations they make
+// (propably quite random) would mean that new IC will be created!!! that's a
+// very bad thing!
+//  = consider that backup keys are forbiddend from root IDs?
+
 func (i *Identity) CreateBackupKeysAmount(count int) {
+	assert.ThatNot(i.IsRoot())
 	assert.That(i.ValidHandle())
+
 	i.Node.CreateBackupKeysAmount(count, i.Handle)
 }
 

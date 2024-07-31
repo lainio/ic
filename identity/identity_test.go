@@ -42,8 +42,6 @@ func TestIdentity_All(t *testing.T) {
 
 	t.Run("invite", testIdentityInvite)
 
-	t.Run("invite with clone firt: REAL version", testIdentityCloneFirstAndInvite) // TODO: replace in future
-	// TODO: new invite with with simulated network communication
 	t.Run("rotate key", testRotateKey)
 	t.Run("rotate and invite", testRotateAndInvite)
 	t.Run("trust level", testTrustLevel)
@@ -90,48 +88,14 @@ func testSetup(t *testing.T) {
 func testNewIdentity(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	// -- root
+	// -- root alike
 	aliceID := NewRoot(key.New())
 	assert.SLen(aliceID.InviteeChains, 1)
 	assert.SLen(aliceID.InviteeChains[0].Blocks, 1)
 
-	// -- joining one
+	// -- joining one alike
 	bobID := New(key.New())
 	assert.SLen(bobID.InviteeChains, 0)
-}
-
-func testIdentityCloneFirstAndInvite(t *testing.T) {
-	defer assert.PushTester(t)()
-
-	// Root1 chains start here:
-	alice2 := NewFromData(alice.Bytes())
-	//assert.Equal(alice2.Len(), 0, "=> is non-root identity")
-	alice2 = root3.Invite(alice2, chain.WithPosition(1))
-	//      root3
-	//        ↓
-	//      alice2
-	assert.Equal(alice2.Len(), 2)
-	{
-		c := alice2.InviteeChains[0]
-		assert.SLen(c.Blocks, 2)
-		assert.That(c.VerifySignatures())
-	}
-
-	bob2 := NewFromData(bob.Bytes())
-	bob2 = alice.Invite(bob2, chain.WithPosition(1))
-	//      root3
-	//        ↓
-	//      alice -> bob2
-	assert.Equal(bob2.Len(), 1)
-	{
-		c := bob2.InviteeChains[0]
-		assert.SLen(c.Blocks, 3) // we know how long the chain is now
-		assert.That(c.VerifySignatures())
-	}
-
-	// Bob and Alice share same chain root == Root1
-	common := alice.CommonChain(bob2.Node)
-	assert.SNotNil(common.Blocks)
 }
 
 func testIdentityInvite(t *testing.T) {
@@ -139,7 +103,7 @@ func testIdentityInvite(t *testing.T) {
 
 	// Root1 chains start here:
 	assert.Equal(alice.Len(), 0, "=> is non-root identity")
-	alice = root1.Invite(alice, chain.WithPosition(1))
+	alice = root1.Invite(alice.Clone(), chain.WithPosition(1))
 	//      root1
 	//        ↓
 	//      alice
@@ -150,7 +114,7 @@ func testIdentityInvite(t *testing.T) {
 		assert.That(c.VerifySignatures())
 	}
 
-	bob = alice.Invite(bob, chain.WithPosition(1))
+	bob = alice.Invite(bob.Clone(), chain.WithPosition(1))
 	//      root1
 	//        ↓
 	//      alice -> bob
@@ -166,7 +130,7 @@ func testIdentityInvite(t *testing.T) {
 	assert.SNotNil(common.Blocks)
 
 	// Root2 invites Carol here
-	carol = root2.Invite(carol, chain.WithPosition(1))
+	carol = root2.Invite(carol.Clone(), chain.WithPosition(1))
 	assert.Equal(carol.Len(), 1)
 	{
 		c := carol.InviteeChains[0]
@@ -180,7 +144,7 @@ func testIdentityInvite(t *testing.T) {
 
 	// Dave is one of the roots as well and we build it here:
 	dave = NewRoot(key.New(), chain.WithEndpoint(endpointValueDave, true))
-	eve = dave.Invite(eve, chain.WithPosition(1))
+	eve = dave.Invite(eve.Clone(), chain.WithPosition(1))
 	assert.Equal(eve.Len(), 1)
 	{
 		c := eve.InviteeChains[0]
@@ -190,7 +154,7 @@ func testIdentityInvite(t *testing.T) {
 
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
 	// Eve!
-	dave = root2.Invite(dave, chain.WithPosition(1))
+	dave = root2.Invite(dave.Clone(), chain.WithPosition(1))
 	assert.Equal(dave.Len(), 2)
 	{
 		c := dave.InviteeChains[1]
@@ -205,7 +169,7 @@ func testIdentityInvite(t *testing.T) {
 	common = carol.CommonChain(eve.Node)
 	assert.SNil(common.Blocks)
 	// .. so Carol can invite Eve
-	eve = carol.Invite(eve, chain.WithPosition(1))
+	eve = carol.Invite(eve.Clone(), chain.WithPosition(1))
 	assert.Equal(eve.Len(), 2)
 
 	// now Eve has common chain with Root1 as well
@@ -224,10 +188,7 @@ func testRotateKey(t *testing.T) {
 
 	eve = eve.RotateKey(key.New())
 
-	// TODO: +1 new chain is added, when doing key rotation we don't want only
-	// one link length new chain. Figure out how to handle that.
 	assert.SLen(eve.InviteeChains, length)
-	//t.Skip("see TODO")
 
 	for i, c := range eve.InviteeChains {
 		assert.Equal(c.Len(), lengths[i]+1)
@@ -384,8 +345,8 @@ func testWebOfTrust(t *testing.T) {
 			dave.PubKey(), "dave invited originally eve!")
 	}
 
-	frank = alice.Invite(frank, chain.WithPosition(1))
-	grace = bob.Invite(grace, chain.WithPosition(1))
+	frank = alice.Invite(frank.Clone(), chain.WithPosition(1))
+	grace = bob.Invite(grace.Clone(), chain.WithPosition(1))
 	//      root1
 	//        ↓
 	//      alice -> bob
@@ -478,9 +439,14 @@ func testChallenge(t *testing.T) {
 func testCreateBackupKeysAmount(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	assert.SLen(dave.Node.BackupKeys.Blocks, 0)
-	dave.CreateBackupKeysAmount(3)
-	assert.SLen(dave.Node.BackupKeys.Blocks, 3)
+	t.Run("root node not allowed", func(t *testing.T) {
+		defer assert.PushTester(t, assert.Debug)()
+		defer func() {
+			r := recover()
+			assert.INotNil(r)
+		}()
+		dave.CreateBackupKeysAmount(3)
+	})
 
 	assert.SLen(frank.Node.BackupKeys.Blocks, 0)
 	frank.CreateBackupKeysAmount(3)
@@ -498,11 +464,14 @@ func testCreateBackupKeysAmount(t *testing.T) {
 func testRotateToBackupKey(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	{
-		prevLen := dave.InviteeChains[0].Len()
-		dave = dave.RotateToBackupKey(2)
-		assert.SLen(dave.InviteeChains[0].Blocks, int(prevLen)+1)
-	}
+	t.Run("root node not allowed", func(t *testing.T) {
+		defer assert.PushTester(t, assert.Debug)()
+		defer func() {
+			r := recover()
+			assert.INotNil(r)
+		}()
+		dave.RotateToBackupKey(2)
+	})
 	{
 		assert.SLen(frank.Node.BackupKeys.Blocks, 3)
 		prevLen := frank.InviteeChains[0].Len()
