@@ -56,6 +56,9 @@ bench3:
 vet: | test
 	@$(GO) vet $(PKGS)
 
+dry-fmt:
+	@golines -t 5 --dry-run -m 80 --ignore-generated .
+
 fmt:
 	@golines -t 5 -w -m 80 --ignore-generated .
 
