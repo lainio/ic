@@ -17,7 +17,10 @@ import (
 // TODO: maybe we should use key.Info everywhere we just can?
 
 type Digest struct {
-	IDK     key.Public // TODO: when we need key.ID? Should we use key.Info?
+	IDK key.Public // TODO: when we need key.ID? Should we use key.Info?
+
+	// TODO: should this be array?
 	RootIDK key.Public // TODO: when we need key.ID? Should we use key.Info?
-	Hops    hop.Distance
+
+	Hops hop.Distance
 }
