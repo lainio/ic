@@ -8,6 +8,7 @@ PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4)
 
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 
+MAX_LINE ?= 80
 GO := go
 #GO := go1.18beta1
 TEST_ARGS ?= -benchmem
@@ -56,11 +57,11 @@ bench3:
 vet: | test
 	@$(GO) vet $(PKGS)
 
-dry-fmt:
-	@golines -t 5 --dry-run -m 80 --ignore-generated .
-
 fmt:
-	@golines -t 5 -w -m 80 --ignore-generated .
+	@golines -t 5 -w -m $(MAX_LINE) --ignore-generated .
+
+dry-fmt:
+	@golines -t 5 --dry-run -m $(MAX_LINE) --ignore-generated .
 
 gofmt:
 	@echo Checking code is gofmted
