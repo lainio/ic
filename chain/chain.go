@@ -242,11 +242,13 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 	)
 }
 
-// Find finds Block from Chain if it exists.
-func (c Chain) Find(IDK key.Public) (b Block, found bool) {
-	for _, block := range c.Blocks {
+// Find finds Block from Chain if it exists. If block not found the returned
+// 'found' is [hop.NotConnected].
+func (c Chain) Find(IDK key.Public) (b Block, found hop.Distance) {
+	found = hop.NewNotConnected()
+	for i, block := range c.Blocks {
 		if key.EqualBytes(block.Public(), IDK) {
-			return block, true
+			return block, hop.Distance(i)
 		}
 	}
 	return

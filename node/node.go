@@ -222,9 +222,8 @@ func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 
 	// find the shortest if possible
 	for _, c := range n.InviteeChains {
-		_, idkFound := c.Find(digest.RootIDK)
-		if idkFound {
-			currentLvl := c.FindLevel(digest.RootIDK)
+		_, currentLvl := c.Find(digest.RootIDK)
+		if currentLvl != hop.NotConnected {
 			if lvl.PickShorter(currentLvl) {
 				// locations are in the same IC: - 1 if for our own block
 				hops = c.Len() - 1 - lvl
@@ -329,7 +328,9 @@ func (n Node) Resolver() (endpoint string) {
 // Find finds the first (TODO: rename?) chain block that has the IDK.
 func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 	for _, c := range n.InviteeChains {
-		block, found = c.Find(IDK)
+		var lvl hop.Distance
+		block, lvl = c.Find(IDK)
+		found = lvl != hop.NotConnected
 		if found {
 			return
 		}
