@@ -345,6 +345,7 @@ var (
 // CheckIntegrity checks your Node's integrity, which means that all of the
 // InviteeChains must be signed properly and their LastBlock shares same IDK.
 // The last part is the logical binging under the Node structure.
+//
 // NOTE that you cannot trust the Node who's integrity is violated!
 func (n Node) CheckIntegrity() error {
 	if n.Len() == 0 { // empty non Root Node is fine.
