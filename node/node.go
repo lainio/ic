@@ -82,7 +82,7 @@ func (n Node) AddChain(c chain.Chain) (rn Node) {
 //   - Maximum amount is two (12). It could be what evernumber, but storage.
 func (n *Node) CreateBackupKeysAmount(count int, inviterKH key.Handle) {
 	assert.ThatNot(n.IsRoot())
-	assert.SLen(n.BackupKeys.Blocks, 0, "you can create backup keys only once")
+	assert.SEmpty(n.BackupKeys.Blocks, "you can create backup keys only once")
 	assert.Greater(count, 1, "two backup keys is minimum")
 	assert.Less(count, 12+1, "twelve backup keys is max")
 
