@@ -283,9 +283,16 @@ func (n Node) IsInviterFor(their Node) bool {
 	return false
 }
 
+// IsRoot tells if the node is a root. A root has a self started IC always.
+// To formally test that we are really root we follow these rules:
+//   - we have 1 IC which length == 1 (root IC exists always) OR
+//   - we have several IC AND we test that the self startest's
+//     pubkey is equal to second chains last block's pubkey
 func (n Node) IsRoot() bool {
 	return (n.Len() == 1 && n.InviteeChains[0].Len() == 1) ||
 		(n.Len() > 1 &&
+			// let's test root IC (index 0) to second (index 1) where we are
+			// the actual invitee from real inviter ourself.
 			key.EqualBytes(
 				n.InviteeChains[0].FirstBlock().Invitee.Public,
 				n.InviteeChains[1].LastBlock().Invitee.Public,
