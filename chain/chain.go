@@ -6,8 +6,8 @@ package chain
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/gob"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/hop"
@@ -88,10 +88,11 @@ func New(keyInfo key.Info, flags ...Opts) Chain {
 }
 
 // NewChainFromData creates a new Chain from byte data.
+//
 // NOTE that [NewBlockFromData] creates a new Block.
 func NewChainFromData(d []byte) (c Chain) {
 	r := bytes.NewReader(d)
-	dec := gob.NewDecoder(r)
+	dec := cbor.NewDecoder(r)
 	try.To(dec.Decode(&c))
 	return c
 }
@@ -102,9 +103,8 @@ func (c Chain) IsNil() bool {
 
 // Bytes return Chain's public data for persistency.
 func (c Chain) Bytes() []byte {
-	// TODO: CBOR type
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	enc := cbor.NewEncoder(&buf)
 	try.To(enc.Encode(c))
 	return buf.Bytes()
 }

@@ -2,9 +2,9 @@ package node
 
 import (
 	"bytes"
-	"encoding/gob"
 	"errors"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
@@ -372,20 +372,17 @@ func (n Node) Len() int { // TODO: rename -> ICLen
 	return len(n.InviteeChains)
 }
 
-// TODO: start to use CBOR? for everything, all add as format?
-
-// NewFromData TODO:
+// NewFromData creates new from CBOR byte data.
 func NewFromData(d []byte) (n Node) {
 	r := bytes.NewReader(d)
-	dec := gob.NewDecoder(r)
+	dec := cbor.NewDecoder(r)
 	try.To(dec.Decode(&n))
 	return n
 }
 
 func (n Node) Bytes() []byte {
-	// TODO: CBOR type
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	enc := cbor.NewEncoder(&buf)
 	try.To(enc.Encode(n))
 	return buf.Bytes()
 }

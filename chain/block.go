@@ -2,8 +2,8 @@ package chain
 
 import (
 	"bytes"
-	"encoding/gob"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/key"
 )
@@ -40,19 +40,17 @@ func NewVerifyBlock(pinCode int) (Block, Block) {
 }
 
 // NewBlockFromData constructor from raw gob data block.
-// TODO: start to use CBOR? for everything, all add as format?
 func NewBlockFromData(d []byte) (b Block) {
 	r := bytes.NewReader(d)
-	dec := gob.NewDecoder(r)
+	dec := cbor.NewDecoder(r)
 	try.To(dec.Decode(&b))
 	return b
 }
 
 // Bytes return marshallel bytes of the Block.
-// TODO: start to use CBOR? for everything, all add as format?
 func (b Block) Bytes() []byte {
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	enc := cbor.NewEncoder(&buf)
 	try.To(enc.Encode(b))
 	return buf.Bytes()
 }
