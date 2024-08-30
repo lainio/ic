@@ -26,6 +26,7 @@ type Identity struct {
 // New creates a new joining identity with the given [key.Handle]. The 'joining'
 // means that we'll wait other party to invite us, and then we'll get our IC.
 // See [NewRoot] for the cases where we want to start our own chain.
+//
 // NOTE that this is the preferred way to create Identity and join the network.
 func New(h key.Handle) Identity {
 	info := key.InfoFromHandle(h)
@@ -41,8 +42,10 @@ func New(h key.Handle) Identity {
 // NewRoot creates a Root Identity object, which allows us to start a whole new
 // IC. Please prefer [New] function over this to maximize connectivity in the
 // network.
+//
 // NOTE that this far too simple for production use when we need to setup many
 // keys (probably) for the backup keys, etc.
+//
 // NOTE that we can create new backup keys as long as we own the previous one.
 func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
@@ -57,8 +60,8 @@ func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 
 // NewFromData creates new Identity from byte data.
 //
-// NOTE that key.Handle must be given if the data doesn't include ICs or this is
-// not a Root Identity. TODO: WIP
+// NOTE that [key.Handle] must be given if the data doesn't include ICs or this
+// is not a Root Identity. TODO: WIP
 func NewFromData(d []byte, kh key.Handle) (i Identity) {
 	i.Node = node.NewFromData(d)
 
