@@ -100,13 +100,13 @@ func testNewIdentity(t *testing.T) {
 func testIdentityInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	assert.Equal(alice.Len(), 0, "=> is non-root identity")
+	assert.Equal(alice.ICCount(), 0, "=> is non-root identity")
 	cloneAlice := alice.Clone() // simulate real network transport
 	alice = root1.Invite(cloneAlice, chain.WithPosition(1))
 	//      root1
 	//        ↓
 	//      alice
-	assert.Equal(alice.Len(), 1)
+	assert.Equal(alice.ICCount(), 1)
 	{
 		c := alice.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
@@ -117,7 +117,7 @@ func testIdentityInvite(t *testing.T) {
 	//      root1
 	//        ↓
 	//      alice -> bob
-	assert.Equal(bob.Len(), 1)
+	assert.Equal(bob.ICCount(), 1)
 	{
 		c := bob.InviteeChains[0]
 		assert.SLen(c.Blocks, 3) // we know how long the chain is now
@@ -130,7 +130,7 @@ func testIdentityInvite(t *testing.T) {
 
 	// Root2 invites Carol here
 	carol = root2.Invite(carol.Clone(), chain.WithPosition(1))
-	assert.Equal(carol.Len(), 1)
+	assert.Equal(carol.ICCount(), 1)
 	{
 		c := carol.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
@@ -144,7 +144,7 @@ func testIdentityInvite(t *testing.T) {
 	// Dave is one of the roots as well and we build it here:
 	dave = NewRoot(key.New(), chain.WithEndpoint(endpointValueDave, true))
 	eve = dave.Invite(eve.Clone(), chain.WithPosition(1))
-	assert.Equal(eve.Len(), 1)
+	assert.Equal(eve.ICCount(), 1)
 	{
 		c := eve.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
@@ -154,7 +154,7 @@ func testIdentityInvite(t *testing.T) {
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
 	// Eve!
 	dave = root2.Invite(dave.Clone(), chain.WithPosition(1))
-	assert.Equal(dave.Len(), 2)
+	assert.Equal(dave.ICCount(), 2)
 	{
 		c := dave.InviteeChains[1]
 		assert.SLen(c.Blocks, 2)
@@ -169,7 +169,7 @@ func testIdentityInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 	// .. so Carol can invite Eve
 	eve = carol.Invite(eve.Clone(), chain.WithPosition(1))
-	assert.Equal(eve.Len(), 2)
+	assert.Equal(eve.ICCount(), 2)
 
 	// now Eve has common chain with Root1 as well
 	common = eve.CommonChain(root2.Node)
@@ -179,7 +179,7 @@ func testIdentityInvite(t *testing.T) {
 func testRotateKey(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	length := eve.Len()
+	length := eve.ICCount()
 	lengths := make([]hop.Distance, length)
 	for i, c := range eve.InviteeChains {
 		lengths[i] = c.Len()
@@ -485,7 +485,7 @@ func testRotateToBackupKey(t *testing.T) {
 	// version to be used for table testing
 	{
 		assert.SLen(eve.Node.BackupKeys.Blocks, 2)
-		prevLenghts := make([]int, eve.Len())
+		prevLenghts := make([]int, eve.ICCount())
 		prevChainsLen := len(eve.InviteeChains)
 		for i := range prevChainsLen {
 			prevLenghts[i] = int(eve.InviteeChains[i].Len())

@@ -142,7 +142,7 @@ func (n Node) InviteWithRotateKey(
 ) (
 	rn Node,
 ) {
-	rn.InviteeChains = make([]chain.Chain, 0, n.Len()+inviteesNode.Len())
+	rn.InviteeChains = make([]chain.Chain, 0, n.ICCount()+inviteesNode.ICCount())
 
 	// keep all the existing web-of-trust chains if not rotation case
 	if !inviteesNode.rotationChain() {
@@ -188,7 +188,7 @@ func (n Node) Invite(
 }
 
 func (n Node) rotationChain() (yes bool) {
-	if n.Len() == 1 && n.InviteeChains[0].Len() == 1 {
+	if n.ICCount() == 1 && n.InviteeChains[0].Len() == 1 {
 		yes = n.InviteeChains[0].Blocks[0].Rotation
 	}
 	return yes
@@ -197,7 +197,7 @@ func (n Node) rotationChain() (yes bool) {
 // CommonChains return slice of chain pairs. If no pairs can be found the slice
 // is empty not nil.
 func (n Node) CommonChains(their Node) []chain.Pair {
-	common := make([]chain.Pair, 0, n.Len())
+	common := make([]chain.Pair, 0, n.ICCount())
 	for _, my := range n.InviteeChains {
 		p := their.sharedRootPair(my)
 		if p.Valid() {
@@ -289,8 +289,8 @@ func (n Node) IsInviterFor(their Node) bool {
 //   - we have several IC AND we test that the self startest's
 //     pubkey is equal to second chains last block's pubkey
 func (n Node) IsRoot() bool {
-	return (n.Len() == 1 && n.InviteeChains[0].Len() == 1) ||
-		(n.Len() > 1 &&
+	return (n.ICCount() == 1 && n.InviteeChains[0].Len() == 1) ||
+		(n.ICCount() > 1 &&
 			// let's test root IC (index 0) to second (index 1) where we are
 			// the actual invitee from real inviter ourself.
 			key.EqualBytes(
@@ -356,7 +356,7 @@ var (
 //
 // NOTE that you cannot trust the Node who's integrity is violated!
 func (n Node) CheckIntegrity() error {
-	if n.Len() == 0 { // empty non Root Node is fine.
+	if n.ICCount() == 0 { // empty non Root Node is fine.
 		return nil
 	}
 
@@ -375,7 +375,8 @@ func (n Node) CheckIntegrity() error {
 	return nil
 }
 
-func (n Node) Len() int { // TODO: rename -> ICLen
+// ICCount tells how many ICs we belong.
+func (n Node) ICCount() int {
 	return len(n.InviteeChains)
 }
 

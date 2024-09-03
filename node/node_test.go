@@ -90,7 +90,7 @@ func testInvite(t *testing.T) {
 	//      root1
 	//        ↓
 	//      alice
-	assert.Equal(alice.Len(), 1)
+	assert.Equal(alice.ICCount(), 1)
 	{
 		c := alice.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
@@ -104,7 +104,7 @@ func testInvite(t *testing.T) {
 	//      root1
 	//        ↓
 	//      alice -> bob
-	assert.Equal(bob.Len(), 1)
+	assert.Equal(bob.ICCount(), 1)
 	{
 		c := bob.InviteeChains[0]
 		assert.SLen(c.Blocks, 3) // we know how long the chain is now
@@ -124,7 +124,7 @@ func testInvite(t *testing.T) {
 	//     root2
 	//       ↓
 	//    carol
-	assert.Equal(carol.Len(), 1)
+	assert.Equal(carol.ICCount(), 1)
 	{
 		c := carol.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
@@ -144,7 +144,7 @@ func testInvite(t *testing.T) {
 	//     dave
 	//      ↓
 	//     eve
-	assert.Equal(eve.Len(), 1)
+	assert.Equal(eve.ICCount(), 1)
 	{
 		c := eve.InviteeChains[0]
 		assert.SLen(c.Blocks, 2)
@@ -162,7 +162,7 @@ func testInvite(t *testing.T) {
 	//       carol    dave-2-chains
 	//                  ↓
 	//           eve(root-is-dave)
-	assert.Equal(dave.Len(), 2)
+	assert.Equal(dave.ICCount(), 2)
 	{
 		c := dave.InviteeChains[1]
 		assert.SLen(c.Blocks, 2)
@@ -185,7 +185,7 @@ func testInvite(t *testing.T) {
 	//       carol    dave-2-chains
 	//            ↓     ↓
 	//           eve(root-is-dave)
-	assert.Equal(eve.Len(), 2, "has two chains")
+	assert.Equal(eve.ICCount(), 2, "has two chains")
 
 	// now Eve has common chain with Root2 as well
 	common = eve.CommonChain(root2.Node)
@@ -261,14 +261,14 @@ func testWebOfTrustInfo(t *testing.T) {
 		alice.Handle,
 		frank.Node,
 		key.InfoFromHandle(frank), chain.WithPosition(1))
-	assert.Equal(frank.Len(), 1)
-	assert.Equal(alice.Len(), 1)
+	assert.Equal(frank.ICCount(), 1)
+	assert.Equal(alice.ICCount(), 1)
 	grace.Node = bob.Invite(
 		bob.Handle,
 		grace.Node,
 		key.InfoFromHandle(grace), chain.WithPosition(1))
-	assert.Equal(grace.Len(), 1)
-	assert.Equal(bob.Len(), 1)
+	assert.Equal(grace.ICCount(), 1)
+	assert.Equal(bob.ICCount(), 1)
 	//      root1
 	//        ↓
 	//      alice -> bob
@@ -350,14 +350,14 @@ func testWebOfTrustInfo(t *testing.T) {
 	// NOTE --- does nothing! -----
 	//   next dave's invitation doesn't add any new chains because there is no
 	//   new roots in daves chains
-	heidiNodeLen := heidi.Len()
+	heidiNodeLen := heidi.ICCount()
 	heidi.Node = dave.Invite(
 		dave.Handle,
 		heidi.Node,
 		key.InfoFromHandle(heidi),
 		chain.WithPosition(1),
 	)
-	assert.Equal(heidi.Len(), heidiNodeLen)
+	assert.Equal(heidi.ICCount(), heidiNodeLen)
 
 	//         ┌ root2  ┐                root3
 	//         ↓        ↓                  │
@@ -420,7 +420,7 @@ func testMarshaling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			defer assert.PushTester(t)()
 
-			length := tt.node.Len()
+			length := tt.node.ICCount()
 			idk := tt.node.GetIDK().Public
 
 			b := tt.node.Bytes()
@@ -428,7 +428,7 @@ func testMarshaling(t *testing.T) {
 			node2 := NewFromData(b)
 
 			try.To(node2.CheckIntegrity())
-			assert.Equal(node2.Len(), length)
+			assert.Equal(node2.ICCount(), length)
 			assert.DeepEqual(node2.GetIDK().Public, idk)
 		})
 	}
