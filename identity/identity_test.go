@@ -100,9 +100,9 @@ func testNewIdentity(t *testing.T) {
 func testIdentityInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	// Root1 chains start here:
 	assert.Equal(alice.Len(), 0, "=> is non-root identity")
-	alice = root1.Invite(alice.Clone(), chain.WithPosition(1))
+	cloneAlice := alice.Clone() // simulate real network transport
+	alice = root1.Invite(cloneAlice, chain.WithPosition(1))
 	//      root1
 	//        ↓
 	//      alice
