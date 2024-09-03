@@ -44,7 +44,6 @@ func TestIdentity_All(t *testing.T) {
 
 	t.Run("rotate key", testRotateKey)
 	t.Run("rotate and invite", testRotateAndInvite)
-	t.Run("trust level", testTrustLevel)
 	t.Run("endpoint", testEndpoint)
 	t.Run("resolver", testResolver)
 	t.Run("web of trust", testWebOfTrust)
@@ -241,13 +240,6 @@ func testRotateAndInvite(t *testing.T) {
 		assert.SLen(mike.InviteeChains[0].Blocks, 3+1+1,
 			"old length 3 + 1 new party + 1 rotation")
 	}
-}
-
-func testTrustLevel(t *testing.T) {
-	defer assert.PushTester(t)()
-
-	lvl := dave.TrustLevel()
-	assert.Equal(lvl, 0)
 }
 
 func testEndpoint(t *testing.T) {

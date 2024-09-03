@@ -81,7 +81,6 @@ func NewFromData(d []byte, kh key.Handle) (i Identity) {
 }
 
 func (i Identity) Bytes() []byte {
-	// TODO: CBOR type
 	// It's enough to get Node data for read-only Identities
 	return i.Node.Bytes()
 }
@@ -91,8 +90,8 @@ func (i Identity) Clone() Identity {
 }
 
 // InviteWithRotateKey we first create new key for this specefic invitation.
-// this is like double blinding. minimize correlation. TODO: does this still
-// work is the real world,
+// this is like double blinding. minimize correlation.
+// TODO: does this still work is the real world,
 func (i Identity) InviteWithRotateKey(
 	rhs Identity,
 	opts ...chain.Opts,
@@ -182,17 +181,4 @@ func (i Identity) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
 	// TODO: should we still randomize the used index? it's now 0 but it could
 	// be any of the available?
 	return i.InviteeChains[0].Challenge(pinCode, f)
-}
-
-// TrustLevel calculates current trust-level of the Identity domain.
-// Calcultation is simple summary of Invitee chains and the levels there
-// TODO: Where this is used?
-func (i Identity) TrustLevel() int {
-	return 0
-}
-
-// Friends tells if these two are friends by IC.
-// TODO: Where this is used?
-func (i Identity) Friends(rhs Identity) bool {
-	return false
 }
