@@ -47,6 +47,7 @@ func New(h key.Handle) Identity {
 // keys (probably) for the backup keys, etc.
 //
 // NOTE that we can create new backup keys as long as we own the previous one.
+// TODO: rename NewRoot -> NewDomain, start to use name Domain for ICs?
 func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{
@@ -90,8 +91,15 @@ func (i Identity) Clone() Identity {
 }
 
 // InviteWithRotateKey we first create new key for this specefic invitation.
-// this is like double blinding. minimize correlation.
-// TODO: does this still work is the real world,
+// This is like double blinding. minimize correlation.
+//
+// TODO: does this still work is the real world? The better question is that
+// does this still give us some advantage? Why we should do this? If we use this
+// time to time, we can be sure that inviter is not drictly binded to invitee?
+// but why? Currently it's still inviter who controls the rotation key, so
+// really what good it gives to us? Cosider it, if it just makes moer complexity
+// we should not use it. Maybe we leave it here and see what happens when we are
+// starting to add new features and start use the system in real things.
 func (i Identity) InviteWithRotateKey(
 	rhs Identity,
 	opts ...chain.Opts,
