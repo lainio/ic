@@ -332,7 +332,7 @@ func (n Node) Resolver() (endpoint string) {
 	return
 }
 
-// Find finds the first (TODO: rename?) chain block that has the IDK.
+// Find finds the first chain block that has the IDK.
 func (n Node) Find(IDK key.Public) (block chain.Block, found bool) {
 	for _, c := range n.InviteeChains {
 		var lvl hop.Distance
