@@ -20,6 +20,10 @@ func (d Distance) String() string {
 	}
 }
 
+// PickShorter selects shorter of two Distance and tells if swap was needed.
+// Because Distance is simple int it's fine to just swap existing lhs object to
+// rhs object. Naturally the caller must know this! The old value can be
+// discarded.
 func (d *Distance) PickShorter(rhs Distance) (swap bool) {
 	swap = *d == NotConnected || rhs < *d
 	if swap {
