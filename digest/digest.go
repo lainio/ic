@@ -15,11 +15,12 @@ import (
 //  authentication. key.Public is important for verification, and key.ID is for
 //  signing.
 // TODO: maybe we should use key.Info everywhere we just can?
+//   - nope, we should keep this as compact we can.
 
 type Digest struct {
 	IDK key.Public // TODO: when we need key.ID? Should we use key.Info?
 
-	// TODO: should this be array?
+	// TODO: should this be array? Yes, good question, let's test size?
 	RootIDK key.Public // TODO: when we need key.ID? Should we use key.Info?
 
 	Hops hop.Distance

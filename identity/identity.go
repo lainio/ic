@@ -47,6 +47,10 @@ func New(h key.Handle) Identity {
 // keys (probably) for the backup keys, etc.
 //
 // NOTE that we can create new backup keys as long as we own the previous one.
+// TODO We cannot change root IDK because it's used for certifications!!!
+//   - normal PKI roots are delivered separately, but this system they are
+//     included in the certifications themselves.
+//
 // TODO: rename NewRoot -> NewDomain, start to use name Domain for ICs?
 func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	info := key.InfoFromHandle(h)
