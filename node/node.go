@@ -60,9 +60,9 @@ func NewWebOfTrust(n1, n2 Node) *WebOfTrust {
 //   - it's root node because it has a self started IC!
 //   - is this something that happens only once per node? Aka, it means that we
 //     allocate the identity space like wallet?
-func NewRoot(pubKey key.Info, flags ...chain.Opts) Node { // TODO: why key.Info
+func NewRoot(kinfo key.Info, flags ...chain.Opts) Node {
 	n := Node{InviteeChains: make([]chain.Chain, 1, 12)}
-	n.InviteeChains[0] = chain.New(pubKey, flags...) // TODO: convert here?
+	n.InviteeChains[0] = chain.New(kinfo, flags...)
 	// TODO: how about BackupKeys? They much match our identity keys.
 	//  - we cannot creat BackupKeys if we lose control of our IDK (its privK)
 	return n
@@ -425,8 +425,8 @@ func (n Node) getBackupKeyHandle(keyIndex int) key.Handle {
 
 // GetIDK return Node's current IDK as [key.Info].
 func (n Node) GetIDK() key.Info {
-	assert.SLonger(n.InviteeChains, 0)
-	assert.SLonger(n.InviteeChains[0].Blocks, 0)
+	assert.SNotEmpty(n.InviteeChains)
+	assert.SNotEmpty(n.InviteeChains[0].Blocks)
 
 	return n.InviteeChains[0].LastBlock().Invitee
 }

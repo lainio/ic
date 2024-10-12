@@ -53,12 +53,12 @@ func New(h key.Handle) Identity {
 //
 // TODO: rename NewRoot -> NewDomain, start to use name Domain for ICs?
 func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
-	info := key.InfoFromHandle(h)
+	keyInfo := key.InfoFromHandle(h)
 	return Identity{
-		Node: node.NewRoot(info, flags...),
+		Node: node.NewRoot(keyInfo, flags...),
 		Hand: key.Hand{
 			Handle: h,
-			Info:   &info,
+			Info:   &keyInfo,
 		},
 	}
 }
@@ -126,11 +126,18 @@ func (i Identity) Invite(rhs Identity, opts ...chain.Opts) Identity {
 	return rhs
 }
 
+// RotateKey ads a new block for all of our current ICs and marks it with
+// attributes Rotation and Position (=0). If we follow zero trust principle that
+// means nothing. But identity's incentive is to mark weight to Rotation +
+// Position zero, because they don't want rotation to make ICs too long.
 func (i Identity) RotateKey(newKH key.Handle) Identity {
-	assert.SLonger(i.InviteeChains, 0)
-	newInfo := New(newKH)
+	assert.SNotEmpty(i.InviteeChains, "we cannot rotate empty chains")
 
-	newID := i.Invite(newInfo, chain.WithRotation(), chain.WithPosition(0))
+	newID := i.Invite(
+		New(newKH),
+		chain.WithRotation(),
+		chain.WithPosition(0),
+	)
 	return newID
 }
 
@@ -188,7 +195,7 @@ func (i Identity) WebOfTrust(rhs Identity) *node.WebOfTrust {
 // it calls other party over the network to sign the challenge which is readily
 // build and randomized.
 func (i Identity) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
-	assert.SLonger(i.InviteeChains, 0)
+	assert.SNotEmpty(i.InviteeChains)
 	// All InviteeChains are equally useful for Challenge.
 	// TODO: should we still randomize the used index? it's now 0 but it could
 	// be any of the available?
