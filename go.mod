@@ -8,7 +8,7 @@ require (
 	github.com/duo-labs/webauthn v0.0.0-20221205164246-ebaf9b74c6ec
 	github.com/findy-network/findy-agent-auth v0.2.85
 	github.com/fxamacker/cbor/v2 v2.6.0
-	github.com/lainio/err2 v1.0.0
+	github.com/lainio/err2 v1.1.0
 )
 
 require (
