@@ -25,6 +25,13 @@ type Node struct {
 	// Also we will have service type inviters who will have we large count of
 	// invitees. And if that's something we don't need, we don't store it.
 	// However, if it's small and doesn't matter, let's think about it then.
+	//
+	// TODO: However, we should got something that we invtie additional members
+	// to the network. They should sign something that we can proof that we
+	// have made it. The problem is similar than the reputation or quantitative
+	// measure of our Tx count: succesful, no complaint reputation. We should
+	// think these insentive aspects carefully. Especially when we want to get
+	// this viral.
 }
 
 // WebOfTrust includes most important information about WoT.
@@ -131,8 +138,8 @@ func (n Node) CopyBackupKeysTo(tgt *Node) *Node {
 	return tgt
 }
 
-// InviteWithRotateKey is method to add to all of those ICs of us (inviter, n
-// Node) that invitee doesn't yet belong.
+// InviteWithRotateKey is method to add to all our (inviter, n Node) our ICs
+// that invitee doesn't yet belong to.
 //   - if inviter == inviterNew then this's a normal Invite
 func (n Node) InviteWithRotateKey(
 	inviter, inviterNew key.Handle,
@@ -175,7 +182,7 @@ func (n Node) InviteWithRotateKey(
 // NOTE! Use identity.Invite at the API lvl.
 // This has worked since we started, but at the identity level we need symmetric
 // invitation system. TODO: <- check what this comment means!
-// TODO: move chain, crypto, and node to internal
+// TODO: move chain, crypto, and node to internal pkg.
 func (n Node) Invite(
 	inviter key.Handle,
 	inviteesNode Node,
