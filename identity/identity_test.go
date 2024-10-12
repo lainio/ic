@@ -69,11 +69,11 @@ func testSetup(t *testing.T) {
 	assert.SLen(root3.InviteeChains[0].Blocks, 1)
 
 	alice = New(key.New())
-	assert.SLen(alice.InviteeChains, 0)
+	assert.SEmpty(alice.InviteeChains)
 
 	bob = New(key.New())
 	carol = New(key.New())
-	assert.SLen(carol.InviteeChains, 0)
+	assert.SEmpty(carol.InviteeChains)
 
 	eve = New(key.New())
 	frank = New(key.New())
@@ -94,7 +94,7 @@ func testNewIdentity(t *testing.T) {
 
 	// -- joining one alike
 	bobID := New(key.New())
-	assert.SLen(bobID.InviteeChains, 0)
+	assert.SEmpty(bobID.InviteeChains)
 }
 
 func testIdentityInvite(t *testing.T) {
@@ -201,21 +201,21 @@ func testRotateAndInvite(t *testing.T) {
 	//     \
 	//      --> judy --> olivia
 	{
-		assert.SLen(ivan.InviteeChains, 0)
+		assert.SEmpty(ivan.InviteeChains)
 		ivan = root3.InviteWithRotateKey(ivan, chain.WithPosition(1))
 		assert.SLen(ivan.InviteeChains, 1)
 		assert.SLen(ivan.InviteeChains[0].Blocks, 2+1,
 			"2 parties + 1 rotation")
 	}
 	{
-		assert.SLen(judy.InviteeChains, 0)
+		assert.SEmpty(judy.InviteeChains)
 		judy = root3.InviteWithRotateKey(judy, chain.WithPosition(1))
 		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(judy.InviteeChains[0].Blocks, 2+1,
 			"2 parties + 1 rotation")
 	}
 	{
-		assert.SLen(mike.InviteeChains, 0)
+		assert.SEmpty(mike.InviteeChains)
 		mike = ivan.InviteWithRotateKey(mike, chain.WithPosition(1))
 		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(mike.InviteeChains, 1)
@@ -223,7 +223,7 @@ func testRotateAndInvite(t *testing.T) {
 			"old length 3 + 1 new party + 1 rotation")
 	}
 	{
-		assert.SLen(olivia.InviteeChains, 0)
+		assert.SEmpty(olivia.InviteeChains)
 		olivia = judy.InviteWithRotateKey(olivia, chain.WithPosition(1))
 		assert.SLen(judy.InviteeChains, 1)
 		assert.SLen(olivia.InviteeChains, 1)
@@ -440,15 +440,15 @@ func testCreateBackupKeysAmount(t *testing.T) {
 		dave.CreateBackupKeysAmount(3)
 	})
 
-	assert.SLen(frank.Node.BackupKeys.Blocks, 0)
+	assert.SEmpty(frank.Node.BackupKeys.Blocks)
 	frank.CreateBackupKeysAmount(3)
 	assert.SLen(frank.Node.BackupKeys.Blocks, 3)
 
-	assert.SLen(grace.Node.BackupKeys.Blocks, 0)
+	assert.SEmpty(grace.Node.BackupKeys.Blocks)
 	grace.CreateBackupKeysAmount(2)
 	assert.SLen(grace.Node.BackupKeys.Blocks, 2)
 
-	assert.SLen(eve.Node.BackupKeys.Blocks, 0)
+	assert.SEmpty(eve.Node.BackupKeys.Blocks)
 	eve.CreateBackupKeysAmount(2)
 	assert.SLen(eve.Node.BackupKeys.Blocks, 2)
 }
