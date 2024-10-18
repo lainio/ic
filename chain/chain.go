@@ -175,7 +175,7 @@ func (c Chain) KeyRotationsLen() (count hop.Distance) {
 
 // isLeaf
 func (c Chain) _(invitersKey key.Handle) bool {
-	return key.EqualBytes(c.LeafPubKey(), try.To1(invitersKey.CBORPublicKey()))
+	return bytes.Equal(c.LeafPubKey(), try.To1(invitersKey.CBORPublicKey()))
 }
 
 func (c Chain) LeafPubKey() key.Public {
@@ -247,7 +247,7 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 func (c Chain) Find(IDK key.Public) (b Block, found hop.Distance) {
 	found = hop.NewNotConnected()
 	for i, block := range c.Blocks {
-		if key.EqualBytes(block.Public(), IDK) {
+		if bytes.Equal(block.Public(), IDK) {
 			return block, hop.Distance(i)
 		}
 	}
@@ -266,7 +266,7 @@ func (c Chain) Resolver() (endpoint string) {
 
 func (c Chain) FindLevel(IDK key.Public) (lvl hop.Distance) {
 	for i, block := range c.Blocks {
-		if key.EqualBytes(block.Public(), IDK) {
+		if bytes.Equal(block.Public(), IDK) {
 			return hop.Distance(i)
 		}
 	}

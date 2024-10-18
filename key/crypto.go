@@ -4,7 +4,6 @@
 package key
 
 import (
-	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -140,7 +139,3 @@ func (sig Signature) Verify(pubKey Public, msg []byte) bool {
 const HashSize = 32
 
 type Hash = [HashSize]byte
-
-func EqualBytes(a, b []byte) bool {
-	return bytes.Equal(a, b)
-}

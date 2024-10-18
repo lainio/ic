@@ -166,7 +166,7 @@ func (n Node) InviteWithRotateKey(
 
 		// inviter (n) has something that invitee dosen't belong yet
 		var newChain chain.Chain
-		if key.EqualBytes(inviter.ID(), inviterNew.ID()) {
+		if bytes.Equal(inviter.ID(), inviterNew.ID()) {
 			newChain = c.Invite(inviter, invitee, opts...)
 		} else {
 			newChain = c.Invite(inviter, key.InfoFromHandle(inviterNew), opts...)
@@ -300,7 +300,7 @@ func (n Node) IsRoot() bool {
 		(n.ICCount() > 1 &&
 			// let's test root IC (index 0) to second (index 1) where we are
 			// the actual invitee from real inviter ourself.
-			key.EqualBytes(
+			bytes.Equal(
 				n.InviteeChains[0].FirstBlock().Invitee.Public,
 				n.InviteeChains[1].LastBlock().Invitee.Public,
 			))
@@ -371,7 +371,7 @@ func (n Node) CheckIntegrity() error {
 	IDK := n.InviteeChains[0].LastBlock().Public()
 
 	for _, c := range n.InviteeChains {
-		if !key.EqualBytes(c.LastBlock().Public(), IDK) {
+		if !bytes.Equal(c.LastBlock().Public(), IDK) {
 			return ErrWrongKey
 		}
 
