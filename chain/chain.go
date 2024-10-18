@@ -78,7 +78,7 @@ func Hops(lhs, rhs Chain) (hop.Distance, hop.Distance) {
 func New(keyInfo key.Info, flags ...Opts) Chain {
 	chain := Chain{Blocks: make([]Block, 1, 12)}
 	chain.Blocks[0] = Block{
-		HashToPrev:        nil,
+		HashToPrev:        key.Hash{},
 		Invitee:           keyInfo,
 		InvitersSignature: nil,
 	}
@@ -184,12 +184,12 @@ func (c Chain) LeafPubKey() key.Public {
 	return c.LastBlock().Public()
 }
 
-func (c Chain) leafHash() []byte {
+func (c Chain) leafHash() key.Hash {
 	if c.Blocks == nil {
-		return nil
+		return key.Hash{}
 	}
 	ha := sha256.Sum256(c.LastBlock().Bytes())
-	return ha[:]
+	return ha
 }
 
 type getBackupKey func(int) key.Public

@@ -4,6 +4,7 @@
 package key
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -136,16 +137,10 @@ func (sig Signature) Verify(pubKey Public, msg []byte) bool {
 	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)
 }
 
-type Hash = []byte // TODO: [32]byte! we are using SHA256
+const HashSize = 32
+
+type Hash = [HashSize]byte
 
 func EqualBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if v != b[i] {
-			return false
-		}
-	}
-	return true
+	return bytes.Equal(a, b)
 }

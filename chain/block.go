@@ -27,7 +27,7 @@ type Block struct {
 // and out-of-band.
 func NewVerifyBlock(pinCode int) (Block, Block) {
 	challengeBlock := Block{
-		HashToPrev: key.RandSlice(32),
+		HashToPrev: key.Hash(key.RandSlice(32)),
 		Invitee:    key.RandInfo(32),
 	}
 	return challengeBlock, Block{
@@ -72,7 +72,7 @@ func (b Block) excludeSign() Block {
 }
 
 func EqualBlocks(b1, b2 Block) bool {
-	return key.EqualBytes(b1.HashToPrev, b2.HashToPrev) &&
+	return b1.HashToPrev == b2.HashToPrev &&
 		key.EqualBytes(b1.ID(), b2.ID()) &&
 		key.EqualBytes(b1.Public(), b2.Public()) &&
 		key.EqualBytes(b1.InvitersSignature, b2.InvitersSignature) &&
