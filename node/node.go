@@ -29,7 +29,7 @@ type Node struct {
 	// TODO: However, we should got something that we invtie additional members
 	// to the network. They should sign something that we can proof that we
 	// have made it. The problem is similar than the reputation or quantitative
-	// measure of our Tx count: succesful, no complaint reputation. We should
+	// measure of our Tx count: successful, no complaint reputation. We should
 	// think these insentive aspects carefully. Especially when we want to get
 	// this viral.
 }
