@@ -156,9 +156,9 @@ func (i Identity) RotateToBackupKey(keyIndex int) Identity {
 // TODO: How about Root Identities and backup keys? Root IDK is very important
 // over the time and for many IC holder. What happens if some of the main roots
 // needs to rotate their keys to backup keys? Next invitations they make
-// (propably quite random) would mean that new IC will be created!!! that's a
+// (probably quite random) would mean that new IC will be created!!! That's a
 // very bad thing!
-//  = consider that backup keys are forbiddend from root IDs?
+//  = consider that backup keys are forbidden from root IDs? Yes!! Have to.
 
 func (i *Identity) CreateBackupKeysAmount(count int) {
 	assert.ThatNot(i.IsRoot())
