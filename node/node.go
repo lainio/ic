@@ -367,7 +367,7 @@ func (n Node) CheckIntegrity() error {
 		return nil
 	}
 
-	// use 1st ICs PubKey for our IDK, all the rest must use the same
+	// pick 1st ICs PubKey for our IDK, all the rest MUST use the same
 	IDK := n.InviteeChains[0].LastBlock().Public()
 
 	for _, c := range n.InviteeChains {
