@@ -12,6 +12,9 @@ type Options struct {
 
 	// TODO: future ones, endpoint or does this belong to key.Info? It might be
 	// good if we could share same key with the Tor service and our ID?
+
+	// TODO: we can use this same block type for Tx Merits, see Block and think
+	// about then name Invitee
 }
 
 func NewOptions(options ...Opts) *Options {

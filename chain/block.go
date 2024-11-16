@@ -14,7 +14,7 @@ import (
 // identity ID, we call it in the docs IDK.
 type Block struct {
 	HashToPrev key.Hash
-	Invitee    key.Info
+	Invitee    key.Info // TODO: Maybe try to find meta name like Receiver?
 	Options
 
 	InvitersSignature key.Signature

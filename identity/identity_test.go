@@ -426,7 +426,7 @@ func testChallenge(t *testing.T) {
 //
 // Yes, CreateBackupKeysAmount must be called before first invitation towards us
 // is made, and if we are a Root Identity, its constructor is the place for
-// that. WIP
+// that. Root Identity cannot have backup keys because it cannot change its IDK!
 
 func testCreateBackupKeysAmount(t *testing.T) {
 	defer assert.PushTester(t)()

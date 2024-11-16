@@ -221,7 +221,6 @@ func emptyBKImpl(int) key.Public {
 }
 
 // VerifySignatures verifies chains signatures, from root to the leaf.
-// TODO: merge with the next, refactoring.
 func (c Chain) VerifySignatures() bool {
 	return c.VerifySignaturesWithGetBKID(emptyBKImpl)
 }
