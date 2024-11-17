@@ -186,7 +186,7 @@ func (i Identity) Endpoint(pubkey key.Public) string {
 
 // WebOfTrustInfo returns web-of-trust information of two identitys if they
 // share a trust chain (common root). If not returns nil.
-func (i Identity) WebOfTrust(rhs Identity) *node.WebOfTrust {
+func (i Identity) WebOfTrust(rhs Identity) *node.WoTInfo {
 	return i.WebOfTrustInfo(rhs.Node)
 }
 

@@ -34,8 +34,8 @@ type Node struct {
 	// this viral.
 }
 
-// WebOfTrust includes most important information about WoT.
-type WebOfTrust struct {
+// WoTInfo includes most important information about WoT.
+type WoTInfo struct {
 	// Hops tells how far the the other end is when traversing thru the
 	// CommonInviter. NOTE that if parties don't have WoT this is
 	// hop.NotConnected.
@@ -57,9 +57,9 @@ type WebOfTrust struct {
 	Position int
 }
 
-// NewWebOfTrust returns web-of-trust information of two nodes if they share a
+// NewWoTInfo returns web-of-trust information of two nodes if they share a
 // trust chain. If not the Hops field is hop.NotConnected.
-func NewWebOfTrust(n1, n2 Node) *WebOfTrust {
+func NewWoTInfo(n1, n2 Node) *WoTInfo {
 	return n1.WebOfTrustInfo(n2)
 }
 
@@ -220,7 +220,7 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 // i.e., ICs including a correct RootIDK. If not returns nil.
 //
 // See [WebOfTrustInfo] for cases where you have both [Node]s.
-func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
+func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	var (
 		found bool
 		hops  = hop.NewNotConnected()
@@ -240,7 +240,7 @@ func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 	}
 
 	if found {
-		return &WebOfTrust{
+		return &WoTInfo{
 			SameChain:           true,
 			Hops:                hops + digest.Hops,
 			CommonInviterLevel:  lvl, // their lvl in IC
@@ -252,7 +252,7 @@ func (n Node) WoT(digest *digest.Digest) *WebOfTrust {
 
 // WebOfTrustInfo returns web-of-trust information of two nodes if they share a
 // trust chain (common root). If not returns nil.
-func (n Node) WebOfTrustInfo(their Node) *WebOfTrust {
+func (n Node) WebOfTrustInfo(their Node) *WoTInfo {
 	chainPairs := n.CommonChains(their)
 
 	hops := hop.NewNotConnected()
@@ -270,7 +270,7 @@ func (n Node) WebOfTrustInfo(their Node) *WebOfTrust {
 			fromRoot.PickShorter(lvl)
 		}
 	}
-	return &WebOfTrust{
+	return &WoTInfo{
 		Hops:                hops,
 		CommonInviterLevel:  fromRoot,
 		CommonInviterPubKey: commonIDKey,

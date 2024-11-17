@@ -253,7 +253,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.That(wot2.SameChain)
 	assert.Equal(wot2.Hops, 1)
 
-	wot = NewWebOfTrust(bob.Node, carol.Node)
+	wot = NewWoTInfo(bob.Node, carol.Node)
 	assert.Equal(wot.CommonInviterLevel, hop.NotConnected)
 	assert.Equal(wot.Hops, hop.NotConnected)
 
@@ -319,7 +319,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.That(wot2.SameChain)
 	assert.Equal(wot2.Hops, 3)
 
-	wot = NewWebOfTrust(frank.Node, grace.Node)
+	wot = NewWoTInfo(frank.Node, grace.Node)
 	assert.Equal(wot.CommonInviterLevel, 1)
 	assert.DeepEqual(wot.CommonInviterPubKey, aliceIDK)
 	assert.Equal(wot.Hops, 3)
@@ -366,7 +366,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	//           eve(root-is-dave)         │
 	//           ↓                         ↓
 	//        eve(key-rotated) ­─────────→ heidi
-	wot = NewWebOfTrust(eve.Node, heidi.Node)
+	wot = NewWoTInfo(eve.Node, heidi.Node)
 	assert.Equal(wot.CommonInviterLevel, 1, "common root is dave and eve is 1 from it")
 	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(eve.CBORPublicKey()))
 	assert.Equal(wot.Hops, 1, "dave invites heidi")
