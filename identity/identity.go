@@ -149,7 +149,7 @@ func (i Identity) RotateToBackupKey(keyIndex int) Identity {
 	assert.ThatNot(i.IsRoot())
 
 	newNode, newKH := i.Node.RotateToBackupKey(keyIndex)
-	newIdentity := Identity{Node: newNode, Hand: key.NewHand(newKH)}
+	newIdentity := Identity{Node: newNode, Hand: key.NewHandFromHandle(newKH)}
 	return newIdentity
 }
 
@@ -184,7 +184,7 @@ func (i Identity) Endpoint(pubkey key.Public) string {
 	return ""
 }
 
-// WebOfTrustInfo returns web-of-trust information of two identitys if they
+// WebOfTrustInfo returns web-of-trust information of two identities if they
 // share a trust chain (common root). If not returns nil.
 func (i Identity) WebOfTrust(rhs Identity) *node.WoTInfo {
 	return i.WebOfTrustInfo(rhs.Node)

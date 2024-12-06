@@ -39,8 +39,14 @@ type Hand struct {
 	*Info
 }
 
-// NewHand creates a hand holding a [Handle] and [Info].
-func NewHand(h Handle) Hand {
+func NewHand() Hand {
+	h := New()
+	info := InfoFromHandle(h)
+	return Hand{Handle: h, Info: &info}
+}
+
+// NewHandFromHandle creates a hand holding a [Handle] and [Info].
+func NewHandFromHandle(h Handle) Hand {
 	info := InfoFromHandle(h)
 	return Hand{Handle: h, Info: &info}
 }
