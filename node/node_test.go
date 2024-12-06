@@ -25,7 +25,7 @@ var (
 
 type entity struct {
 	Node
-	key.Handle // TODO: use key.Hand? Yes!
+	key.Hand
 }
 
 func TestMain(m *testing.M) {
@@ -40,19 +40,20 @@ func teardown() {
 
 func setup() {
 	// root, alice, bob setup
-	root1.Handle = key.New()
-	root2.Handle = key.New()
-	alice.Handle = key.New()
-	bob.Handle = key.New()
-	carol.Handle = key.New()
-	dave.Handle = key.New()
-	eve.Handle = key.New()
-	// TODO: comment frank init out to test err2
-	frank.Handle = key.New()
-	grace.Handle = key.New()
+	root1.Hand = key.NewHand()
+	root2.Hand = key.NewHand()
+	alice.Hand = key.NewHand()
+	bob.Hand = key.NewHand()
+	carol.Hand = key.NewHand()
+	dave.Hand = key.NewHand()
+	eve.Hand = key.NewHand()
 
-	root1.Node = NewRoot(key.InfoFromHandle(root1), chain.WithEndpoint("root1", true))
-	root2.Node = NewRoot(key.InfoFromHandle(root2), chain.WithEndpoint("root2", true))
+	// TODO: comment frank init out to test err2
+	frank.Hand = key.NewHand()
+	grace.Hand = key.NewHand()
+
+	root1.Node = NewRoot(*root1.Info, chain.WithEndpoint("root1", true))
+	root2.Node = NewRoot(*root2.Info, chain.WithEndpoint("root2", true))
 }
 
 func Test_all(t *testing.T) {
@@ -71,11 +72,11 @@ func Test_all(t *testing.T) {
 func testNewRootNode(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	aliceNode := NewRoot(key.InfoFromHandle(alice))
+	aliceNode := NewRoot(*alice.Info)
 	assert.SLen(aliceNode.InviteeChains, 1)
 	assert.SLen(aliceNode.InviteeChains[0].Blocks, 1)
 
-	bobNode := NewRoot(key.InfoFromHandle(bob))
+	bobNode := NewRoot(*bob.Info)
 	assert.SLen(bobNode.InviteeChains, 1)
 }
 
@@ -84,9 +85,9 @@ func testInvite(t *testing.T) {
 
 	// Root1 chains start here:
 	alice.Node = root1.Invite(
-		root1.Handle,
+		root1.Hand.Handle,
 		alice.Node,
-		key.InfoFromHandle(alice), chain.WithPosition(1))
+		*alice.Info, chain.WithPosition(1))
 	//      root1
 	//        ↓
 	//      alice
@@ -98,9 +99,9 @@ func testInvite(t *testing.T) {
 	}
 
 	bob.Node = alice.Invite(
-		alice.Handle,
+		alice.Hand.Handle,
 		bob.Node,
-		key.InfoFromHandle(bob), chain.WithPosition(1))
+		*bob.Info, chain.WithPosition(1))
 	//      root1
 	//        ↓
 	//      alice -> bob
@@ -118,9 +119,9 @@ func testInvite(t *testing.T) {
 	// root2 chains start here:
 	// root2 invites Carol here
 	carol.Node = root2.Invite(
-		root2.Handle,
+		root2.Hand.Handle,
 		carol.Node,
-		key.InfoFromHandle(carol), chain.WithPosition(1))
+		*carol.Info, chain.WithPosition(1))
 	//     root2
 	//       ↓
 	//    carol
@@ -136,11 +137,11 @@ func testInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 
 	// Dave is one of the roots as well and we build it here:
-	dave.Node = NewRoot(key.InfoFromHandle(dave), chain.WithEndpoint("dave", true))
+	dave.Node = NewRoot(*dave.Info, chain.WithEndpoint("dave", true))
 	eve.Node = dave.Invite(
-		dave.Handle,
+		dave.Hand.Handle,
 		eve.Node,
-		key.InfoFromHandle(eve), chain.WithPosition(1))
+		*eve.Info, chain.WithPosition(1))
 	//     dave
 	//      ↓
 	//     eve
@@ -154,9 +155,9 @@ func testInvite(t *testing.T) {
 	// Root2 invites Dave and now Dave has 2 chains, BUT this doesn't effect
 	// Eve! NOTE but when Dave invites new parties nowon they will get 2 chains
 	dave.Node = root2.Invite(
-		root2.Handle,
+		root2.Hand.Handle,
 		dave.Node,
-		key.InfoFromHandle(dave), chain.WithPosition(1))
+		*dave.Info, chain.WithPosition(1))
 	//         ┌ root2  ┐
 	//         ↓        ↓
 	//       carol    dave-2-chains
@@ -177,9 +178,9 @@ func testInvite(t *testing.T) {
 	assert.SNil(common.Blocks)
 	// .. so Carol can invite Eve
 	eve.Node = carol.Invite(
-		carol.Handle,
+		carol.Hand.Handle,
 		eve.Node,
-		key.InfoFromHandle(eve), chain.WithPosition(1))
+		*eve.Info, chain.WithPosition(1))
 	//         ┌ root2  ┐
 	//         ↓        ↓
 	//       carol    dave-2-chains
@@ -258,15 +259,15 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot.Hops, hop.NotConnected)
 
 	frank.Node = alice.Invite(
-		alice.Handle,
+		alice.Hand.Handle,
 		frank.Node,
-		key.InfoFromHandle(frank), chain.WithPosition(1))
+		*frank.Info, chain.WithPosition(1))
 	assert.Equal(frank.ICCount(), 1)
 	assert.Equal(alice.ICCount(), 1)
 	grace.Node = bob.Invite(
-		bob.Handle,
+		bob.Hand.Handle,
 		grace.Node,
-		key.InfoFromHandle(grace), chain.WithPosition(1))
+		*grace.Info, chain.WithPosition(1))
 	assert.Equal(grace.ICCount(), 1)
 	assert.Equal(bob.ICCount(), 1)
 	//      root1
@@ -325,13 +326,13 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot.Hops, 3)
 	assert.ThatNot(wot.SameChain)
 
-	root3 := entity{Handle: key.New()}
-	root3.Node = NewRoot(key.InfoFromHandle(root3), chain.WithEndpoint("root3", true))
-	heidi := entity{Handle: key.New()}
+	root3 := entity{Hand: key.NewHand()}
+	root3.Node = NewRoot(*root3.Info, chain.WithEndpoint("root3", true))
+	heidi := entity{Hand: key.NewHand()}
 	heidi.Node = root3.Invite(
-		root3.Handle,
+		root3.Hand.Handle,
 		heidi.Node,
-		key.InfoFromHandle(heidi), chain.WithPosition(1))
+		*heidi.Info, chain.WithPosition(1))
 	assert.SLen(heidi.InviteeChains, 1)
 	assert.SLen(heidi.InviteeChains[0].Blocks, 2, "heidi's root is 'root3'")
 
@@ -342,9 +343,9 @@ func testWebOfTrustInfo(t *testing.T) {
 
 	// heidi got's 2 new roots from eve:
 	heidi.Node = eve.Invite(
-		eve.Handle,
+		eve.Hand.Handle,
 		heidi.Node,
-		key.InfoFromHandle(heidi), chain.WithPosition(1))
+		*heidi.Info, chain.WithPosition(1))
 	assert.SLen(heidi.InviteeChains, 3, "heidi's 2 + previous 1")
 
 	// NOTE --- does nothing! -----
@@ -352,9 +353,9 @@ func testWebOfTrustInfo(t *testing.T) {
 	//   new roots in daves chains
 	heidiNodeLen := heidi.ICCount()
 	heidi.Node = dave.Invite(
-		dave.Handle,
+		dave.Hand.Handle,
 		heidi.Node,
-		key.InfoFromHandle(heidi),
+		*heidi.Info,
 		chain.WithPosition(1),
 	)
 	assert.Equal(heidi.ICCount(), heidiNodeLen)
