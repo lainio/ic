@@ -28,6 +28,7 @@ type Identity struct {
 // See [NewRoot] for the cases where we want to start our own chain.
 //
 // NOTE that this is the preferred way to create Identity and join the network.
+// TODO: add backup key count here?
 func New(h key.Handle) Identity {
 	info := key.InfoFromHandle(h)
 	return Identity{
@@ -161,6 +162,8 @@ func (i Identity) RotateToBackupKey(keyIndex int) Identity {
 //  = consider that backup keys are forbidden from root IDs? Yes!! Have to.
 
 func (i *Identity) CreateBackupKeysAmount(count int) {
+	// TODO: should this be one time operation and done when the identity is
+	// created (New function). The we'd un export this but call it from there.
 	assert.ThatNot(i.IsRoot())
 	assert.That(i.ValidHandle())
 
