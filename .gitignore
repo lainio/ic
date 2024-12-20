@@ -1,6 +1,7 @@
 # IDEs, etc.
 .idea
 *.vim
+.envrc
 
 # Binaries for programs and plugins
 *.exe
