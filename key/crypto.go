@@ -19,7 +19,7 @@ import (
 
 // TODO: from where we get the key! In the server this is ordinary secret. We
 // can still think this when we have our UI app ready.
-var myStore = enclave.New("aa5cb4215d4fc1f9912f094a6fdc1f263c124854f59b8b889b50ac2f32856844")
+var Enclave enclave.Secure = enclave.New("bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1")
 
 type Public = []byte
 type ID = []byte
@@ -101,11 +101,11 @@ func InfoFromHandle(h Handle) Info {
 }
 
 func New() Handle {
-	return try.To1(myStore.NewKeyHandle())
+	return try.To1(Enclave.NewKeyHandle())
 }
 
 func NewFromInfo(info Info) Handle {
-	yes, kh := myStore.IsKeyHandle(info.ID)
+	yes, kh := Enclave.IsKeyHandle(info.ID)
 	assert.That(yes)
 	return kh
 }
