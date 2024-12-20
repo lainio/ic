@@ -15,6 +15,22 @@ TEST_ARGS ?= -benchmem
 
 check: lint test
 
+cli:
+	$(eval VERSION = $(shell printf "Build v.%s on %s" "$(shell cat ./VERSION)" "$(shell date)"))
+	@echo "Installing version '$(VERSION)' of 'tdc'"
+	go build \
+		-ldflags "-X 'github.com/lainio/ic/utils.Version=$(VERSION)'" \
+		-o $(GOPATH)/bin/tdc \
+		cmd/tdc/main.go
+
+install:
+	$(eval VERSION = $(shell printf "Build v.%s on %s" "$(shell cat ./VERSION)" "$(shell date)"))
+	@echo "Installing version $(VERSION) of 'ic'"
+	go install \
+		-ldflags "-X 'github.com/lainio/ic/utils.Version=$(VERSION)'" \
+		-o $(GOPATH)/bin/tdc \
+		cmd/tdc/main.go
+
 build:
 	@$(GO) build -o /dev/null $(PKGS)
 
