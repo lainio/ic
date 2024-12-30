@@ -21,15 +21,14 @@ cli:
 	go build \
 		-ldflags "-X 'github.com/lainio/ic/utils.Version=$(VERSION)'" \
 		-o $(GOPATH)/bin/tdc \
-		cmd/tdc/main.go
+		cmd/tdc/tdc.go
 
 install:
 	$(eval VERSION = $(shell printf "Build v.%s on %s" "$(shell cat ./VERSION)" "$(shell date)"))
 	@echo "Installing version $(VERSION) of 'ic'"
 	go install \
 		-ldflags "-X 'github.com/lainio/ic/utils.Version=$(VERSION)'" \
-		-o $(GOPATH)/bin/tdc \
-		cmd/tdc/main.go
+		cmd/tdc/tdc.go
 
 build:
 	@$(GO) build -o /dev/null $(PKGS)
