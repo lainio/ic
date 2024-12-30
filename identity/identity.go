@@ -27,9 +27,15 @@ type Identity struct {
 // means that we'll wait other party to invite us, and then we'll get our IC.
 // See [NewRoot] for the cases where we want to start our own chain.
 //
+// NOTE if [key.Handle] is nil new key handle is created by using current
+// [key.Enclave].
+//
 // NOTE that this is the preferred way to create Identity and join the network.
 // TODO: add backup key count here?
 func New(h key.Handle) Identity {
+	if h == nil {
+		h = key.New()
+	}
 	info := key.InfoFromHandle(h)
 	return Identity{
 		Node: node.Node{}, // Just empty Node! Important, no root IC.
@@ -44,6 +50,9 @@ func New(h key.Handle) Identity {
 // IC. Please prefer [New] function over this to maximize connectivity in the
 // network.
 //
+// NOTE if [key.Handle] is nil new key handle is created by using current
+// [key.Enclave].
+//
 // NOTE that this far too simple for production use when we need to setup many
 // keys (probably) for the backup keys, etc.
 //
@@ -54,6 +63,9 @@ func New(h key.Handle) Identity {
 //
 // TODO: rename NewRoot -> NewDomain, start to use name Domain for ICs?
 func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
+	if h == nil {
+		h = key.New()
+	}
 	keyInfo := key.InfoFromHandle(h)
 	return Identity{
 		Node: node.NewRoot(keyInfo, flags...),
@@ -203,4 +215,9 @@ func (i Identity) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
 	// TODO: should we still randomize the used index? it's now 0 but it could
 	// be any of the available?
 	return i.InviteeChains[0].Challenge(pinCode, f)
+}
+
+// GetIDK return Node's current IDK as [key.Info].
+func (i Identity) GetIDK() key.Info {
+	return *i.Info
 }
