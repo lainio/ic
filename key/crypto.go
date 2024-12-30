@@ -8,6 +8,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 	"math/big"
 
 	"github.com/duo-labs/webauthn/protocol/webauthncose"
@@ -19,7 +21,9 @@ import (
 
 // TODO: from where we get the key! In the server this is ordinary secret. We
 // can still think this when we have our UI app ready.
-var Enclave enclave.Secure = enclave.New("bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1")
+var Enclave enclave.Secure = enclave.New(
+	"bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1",
+)
 
 type Public = []byte
 type ID = []byte
@@ -95,11 +99,23 @@ type Info struct {
 	Public // The Public Key
 }
 
+func (i Info) String() string {
+	const (
+		byteCount       = 8
+		publicByteCount = 77
+	)
+	id := hex.EncodeToString(i.ID[:byteCount])
+	pk := hex.EncodeToString(i.Public[publicByteCount-byteCount:])
+
+	return fmt.Sprintf("ID: '%v', Public: '%v'", id, pk)
+}
+
 func InfoFromHandle(h Handle) Info {
 	pubK := try.To1(h.CBORPublicKey())
 	return Info{ID: h.ID(), Public: pubK}
 }
 
+// New creates a new [Handle] by using current [Enclave].
 func New() Handle {
 	return try.To1(Enclave.NewKeyHandle())
 }
