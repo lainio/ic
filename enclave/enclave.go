@@ -263,8 +263,7 @@ type RoleInfo struct {
 // and helps us store them to DB. Public members are for GOB serialization.
 // TODO: We could have UserRaw the help us keep User clean.
 type User struct {
-	ID      uint32   // Replace with ..
-	KeyInfo key.Info // ... RoleInfo
+	RoleInfo
 
 	IdentityCBOR []byte
 
@@ -306,8 +305,10 @@ func NewUser(flags ...chain.Opts) User {
 	try.To(PutUserIDCount())
 
 	return User{
-		ID:           userIDCount,
-		KeyInfo:      key.InfoFromHandle(kh),
+		RoleInfo: RoleInfo{
+			ID:      userIDCount,
+			KeyInfo: key.InfoFromHandle(kh),
+		},
 		identity:     &id,
 		IdentityCBOR: id.Bytes(),
 	}
