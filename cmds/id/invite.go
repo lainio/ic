@@ -7,6 +7,7 @@ import (
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/chain"
 	cmd "github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/enclave"
 	"github.com/lainio/ic/identity"
@@ -37,7 +38,7 @@ var idInviteCmd = &cobra.Command{
 		defer func() {
 			glog.V(3).Infoln("closing nats")
 			ec.Close()
-		}() 
+		}()
 
 		try.To(invitationHandshake())
 		// TODO: --------------------------------------
@@ -81,42 +82,47 @@ func init() {
 func invitationHandshake() (err error) {
 	defer err2.Handle(&err)
 
-	invitationCh := make(chan Invitation)
-	subject := fmt.Sprintf(
-		"%s_%d", subjectInvitationPropose, idInviteCmdData.RcvrUserID,
-	)
-	glog.V(3).Infoln("--- we'll listen", subject)
-	tryBindInOutChannelToSubject(subject, invitationCh)
+	sendInvitationCh, subject := makeOutSubject(subjectInvitationPropose, idInviteCmdData.RcvrUserID)
+	listenInvitationCh, subject2 := makeInSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
 
+	glog.V(3).Infoln("--- we'll send", subject)
+
+	todoRandom := 1234 // TODO: implement in utils or...
+	challenge, verify := chain.NewVerifyBlock(todoRandom)
 	me := Invitation{
-		Sender: RoleInfo{
-			ID:      senderUser.ID,
-			KeyInfo: senderUser.KeyInfo,
-		},
-		Rcvr: RoleInfo{
-			ID:      rcvrUser.ID,
-			KeyInfo: rcvrUser.KeyInfo,
-		},
-		Indentity: identity.Identity{},
+		Sender: senderUser.RoleInfo,
+		Rcvr:   rcvrUser.RoleInfo,
+		//Indentity: identity.Identity{},
+		Challenge: challenge,
 	}
-	//		Sender.UserID: senderUser.ID,
-	//		Rcvr.UserID:   rcvrUser.ID,
-	//		Rcvr.IDK:      rcvrUser.KeyID,
+	assert.Equal(verify.Position, todoRandom)
 
-	invitationCh <- me
+	fmt.Println("pin CODE:", todoRandom)
+
+	glog.V(3).Infoln("=== send ===")
+	sendInvitationCh <- me
 
 	glog.V(3).Infoln(
-		"done pub: sender ID", me.Sender.ID,
+		"--> sender ID", me.Sender.ID,
 		"rcvr ID", me.Rcvr.ID,
 	)
-	glog.V(3).Infoln("-- start to wait reply")
-	reply := <-invitationCh
 
-	glog.V(3).Infoln("reply received")
+	glog.V(3).Infoln("--- we'll start to listen", subject2)
+	glog.V(3).Infoln("=== listen ===")
+	reply := <-listenInvitationCh
+
+	glog.V(3).Infoln("=== reply received")
 
 	assert.Equal(reply.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(reply.Sender.ID, idInviteCmdData.SenderUserID)
 	//try.To(reply.Indentity.CheckIntegrity())
+
+	// TODO: verify
+	assert.Equal(reply.Challenge.Position, todoRandom)
+
+	pubKey := reply.Rcvr.KeyInfo.Public
+	verified := reply.ChallengeSig.Verify(pubKey, reply.Challenge.Bytes())
+	assert.That(verified)
 
 	glog.V(3).Infoln("all OK")
 
@@ -125,23 +131,46 @@ func invitationHandshake() (err error) {
 	return nil
 }
 
-func tryBindInOutChannelToSubject(subject string, invitationCh chan Invitation) {
+func makeInSubject(base string, target uint32) (chan Invitation, string) {
+	invitationCh := make(chan Invitation)
+	subject := fmt.Sprintf(
+		"%s_%d", base, target,
+	)
+	tryBindInChannelToSubject(subject, invitationCh)
+	glog.V(3).Infoln("=== In CHANNEL created: ", subject)
+	return invitationCh, subject
+}
+
+func makeOutSubject(base string, target uint32) (chan Invitation, string) {
+	invitationCh := make(chan Invitation)
+	subject := fmt.Sprintf(
+		"%s_%d", base, target,
+	)
+	tryBindOutChannelToSubject(subject, invitationCh)
+	glog.V(3).Infoln("=== Out CHANNEL created: ", subject)
+	return invitationCh, subject
+}
+
+func tryBindOutChannelToSubject(subject string, invitationCh chan Invitation) {
 	try.To(ec.BindSendChan(subject, invitationCh))
+}
+
+func tryBindInChannelToSubject(subject string, invitationCh chan Invitation) {
 	try.To1(ec.BindRecvChan(subject, invitationCh))
 }
 
 type Invitation struct {
-	Sender    RoleInfo
-	Rcvr      RoleInfo
-	Indentity identity.Identity
-}
+	Sender enclave.RoleInfo // both parties..
+	Rcvr   enclave.RoleInfo // ..  keep them same
 
-type RoleInfo struct {
-	ID      uint32
-	KeyInfo key.Info
+	Challenge    chain.Block
+	ChallengeSig key.Signature // only in reply
+
+	Indentity identity.Identity // not used yet
 }
 
 const (
 	subjectInvitationPropose = "INVITATION_PROPOSE"
+	subjectInvitationReply   = "INVITATION_REPLY"
 	subjectInvitationACK     = "INVITATION_ACK"
 )
