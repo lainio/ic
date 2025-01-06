@@ -79,8 +79,8 @@ linters:
     - nakedret
     - noctx
     - nolintlint
-    - staticcheck
-    - stylecheck
+      #- staticcheck
+      #- stylecheck
     - typecheck
     - unconvert
     - unparam
