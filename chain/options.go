@@ -31,11 +31,16 @@ func WithPosition(p int) Opts {
 	}
 }
 
+// TODO: rename -> WithRotationDoneWithBackupKeyIndex
+
 func WithBackupKeyIndex(i int) Opts {
 	return func(o *Options) {
 		o.BackupKeyIndex = i
 	}
 }
+
+// TODO: rename -> WithRotationTxDone
+//  - just extra chain block, no need for new backup key!
 
 func WithRotation() Opts {
 	return func(o *Options) {
@@ -48,6 +53,8 @@ func WithAllowRouting(allow bool) Opts {
 		o.AllowRouting = allow
 	}
 }
+
+// TODO: rename -> WithEndpointIsResolver
 
 func WithEndpoint(endpoint string, isResolver bool) Opts {
 	return func(o *Options) {
