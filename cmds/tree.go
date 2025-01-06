@@ -1,0 +1,60 @@
+package cmds
+
+import (
+	"fmt"
+
+	"github.com/lainio/err2"
+	"github.com/lainio/err2/try"
+	"github.com/spf13/cobra"
+)
+
+var treeDoc = `Prints the command structure in familiar tree format.
+
+The whole command structure is printed if no argument is given.
+If command name is given as argument, only specified command structure is printed.
+(Command must be direct subcommand of the root command.)
+`
+
+var treeCmd = &cobra.Command{
+	Use:   "tree",
+	Short: "Prints our command structure in familiar tree format",
+	Long:  treeDoc,
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) (err error) {
+		defer err2.Handle(&err)
+		if len(args) == 0 {
+			printStructure(rootCmd, "", 0, true)
+		} else {
+			c, _ := try.To2(rootCmd.Find(args))
+			printStructure(c, "", 0, true)
+		}
+		return nil
+	},
+}
+
+func printStructure(cmd *cobra.Command, insertion string, level int, last bool) {
+	if deepLimit != 0 && level >= deepLimit {
+		return
+	}
+	fmt.Print(insertion)
+	if last {
+		insertion += " "
+		fmt.Print("└── ")
+	} else {
+		insertion += "│"
+		fmt.Print("├── ")
+	}
+	insertion += "   "
+	fmt.Println(cmd.Name())
+	for i, subCmd := range cmd.Commands() {
+		last := i == len(cmd.Commands())-1
+		printStructure(subCmd, insertion, level+1, last)
+	}
+}
+
+var deepLimit int
+
+func init() {
+	treeCmd.PersistentFlags().IntVarP(&deepLimit, "level", "L", 0, "level of the tree, zero is ignored")
+	rootCmd.AddCommand(treeCmd)
+}
