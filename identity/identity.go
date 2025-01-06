@@ -36,13 +36,10 @@ func New(h key.Handle) Identity {
 	if h == nil {
 		h = key.New()
 	}
-	info := key.InfoFromHandle(h)
+	hand := key.NewHandFromHandle(h)
 	return Identity{
 		Node: node.Node{}, // Just empty Node! Important, no root IC.
-		Hand: key.Hand{
-			Handle: h,
-			Info:   &info,
-		},
+		Hand: hand,
 	}
 }
 
@@ -66,13 +63,10 @@ func NewRoot(h key.Handle, flags ...chain.Opts) Identity {
 	if h == nil {
 		h = key.New()
 	}
-	keyInfo := key.InfoFromHandle(h)
+	keyHand := key.NewHandFromHandle(h)
 	return Identity{
-		Node: node.NewRoot(keyInfo, flags...),
-		Hand: key.Hand{
-			Handle: h,
-			Info:   &keyInfo,
-		},
+		Node: node.NewRoot(*keyHand.Info, flags...),
+		Hand: keyHand,
 	}
 }
 
@@ -99,7 +93,8 @@ func NewFromData(d []byte, kh key.Handle) (i Identity) {
 }
 
 func (i Identity) Bytes() []byte {
-	// It's enough to get Node data for read-only Identities
+	assert.That(i.Hand.Valid())
+
 	return i.Node.Bytes()
 }
 
