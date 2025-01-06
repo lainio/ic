@@ -21,11 +21,11 @@ type Block struct {
 }
 
 // NewVerifyBlock returns two randomized Blocks that can be used for
-// verification or challenges, etc. First block is for challenge, i.e. pinCode
-// is unknown aka 0, and second block is for actual signing where pincode is set
+// verification or challenges, etc. [theirs] is for challenge, i.e. pinCode
+// is unknown aka 0, and [ours] is for actual signing where pincode is set
 // to Position field. By this we can send pincode by other, thru safe channel
 // and out-of-band.
-func NewVerifyBlock(pinCode int) (Block, Block) {
+func NewVerifyBlock(pinCode int) (theirs Block, ours Block) {
 	challengeBlock := Block{
 		HashToPrev: key.Hash(key.RandSlice(32)),
 		Invitee:    key.RandInfo(32),
