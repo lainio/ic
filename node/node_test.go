@@ -83,6 +83,24 @@ func testNewRootNode(t *testing.T) {
 func testInvite(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	// test without root:
+	fhand := key.NewHand()
+	var (
+		// TODO: allow idle Node constructor? We might not know which one we
+		// want to be root or no-root.
+
+		//first = entity{Node{}, key.NewHand()}
+		first  = entity{NewRoot(*fhand.Info, chain.WithPosition(1)), fhand}
+		second = entity{Node{}, key.NewHand()}
+	)
+	second.Node = first.Invite(
+		first.Handle,
+		second.Node,
+		*second.Info,
+		chain.WithPosition(1),
+	)
+	assert.Equal(second.ICCount(), 1)
+
 	// Root1 chains start here:
 	alice.Node = root1.Invite(
 		root1.Handle,
