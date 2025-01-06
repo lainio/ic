@@ -1,17 +1,18 @@
-// Package crypto implements need helpers for invitation chain use. We haven't
+// Package crypto implemets need helpers for invitation chain use. We haven't
 // yet thought about interface or other stuff. We just build the minimum for the
 // PoC.
 package key
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/duo-labs/webauthn/protocol/webauthncose"
 	"github.com/findy-network/findy-agent-auth/acator/enclave"
 	"github.com/fxamacker/cbor/v2"
@@ -90,6 +91,8 @@ func (h Hand) PubKey() []byte {
 //
 // Handle also allows us decided what kind of key storage we are using and it
 // simplifies key management A LOT.
+//
+// TODO: if this would not be an alias, we could have better API like kh.Info()
 type Handle = enclave.KeyHandle
 
 // Info is key.Info that binds and transport both key's ID and its public key
@@ -99,15 +102,24 @@ type Info struct {
 	Public // The Public Key
 }
 
+const (
+	byteCount       = 8
+	publicByteCount = 77
+	prefixLenOfCBOR = 14
+)
+
 func (i Info) String() string {
-	const (
-		byteCount       = 8
-		publicByteCount = 77
-	)
-	id := hex.EncodeToString(i.ID[:byteCount])
-	pk := hex.EncodeToString(i.Public[publicByteCount-byteCount:])
+	id := base58.Encode(i.ID[:byteCount])
+	pk := base58.Encode(i.Public[publicByteCount-byteCount:])
+	//id := hex.EncodeToString(i.ID[:byteCount])
+	//pk := hex.EncodeToString(i.Public[publicByteCount-byteCount:])
 
 	return fmt.Sprintf("ID: '%v', Public: '%v'", id, pk)
+}
+
+func (i Info) PKString() string {
+	pk := base58.Encode(i.Public)
+	return pk[prefixLenOfCBOR : 2*prefixLenOfCBOR]
 }
 
 func InfoFromHandle(h Handle) Info {
@@ -143,7 +155,7 @@ func RandSlice(n int) []byte {
 type Signature []byte
 
 func (sig Signature) Verify(pubKey Public, msg []byte) bool {
-	var pubK webauthncose.EC2PublicKeyData
+	var pubK webauthncose.EC2PublicKeyData // TODO: copy&paste no module ref!
 	try.To(cbor.Unmarshal(pubKey, &pubK))
 
 	hash := crypto.SHA256.New()
@@ -161,3 +173,22 @@ func (sig Signature) Verify(pubKey Public, msg []byte) bool {
 const HashSize = 32
 
 type Hash = [HashSize]byte
+
+const prefixCBOR = "2DLtZ9GymDo1pt"
+
+type PublicCBOR []byte
+
+func (pk PublicCBOR) Equal(rhs PublicCBOR) bool {
+	return bytes.Equal(pk, rhs)
+}
+
+func (pk PublicCBOR) String() string {
+	p := base58.Encode(pk)
+	return p[prefixLenOfCBOR:]
+}
+
+func NewPublicCBOR(s string) (pk PublicCBOR) {
+	s = prefixCBOR + s
+	b := base58.Decode(s)
+	return b
+}
