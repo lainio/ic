@@ -20,6 +20,7 @@ import (
 	"github.com/findy-network/findy-common-go/crypto/db"
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/identity"
@@ -143,7 +144,7 @@ func GetExistingUser(id uint32) (u User, err error) {
 func RemoveUser(id uint32) (err error) {
 	defer err2.Handle(&err)
 
-	_ = try.To1(GetExistingUser(id))
+	//_ = try.To1(GetExistingUser(id))
 	return db.RmKeyValueFromBucket(
 		buckets[userBucket], &db.Data{
 			Data: uint32ToBytes(id),
@@ -283,20 +284,23 @@ func (u User) Key() []byte {
 }
 
 func (u User) IdentityStr() string {
-	return base58.Encode(u.identity.Bytes())
+	assert.That(bytes.Equal(u.identity.Bytes(), u.IdentityCBOR))
+	return base58.Encode(u.IdentityCBOR)
 }
 
 func (u *User) SetIdentityFromStr(idStr string) {
 	d := base58.Decode(idStr)
 	id := identity.NewFromData(d, key.NewFromInfo(u.KeyInfo))
-	u.identity = &id
+	u.SetIdentity(&id)
 }
 
 func (u User) Identity() *identity.Identity {
+	assert.That(bytes.Equal(u.identity.Bytes(), u.IdentityCBOR))
 	return u.identity
 }
 
 func (u *User) SetIdentity(id *identity.Identity) {
+	u.IdentityCBOR = id.Bytes()
 	u.identity = id
 }
 

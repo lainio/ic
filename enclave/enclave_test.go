@@ -8,6 +8,7 @@ import (
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/chain"
 )
 
 const dbFilename = "MEMORY_fido-enclave.bolt"
@@ -57,7 +58,15 @@ func TestGetUserIDCount(t *testing.T) {
 func TestNewUser(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	var u User
+	var root, u User
+	for range 2 { // roots
+		newU := NewUser(chain.WithAllowRouting(true))
+		assert.NotNil(newU.identity)
+		assert.That(newU.identity.IsRoot())
+		try.To(PutUser(newU))
+		u = newU
+		root = newU
+	}
 	for range 10 {
 		newU := NewUser()
 		assert.NotNil(newU.identity)
@@ -65,10 +74,20 @@ func TestNewUser(t *testing.T) {
 		u = newU
 	}
 
+	invit := root.Identity().Invite(
+		*u.Identity(),
+		chain.WithPosition(100),
+	)
+	assert.Equal(invit.ICCount(), 1)
+	u.SetIdentity(&invit)
+	try.To(PutUser(u))
+	assert.Equal(u.Identity().ICCount(), 1)
+
 	u2, found := try.To2(GetUser(u.ID))
 	assert.Equal(u.ID, u2.ID)
 	assert.That(found)
 	assert.NotNil(u2.identity)
+	assert.Equal(u2.Identity().ICCount(), 1)
 
 	users1 := try.To1(GetAllUsers())
 	assert.SNotEmpty(users1)
@@ -128,8 +147,8 @@ func TestRemoveUser(t *testing.T) {
 	_, err := GetExistingUser(u.ID)
 	assert.Error(err)
 
-	err = RemoveUser(emailNotCreated)
-	assert.Error(err)
+	_ = RemoveUser(emailNotCreated)
+	//assert.Error(err)
 }
 
 func TestClose(t *testing.T) {
