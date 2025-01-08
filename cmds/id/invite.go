@@ -154,7 +154,7 @@ func invitationHandshake() (err error) {
 	sendInvitationCh <- invitedMsg
 
 	glog.V(3).Infoln("--- we'll sleep, to not close too already", subject2)
-	time.Sleep(2 * time.Second)
+	time.Sleep(100 * time.Millisecond)
 
 	glog.V(3).Infoln("all OK")
 

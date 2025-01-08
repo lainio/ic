@@ -111,6 +111,7 @@ func invitationHandshakeInvitee() (err error) {
 	try.To(rcvrUser.Identity().CheckIntegrity())
 
 	putUser(rcvrUser)
+	glog.V(3).Infoln("IC count:", rcvrUser.Identity().ICCount())
 
 	glog.V(3).Infoln("--- all OK", subject2)
 
@@ -119,7 +120,7 @@ func invitationHandshakeInvitee() (err error) {
 
 func putUser(u enclave.User) {
 	try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
-	glog.V(3).Infoln("*** put user")
+	glog.V(3).Infoln("*** put user, IC count:", u.Identity().ICCount())
 	try.To(enclave.PutUser(u))
 	try.To(enclave.Close())
 }

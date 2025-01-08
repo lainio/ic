@@ -55,6 +55,7 @@ func init() {
 var envs = map[string]string{
 	"master-key":     "MASTER_KEY",
 	"wallet":         "WALLET",
+	"user-id":        "USER_ID",
 	"sender-user-id": "SENDER_USER_ID",
 	"rcvr-user-id":   "RCVR_USER_ID",
 }
