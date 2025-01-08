@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/findy-network/findy-common-go/crypto"
 	"github.com/findy-network/findy-common-go/crypto/db"
 	"github.com/golang/glog"
@@ -281,8 +282,22 @@ func (u User) Key() []byte {
 	return uint32ToBytes(u.ID)
 }
 
+func (u User) IdentityStr() string {
+	return base58.Encode(u.identity.Bytes())
+}
+
+func (u *User) SetIdentityFromStr(idStr string) {
+	d := base58.Decode(idStr)
+	id := identity.NewFromData(d, key.NewFromInfo(u.KeyInfo))
+	u.identity = &id
+}
+
 func (u User) Identity() *identity.Identity {
 	return u.identity
+}
+
+func (u *User) SetIdentity(id *identity.Identity) {
+	u.identity = id
 }
 
 func uint32ToBytes(v uint32) []byte {
@@ -321,7 +336,8 @@ func NewUserFromData(b []byte) (u User) {
 
 	iden := identity.NewFromData(
 		u.IdentityCBOR,
-		key.NewFromInfo(u.KeyInfo))
+		key.NewFromInfo(u.KeyInfo),
+	)
 	u.identity = &iden
 
 	return

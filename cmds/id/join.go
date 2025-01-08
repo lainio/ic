@@ -13,6 +13,7 @@ import (
 	"github.com/lainio/ic/enclave"
 	"github.com/lainio/ic/internal/nconn"
 	"github.com/lainio/ic/key"
+	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 )
 
@@ -32,10 +33,12 @@ var idJoinCmd = &cobra.Command{
 		rcvrUser = try.To1(enclave.GetExistingUser(idInviteCmdData.RcvrUserID))
 		try.To(enclave.Close())
 
-		codec := nconn.CBOR_DECODER
+		//codec := nconn.CBOR_DECODER
+		codec := nats.JSON_ENCODER
 		ec = nconn.New(codec).EncodedConn
 		defer func() {
 			glog.V(3).Infoln("closing nats")
+			try.Out(ec.Drain()).Logf("drain failure")
 			ec.Close()
 		}()
 
@@ -66,13 +69,13 @@ func invitationHandshakeInvitee() (err error) {
 	listenInvitationCh, subject := makeInSubject(subjectInvitationPropose, idInviteCmdData.RcvrUserID)
 	sendInvitationCh, subject2 := makeOutSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
 
+	glog.V(3).Infoln("0. IC count:", rcvrUser.Identity().ICCount())
 	glog.V(3).Infoln("-- start to wait:", subject)
 	invitationPropose := <-listenInvitationCh
 	glog.V(3).Infoln("<- we received invitation from:", invitationPropose.Sender.ID)
 
 	assert.Equal(invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(invitationPropose.Sender.ID, idInviteCmdData.SenderUserID)
-	//try.To(reply.Indentity.CheckIntegrity())
 
 	todoRandom := 1234 // TODO: implement in utils or...
 	fmt.Println("pin CODE:", todoRandom)
@@ -89,7 +92,8 @@ func invitationHandshakeInvitee() (err error) {
 
 		Challenge:    challenge,
 		ChallengeSig: sig,
-		//Indentity: identity.Identity{},
+
+		IdentityStr: rcvrUser.IdentityStr(),
 	}
 
 	glog.V(3).Infoln("--- we'll sleep", subject2)
@@ -98,9 +102,24 @@ func invitationHandshakeInvitee() (err error) {
 	sendInvitationCh <- me
 
 	glog.V(3).Infoln("--> rcvr ID:", me.Rcvr.ID)
-	glog.V(3).Infoln("--- we'll sleep", subject2)
-	time.Sleep(4 * time.Second)
-	// TODO: challenge
+
+	reply := <-listenInvitationCh
+	assert.NotEmpty(reply.IdentityStr)
+	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
+	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
+	glog.V(3).Infoln("IC count:", rcvrUser.Identity().ICCount())
+	try.To(rcvrUser.Identity().CheckIntegrity())
+
+	putUser(rcvrUser)
+
+	glog.V(3).Infoln("--- all OK", subject2)
 
 	return nil
+}
+
+func putUser(u enclave.User) {
+	try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
+	glog.V(3).Infoln("*** put user")
+	try.To(enclave.PutUser(u))
+	try.To(enclave.Close())
 }

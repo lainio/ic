@@ -2,6 +2,7 @@ package id
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -10,7 +11,6 @@ import (
 	"github.com/lainio/ic/chain"
 	cmd "github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/enclave"
-	"github.com/lainio/ic/identity"
 	"github.com/lainio/ic/internal/nconn"
 	"github.com/lainio/ic/key"
 	"github.com/nats-io/nats.go"
@@ -33,10 +33,12 @@ var idInviteCmd = &cobra.Command{
 		rcvrUser = try.To1(enclave.GetExistingUser(idInviteCmdData.RcvrUserID))
 		try.To(enclave.Close())
 
-		codec := nconn.CBOR_DECODER
+		//codec := nconn.CBOR_DECODER
+		codec := nats.JSON_ENCODER
 		ec = nconn.New(codec).EncodedConn
 		defer func() {
 			glog.V(3).Infoln("closing nats")
+			try.Out(ec.Drain()).Logf("drain failure")
 			ec.Close()
 		}()
 
@@ -89,22 +91,22 @@ func invitationHandshake() (err error) {
 
 	todoRandom := 1234 // TODO: implement in utils or...
 	challenge, verify := chain.NewVerifyBlock(todoRandom)
-	me := Invitation{
-		Sender: senderUser.RoleInfo,
-		Rcvr:   rcvrUser.RoleInfo,
-		//Indentity: identity.Identity{},
+	invitationProposal := Invitation{
+		Sender:    senderUser.RoleInfo,
+		Rcvr:      rcvrUser.RoleInfo,
 		Challenge: challenge,
+		//Indentity: ,
 	}
 	assert.Equal(verify.Position, todoRandom)
 
 	fmt.Println("pin CODE:", todoRandom)
 
 	glog.V(3).Infoln("=== send ===")
-	sendInvitationCh <- me
+	sendInvitationCh <- invitationProposal
 
 	glog.V(3).Infoln(
-		"--> sender ID", me.Sender.ID,
-		"rcvr ID", me.Rcvr.ID,
+		"--> sender ID", invitationProposal.Sender.ID,
+		"rcvr ID", invitationProposal.Rcvr.ID,
 	)
 
 	glog.V(3).Infoln("--- we'll start to listen", subject2)
@@ -118,15 +120,43 @@ func invitationHandshake() (err error) {
 	//try.To(reply.Indentity.CheckIntegrity())
 
 	// TODO: verify
-	assert.Equal(reply.Challenge.Position, todoRandom)
+	assert.Equal(reply.Challenge.Position, todoRandom, "wrong PIN code")
 
 	pubKey := reply.Rcvr.KeyInfo.Public
-	verified := reply.ChallengeSig.Verify(pubKey, reply.Challenge.Bytes())
-	assert.That(verified)
+	//pubKey := reply.Sender.KeyInfo.Public // Can be used to simulate failure
+
+	//sigMsg := reply.Challenge.Bytes() // TODO: try with verify block
+	sigMsg := verify.Bytes()
+	//sigMsg := []byte{1,2,3,4,5}
+	verified := reply.ChallengeSig.Verify(pubKey, sigMsg)
+	assert.That(verified, "cannot verify signature")
+
+	// TODO: send invitation Identity
+	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
+	assert.NotNil(rcvrUser.Identity())
+	glog.V(3).Infoln("1. IC count:", rcvrUser.Identity().ICCount())
+	glog.V(3).Infoln("invite!!!")
+	invited := senderUser.Identity().Invite(
+		*rcvrUser.Identity(),
+		chain.WithEndpoint("TODO", true),
+	)
+	_ = invited // TODO
+	rcvrUser.SetIdentity(&invited)
+	try.To(rcvrUser.Identity().CheckIntegrity())
+	glog.V(3).Infoln("2. IC count:", rcvrUser.Identity().ICCount())
+	invitedMsg := Invitation{
+		Sender:      senderUser.RoleInfo,
+		Rcvr:        rcvrUser.RoleInfo,
+		IdentityStr: rcvrUser.IdentityStr(),
+	}
+
+	glog.V(3).Infoln("=== send new invited identity ===")
+	sendInvitationCh <- invitedMsg
+
+	glog.V(3).Infoln("--- we'll sleep, to not close too already", subject2)
+	time.Sleep(2 * time.Second)
 
 	glog.V(3).Infoln("all OK")
-
-	// TODO: challenge
 
 	return nil
 }
@@ -166,7 +196,8 @@ type Invitation struct {
 	Challenge    chain.Block
 	ChallengeSig key.Signature // only in reply
 
-	Indentity identity.Identity // not used yet
+	IdentityStr string // CBOR string in base58
+	//Identity *identity.Identity // not used yet
 }
 
 const (
