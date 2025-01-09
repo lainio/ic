@@ -26,7 +26,7 @@ var Enclave enclave.Secure = enclave.New(
 	"bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1",
 )
 
-type Public = []byte
+type Public []byte
 type ID = []byte
 
 // Hand is hand holding a key pair: a full [Handle] or key [Info]. This
@@ -74,7 +74,7 @@ func (h Hand) Valid() bool {
 }
 
 // PubKey returns pubkey. If error occurs it panics. See err2.Handle and Catch.
-func (h Hand) PubKey() []byte {
+func (h Hand) PubKey() Public {
 	if h.ValidInfo() {
 		return h.Public
 	}
@@ -92,6 +92,8 @@ func (h Hand) PubKey() []byte {
 // Handle also allows us decided what kind of key storage we are using and it
 // simplifies key management A LOT.
 //
+// TODO: if this would not be an alias, we could have better API like kh.Info()
+// TODO: if this would not be an alias, we could have better API like kh.Info()
 // TODO: if this would not be an alias, we could have better API like kh.Info()
 type Handle = enclave.KeyHandle
 

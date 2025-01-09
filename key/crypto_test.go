@@ -40,7 +40,7 @@ func TestNewPublicCBOR(t *testing.T) {
 			gotPk := NewPublicCBOR(tt.args.s)
 			assert.That(gotPk.Equal(tt.wantPk))
 
-			verified := tt.args.sig.Verify(gotPk, tt.args.msg)
+			verified := tt.args.sig.Verify([]byte(gotPk), tt.args.msg)
 			assert.That(verified)
 		})
 	}

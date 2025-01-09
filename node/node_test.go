@@ -229,13 +229,14 @@ func testFind(t *testing.T) {
 
 	// found ones:
 	{
-		pubkey := try.To1(dave.CBORPublicKey())
+		pubkey := key.Public(try.To1(dave.CBORPublicKey()))
+
 		block, found := eve.Find(pubkey)
 		assert.That(found)
 		assert.DeepEqual(block.Public(), pubkey)
 	}
 	{
-		pubkey := try.To1(root2.CBORPublicKey())
+		pubkey := key.Public(try.To1(root2.CBORPublicKey()))
 		block, found := eve.Find(pubkey)
 		assert.That(found)
 		assert.DeepEqual(block.Public(), pubkey)
@@ -243,7 +244,7 @@ func testFind(t *testing.T) {
 
 	// not found:
 	{
-		pubkey := try.To1(root1.CBORPublicKey())
+		pubkey := key.Public(try.To1(root1.CBORPublicKey()))
 		_, found := eve.Find(pubkey) // eve is invited only by root2 chains
 		assert.ThatNot(found)
 	}
@@ -257,7 +258,7 @@ func testWebOfTrustInfo(t *testing.T) {
 
 	wot := dave.WebOfTrustInfo(eve.Node)
 	assert.Equal(wot.CommonInviterLevel, 0)
-	daveIDK := try.To1(dave.CBORPublicKey())
+	daveIDK := key.Public(try.To1(dave.CBORPublicKey()))
 	assert.DeepEqual(wot.CommonInviterPubKey, daveIDK)
 	assert.Equal(wot.Hops, 1)
 	assert.That(wot.SameChain)
@@ -266,6 +267,8 @@ func testWebOfTrustInfo(t *testing.T) {
 		RootIDK: daveIDK,
 		Hops:    0,
 	}
+	//digestDave2 := dave.Node.Digest()
+
 	wot2 := eve.WoT(digestDave) // Let'r try our other WoT method
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, daveIDK)
@@ -293,8 +296,8 @@ func testWebOfTrustInfo(t *testing.T) {
 	//      alice -> bob
 	//        ↓       ↓
 	//      frank   grace
-	aliceIDK := try.To1(alice.CBORPublicKey())
-	root1IDK := try.To1(root1.CBORPublicKey())
+	aliceIDK := key.Public(try.To1(alice.CBORPublicKey()))
+	root1IDK := key.Public(try.To1(root1.CBORPublicKey()))
 
 	common = frank.CommonChains(grace.Node)
 	assert.SLen(common, 1)
@@ -387,7 +390,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	//        eve(key-rotated) ­─────────→ heidi
 	wot = NewWoTInfo(eve.Node, heidi.Node)
 	assert.Equal(wot.CommonInviterLevel, 1, "common root is dave and eve is 1 from it")
-	assert.DeepEqual(wot.CommonInviterPubKey, try.To1(eve.CBORPublicKey()))
+	assert.DeepEqual(wot.CommonInviterPubKey, key.Public(try.To1(eve.CBORPublicKey())))
 	assert.Equal(wot.Hops, 1, "dave invites heidi")
 	assert.That(wot.SameChain)
 	assert.That(eve.IsInviterFor(heidi.Node))
@@ -412,7 +415,7 @@ func testCheckIntegrity(t *testing.T) {
 
 	// - Not OK ruined version TODO:
 	// - this very bad test but until we have better...
-	grace.InviteeChains[0].Blocks[0].Public()[32] = 0 // let's ruin one byte
+	[]byte(grace.InviteeChains[0].Blocks[0].Public())[32] = 0 // let's ruin one byte
 	err := grace.CheckIntegrity()
 	assert.Error(err, "see 2 lines above ^")
 	assert.ThatNot(err == ErrWrongKey)
