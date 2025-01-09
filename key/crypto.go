@@ -27,7 +27,28 @@ var Enclave enclave.Secure = enclave.New(
 )
 
 type Public []byte
-type ID = []byte
+
+func (p Public) String() string {
+	pk := base58.Encode(p)
+	return pk
+}
+
+func (p Public) PKString() string {
+	pk := base58.Encode(p)
+	return pk[prefixLenOfCBOR : 2*prefixLenOfCBOR]
+}
+
+type ID []byte
+
+func (id ID) String() string {
+	s := base58.Encode(id)
+	return s
+}
+
+func (id ID) ShortString() string {
+	s := base58.Encode(id)
+	return s[:byteCount]
+}
 
 // Hand is hand holding a key pair: a full [Handle] or key [Info]. This
 // structure allows us to abstract key pairs to ours and theirs. We always have
@@ -111,17 +132,14 @@ const (
 )
 
 func (i Info) String() string {
-	id := base58.Encode(i.ID[:byteCount])
-	pk := base58.Encode(i.Public[publicByteCount-byteCount:])
-	//id := hex.EncodeToString(i.ID[:byteCount])
-	//pk := hex.EncodeToString(i.Public[publicByteCount-byteCount:])
+	id := i.ShortString()
+	pk := i.PKString()
 
 	return fmt.Sprintf("ID: '%v', Public: '%v'", id, pk)
 }
 
 func (i Info) PKString() string {
-	pk := base58.Encode(i.Public)
-	return pk[prefixLenOfCBOR : 2*prefixLenOfCBOR]
+	return i.Public.PKString()
 }
 
 func InfoFromHandle(h Handle) Info {

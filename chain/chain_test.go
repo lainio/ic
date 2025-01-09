@@ -377,17 +377,17 @@ func testFind(t *testing.T) {
 	{
 		foundBlock, found := edvin.Find(rootMaster.LastBlock().Public())
 		assert.NotEqual(found, hop.NotConnected)
-		assert.DeepEqual(foundBlock.ID(), rootMaster.ID())
+		assert.DeepEqual(foundBlock.ID(), key.ID(rootMaster.ID()))
 	}
 	{
 		foundBlock, found := edvin.Find(bob.LastBlock().Public())
 		assert.NotEqual(found, hop.NotConnected)
-		assert.DeepEqual(foundBlock.ID(), bob.ID())
+		assert.DeepEqual(foundBlock.ID(), key.ID(bob.ID()))
 	}
 	{
 		rootBlock, found := edvin.Find(root.LastBlock().Public())
 		assert.NotEqual(found, hop.NotConnected)
-		assert.DeepEqual(rootBlock.ID(), root.ID())
+		assert.DeepEqual(rootBlock.ID(), key.ID(root.ID()))
 	}
 }
 
