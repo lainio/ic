@@ -46,8 +46,16 @@ var (
 	theCipher *crypto.Cipher
 )
 
+func TryClose() {
+	try.To(Close())
+}
+
 func Close() (err error) {
 	return db.Close()
+}
+
+func TryInitSealedBox(filename, backupName, key string) {
+	try.To(InitSealedBox(filename, backupName, key))
 }
 
 // InitSealedBox initialize enclave's sealed box. This must be called once
@@ -89,6 +97,10 @@ func BackupTicker(interval time.Duration) (done chan<- struct{}) {
 	return db.BackupTicker(interval)
 }
 
+func TryPutUser(u User) {
+	try.To(PutUser(u))
+}
+
 // PutUser saves the user to database.
 func PutUser(u User) (err error) {
 	defer err2.Handle(&err)
@@ -105,6 +117,10 @@ func PutUser(u User) (err error) {
 	))
 
 	return nil
+}
+
+func TryGetUser(id uint32) (u User, exist bool) {
+	return try.To2(GetUser(id))
 }
 
 // GetUser returns user by name if exists in enclave
@@ -128,6 +144,10 @@ func GetUser(id uint32) (u User, exist bool, err error) {
 	return NewUserFromData(value.Data), already, err
 }
 
+func TryGetExistingUser(id uint32) (u User) {
+	return try.To1(GetExistingUser(id))
+}
+
 // GetExistingUser returns user by name if exists in enclave
 func GetExistingUser(id uint32) (u User, err error) {
 	defer err2.Handle(&err)
@@ -141,6 +161,10 @@ func GetExistingUser(id uint32) (u User, err error) {
 	return u, err
 }
 
+func TryRemoveUser(id uint32) {
+	try.To(RemoveUser(id))
+}
+
 func RemoveUser(id uint32) (err error) {
 	defer err2.Handle(&err)
 
@@ -150,6 +174,10 @@ func RemoveUser(id uint32) (err error) {
 			Data: uint32ToBytes(id),
 			Read: hash,
 		})
+}
+
+func TryGetAllUsers() (users []User) {
+	return try.To1(GetAllUsers())
 }
 
 func GetAllUsers() (users []User, err error) {
