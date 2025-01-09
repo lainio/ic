@@ -3,7 +3,10 @@ package node
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/findy-network/findy-common-go/x"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -436,4 +439,18 @@ func (n Node) GetIDK() key.Info {
 	assert.SNotEmpty(n.InviteeChains[0].Blocks)
 
 	return n.InviteeChains[0].LastBlock().Invitee
+}
+
+// --- WoTInfo Methods ---
+
+func (wot WoTInfo) String() string {
+	pkStr := "..." + base58.Encode(wot.CommonInviterPubKey[:16])
+	s := fmt.Sprintf(
+		"Hops: %v, Mutual: %v, Inviter Root Lvl: %v, Inviter IDK: %v",
+		wot.Hops,
+		x.Whom(wot.SameChain, "yes", "no"),
+		wot.CommonInviterLevel,
+		pkStr,
+	)
+	return s
 }
