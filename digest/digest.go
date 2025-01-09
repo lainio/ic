@@ -1,6 +1,8 @@
 package digest
 
 import (
+	"fmt"
+
 	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
 )
@@ -24,4 +26,11 @@ type Digest struct {
 	RootIDK key.Public // TODO: when we need key.ID? Should we use key.Info?
 
 	Hops hop.Distance
+}
+
+func (d Digest) String() string {
+	return fmt.Sprintf(
+		"IDK: %v, RootIDK: %v, Hops: %v",
+		d.IDK.PKString(), d.RootIDK.PKString(), d.Hops,
+	)
 }
