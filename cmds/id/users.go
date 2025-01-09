@@ -6,7 +6,6 @@ import (
 	"github.com/findy-network/findy-common-go/x"
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
-	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/enclave"
 	"github.com/spf13/cobra"
 )
@@ -22,8 +21,8 @@ var idUsersCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err)
 
-		try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
-		users := try.To1(enclave.GetAllUsers())
+		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+		users := enclave.TryGetAllUsers()
 		glog.V(3).Infoln("count of users:", len(users))
 		for _, v := range users {
 			if idUsersCmdData.Domains && !v.Identity().IsRoot() {
