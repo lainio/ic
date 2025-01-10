@@ -280,6 +280,16 @@ func (n Node) WebOfTrustInfo(their Node) *WoTInfo {
 	}
 }
 
+func (n Node) Digest() digest.Digest {
+	assert.SNotEmpty(n.InviteeChains)
+
+	return digest.Digest{
+		IDK:     n.GetIDK().Public,
+		RootIDK: n.InviteeChains[0].FirstBlock().Public(),
+		Hops:    n.InviteeChains[0].Len() - 1, /*1 = root*/
+	}
+}
+
 // IsInviterFor tells if we are an inviter for a given node.
 func (n Node) IsInviterFor(their Node) bool {
 	chainPairs := n.CommonChains(their)

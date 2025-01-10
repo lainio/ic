@@ -267,9 +267,12 @@ func testWebOfTrustInfo(t *testing.T) {
 		RootIDK: daveIDK,
 		Hops:    0,
 	}
-	//digestDave2 := dave.Node.Digest()
 
-	wot2 := eve.WoT(digestDave) // Let'r try our other WoT method
+	// Let's test our new Digest() method
+	digestDave2 := dave.Node.Digest()
+	assert.DeepEqual(digestDave, &digestDave2)
+
+	wot2 := eve.WoT(&digestDave2) // Let'r try our other WoT method
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, daveIDK)
 	assert.That(wot2.SameChain)
@@ -312,6 +315,9 @@ func testWebOfTrustInfo(t *testing.T) {
 		RootIDK: root1IDK,
 		Hops:    1,
 	}
+	digestAlice2 := alice.Node.Digest()
+	assert.DeepEqual(digestAlice, &digestAlice2)
+
 	wot2 = frank.WoT(digestAlice)
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
@@ -329,6 +335,9 @@ func testWebOfTrustInfo(t *testing.T) {
 		RootIDK: root1IDK,
 		Hops:    0,
 	}
+	digest2Root1 := root1.Node.Digest()
+	assert.DeepEqual(digestRoot1, &digest2Root1)
+
 	wot2 = frank.WoT(digestRoot1)
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
