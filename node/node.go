@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/btcsuite/btcutil/base58"
 	"github.com/findy-network/findy-common-go/x"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/assert"
@@ -444,7 +443,7 @@ func (n Node) GetIDK() key.Info {
 // --- WoTInfo Methods ---
 
 func (wot WoTInfo) String() string {
-	pkStr := "..." + base58.Encode(wot.CommonInviterPubKey[:16])
+	pkStr := wot.CommonInviterPubKey.PKString()
 	s := fmt.Sprintf(
 		"Hops: %v, Mutual: %v, Inviter Root Lvl: %v, Inviter IDK: %v",
 		wot.Hops,
