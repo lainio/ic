@@ -23,7 +23,8 @@ var idFindCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
-		assert.SLonger(args, 0)
+		assert.SLonger(args, 0, "user ID: argument missing")
+
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 		users := enclave.TryGetAllUsers()
 		try.To(enclave.Close())
@@ -51,10 +52,16 @@ var idFindCmd = &cobra.Command{
 }
 
 var idFindCmdData = struct {
-	DomainPK bool
+	DomainPK  bool
+	UseDigest bool
 }{}
 
 func calcSearch(s string, u enclave.User) bool {
+	if idFindCmdData.UseDigest {
+		uDigest := u.Identity().Digest().Base58()
+		return uDigest == s
+	}
+
 	var (
 		pkStr  string
 		id     uint32
@@ -84,6 +91,8 @@ func init() {
 	flags := idFindCmd.PersistentFlags()
 	flags.BoolVar(&idFindCmdData.DomainPK, "domain-pk", false,
 		"instead of IDK, use Domain Root PK for search")
+	flags.BoolVar(&idFindCmdData.UseDigest, "use-digest", false,
+		"use full digest to find all which have similar one")
 
 	idCmd.AddCommand(idFindCmd)
 }
