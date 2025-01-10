@@ -22,16 +22,16 @@ var idBelongCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err, nil)
 
-		try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
-		senderUser = try.To1(enclave.GetExistingUser(idInviteCmdData.SenderUserID))
-		rcvrUser = try.To1(enclave.GetExistingUser(idInviteCmdData.RcvrUserID))
-		try.To(enclave.Close())
+		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+		senderUser = enclave.TryGetExistingUser(idInviteCmdData.SenderUserID)
+		rcvrUser = enclave.TryGetExistingUser(idInviteCmdData.RcvrUserID)
+		enclave.TryClose()
 
 		wot := senderUser.Identity().WebOfTrust(*rcvrUser.Identity())
 		if wot.Hops == hop.NotConnected {
 			return fmt.Errorf("identities don't share trust domains")
 		}
-		fmt.Println("WoT:", wot)
+		fmt.Println(wot)
 
 		return nil
 	},

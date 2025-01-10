@@ -23,8 +23,6 @@ var idRmCmd = &cobra.Command{
 		defer err2.Handle(&err)
 
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-		//senderUser = try.To1(enclave.GetExistingUser(idInviteCmdData.RcvrUserID))
-		//glog.V(3).Infoln("ic count:", senderUser.Identity().ICCount())
 		glog.V(1).Infoln("removing user ID:", idInviteCmdData.RcvrUserID)
 		try.To(enclave.RemoveUser(idInviteCmdData.RcvrUserID))
 		try.To(enclave.Close())

@@ -26,15 +26,21 @@ var idViewCmd = &cobra.Command{
 		rcvrUser = try.To1(enclave.GetExistingUser(idInviteCmdData.RcvrUserID))
 		try.To(enclave.Close())
 
-		v := rcvrUser
+		u := rcvrUser
 
 		fmt.Printf(
 			"User ID: %d, PK: %v, IC Count: %v, Root: %v\n",
-			v.ID,
-			v.Identity().GetIDK().PKString(),
-			v.Identity().ICCount(),
-			x.Whom(v.Identity().IsRoot(), "yes", "no"),
+			u.ID,
+			u.Identity().GetIDK().PKString(),
+			u.Identity().ICCount(),
+			x.Whom(u.Identity().IsRoot(), "yes", "no"),
 		)
+		if u.Identity().ICCount() > 0 {
+			for _, ic := range u.Identity().InviteeChains {
+				pkStr := ic.FirstBlock().Invitee.PKString()
+				fmt.Println("- Invitee Root PK", pkStr)
+			}
+		}
 
 		//v.Identity().Digest()
 
