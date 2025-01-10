@@ -2,37 +2,88 @@ package id
 
 import (
 	"fmt"
+	"strconv"
 
-	"github.com/golang/glog"
+	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/err2"
-	"github.com/lainio/ic/identity"
+	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/enclave"
 	"github.com/spf13/cobra"
 )
 
 // TODO: think about POW-lvl as and extra flag?
 
-var idListDoc = `TODO`
+var idFindDoc = `TODO`
 
-var idListCmd = &cobra.Command{
-	Use:   "list",
+var idFindCmd = &cobra.Command{
+	Use:   "find",
 	Short: "lists all trust ids for a user",
-	Long:  idListDoc,
-	RunE: func(_ *cobra.Command, _ []string) (err error) {
-		defer err2.Handle(&err)
+	Long:  idFindDoc,
+	RunE: func(_ *cobra.Command, args []string) (err error) {
+		defer err2.Handle(&err, nil)
 
-		glog.V(3).Infoln("something...")
-		identity := identity.NewRoot(nil) // TODO: check flags: Trust Domain node nees..
-		_ = identity                      // to where we store this? From where we'll use it
+		assert.SLonger(args, 0)
+		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+		users := enclave.TryGetAllUsers()
+		try.To(enclave.Close())
 
-		if identity.IsRoot() {
-			fmt.Println("Root Domain Identity OK")
+		for _, u := range users {
+			if calcSearch(args[0], u) {
+				fmt.Printf(
+					"User ID: %d, PK: %v, IC Count: %v, Root: %v\n",
+					u.ID,
+					u.Identity().GetIDK().PKString(),
+					u.Identity().ICCount(),
+					x.Whom(u.Identity().IsRoot(), "yes", "no"),
+				)
+				if u.Identity().ICCount() > 0 {
+					for _, ic := range u.Identity().InviteeChains {
+						pkStr := ic.FirstBlock().Invitee.PKString()
+						fmt.Println("- Invitee Root PK", pkStr)
+					}
+				}
+			}
 		}
+
 		return nil
 	},
+}
+
+var idFindCmdData = struct {
+	DomainPK bool
+}{}
+
+func calcSearch(s string, u enclave.User) bool {
+	var (
+		pkStr  string
+		id     uint32
+		retval bool
+	)
+	if len(s) == 14 {
+		pkStr = s
+	} else {
+		id = uint32(try.To1(strconv.Atoi(s))) //nolint
+	}
+	if idFindCmdData.DomainPK {
+		for _, ic := range u.Identity().InviteeChains {
+			if ic.FirstBlock().Invitee.PKString() == pkStr {
+				retval = true
+				break
+			}
+		}
+	} else {
+		retval = u.RoleInfo.KeyInfo.PKString() == pkStr || u.ID == id
+	}
+	return retval
 }
 
 func init() {
 	defer err2.Catch()
 
-	idCmd.AddCommand(idListCmd)
+	flags := idFindCmd.PersistentFlags()
+	flags.BoolVar(&idFindCmdData.DomainPK, "domain-pk", false,
+		"instead of IDK, use Domain Root PK for search")
+
+	idCmd.AddCommand(idFindCmd)
 }
