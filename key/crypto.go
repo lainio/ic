@@ -114,7 +114,7 @@ func (h Hand) PubKey() Public {
 // simplifies key management A LOT.
 //
 // TODO: if this would not be an alias, we could have better API like kh.Info()
-//  - we should wrap with the new struct!
+//   - we should wrap with the new struct!
 type Handle = enclave.KeyHandle
 
 // Info is key.Info that binds and transport both key's ID and its public key
