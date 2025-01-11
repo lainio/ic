@@ -10,6 +10,7 @@ import (
 	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/enclave"
 	"github.com/lainio/ic/hop"
+	"github.com/lainio/ic/identity"
 	"github.com/spf13/cobra"
 )
 
@@ -21,6 +22,7 @@ var idBelongCmd = &cobra.Command{
 	Use:   "belong",
 	Short: "list all trust domains we belong",
 	Long:  idBelongDoc,
+	Args: cobra.MinimumNArgs(0),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
@@ -36,11 +38,20 @@ var idBelongCmd = &cobra.Command{
 			dig := senderUser.Identity().Digest()
 			senderDigest = &dig
 		}
-
 		rcvrUser = enclave.TryGetExistingUser(idInviteCmdData.RcvrUserID)
+		var idFromDig identity.Identity
+		users := enclave.TryGetAllUsers()
+		for _, v := range users {
+			equal := v.Identity().Digest().Equal(*senderDigest)
+			if equal {
+				idFromDig = *v.Identity()
+				break
+			}
+		}
 		enclave.TryClose()
 
-		wot := rcvrUser.Identity().WoT(senderDigest)
+		//wot := rcvrUser.Identity().WoT(senderDigest)
+		wot := rcvrUser.Identity().WebOfTrust(idFromDig)
 		if wot == nil || wot.Hops == hop.NotConnected {
 			return fmt.Errorf("identities don't share trust domains")
 		}
