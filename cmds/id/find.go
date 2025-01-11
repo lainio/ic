@@ -20,6 +20,7 @@ var idFindCmd = &cobra.Command{
 	Use:   "find",
 	Short: "lists all trust ids for a user",
 	Long:  idFindDoc,
+	Args:  cobra.MinimumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
