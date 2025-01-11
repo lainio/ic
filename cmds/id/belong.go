@@ -22,7 +22,7 @@ var idBelongCmd = &cobra.Command{
 	Use:   "belong",
 	Short: "list all trust domains we belong",
 	Long:  idBelongDoc,
-	Args: cobra.MinimumNArgs(0),
+	Args:  cobra.MinimumNArgs(0),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
