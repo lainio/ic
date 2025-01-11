@@ -63,3 +63,9 @@ func (d Digest) Base58() string {
 	s := base58.Encode(data)
 	return s
 }
+
+func (d Digest) Equal(rhs Digest) bool {
+	data := d.Bytes()
+	dataRhs := rhs.Bytes()
+	return bytes.Equal(data, dataRhs)
+}
