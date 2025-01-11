@@ -133,6 +133,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 	// Override the default help function, NOTE: we got exactly what we want with
 	// the changed Usage Template where we removed Global Flgs section.
 	// rootCmd.SetHelpFunc(myHelp)
+	_ = myHelp
 }
 
 func myHelp(cmd *cobra.Command, args []string) {
