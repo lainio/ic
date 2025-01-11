@@ -20,6 +20,7 @@ var idViewCmd = &cobra.Command{
 	Use:   "view",
 	Short: "view information about your Identity",
 	Long:  idViewDoc,
+	Args:  cobra.MinimumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
@@ -32,25 +33,29 @@ var idViewCmd = &cobra.Command{
 
 		u := rcvrUser
 
-		if idViewCmdData.PrintDigest {
+		if idViewCmdData.PrintDigest || idViewCmdData.DigestOnly {
 			d := u.Identity().Digest()
-			fmt.Println(d.Base58())
-			return nil
-		}
-
-		// TODO: extract to method
-		fmt.Printf(
-			"User ID: %d, Root: %v, Digest: {%v}, IC Count: %v\n",
-			u.ID,
-			x.Whom(u.Identity().IsRoot(), "yes", "no"),
-			//u.Identity().GetIDK().PKString(),
-			u.Identity().Digest(),
-			u.Identity().ICCount(),
-		)
-		if u.Identity().ICCount() > 0 {
-			for _, ic := range u.Identity().InviteeChains {
-				pkStr := ic.FirstBlock().Invitee.PKString()
-				fmt.Println("- Invitee Root PK", pkStr)
+			if idViewCmdData.PrintDigest {
+				fmt.Println(d.Base58())
+			}
+			if idViewCmdData.DigestOnly {
+				fmt.Println(d)
+			}
+		} else {
+			// TODO: extract to method
+			fmt.Printf(
+				"User ID: %d, Root: %v, Digest: {%v}, IC Count: %v\n",
+				u.ID,
+				x.Whom(u.Identity().IsRoot(), "yes", "no"),
+				//u.Identity().GetIDK().PKString(),
+				u.Identity().Digest(),
+				u.Identity().ICCount(),
+			)
+			if u.Identity().ICCount() > 0 {
+				for _, ic := range u.Identity().InviteeChains {
+					pkStr := ic.FirstBlock().Invitee.PKString()
+					fmt.Println("- Invitee Root PK", pkStr)
+				}
 			}
 		}
 
@@ -60,6 +65,7 @@ var idViewCmd = &cobra.Command{
 
 var idViewCmdData = struct {
 	PrintDigest bool
+	DigestOnly  bool
 }{}
 
 func init() {
@@ -68,7 +74,10 @@ func init() {
 	flags := idViewCmd.PersistentFlags()
 	flags.BoolVarP(&idViewCmdData.PrintDigest, "print-digest", "d", false,
 		"print Digest for transportation")
+	flags.BoolVarP(&idViewCmdData.DigestOnly, "digest-only", "o", false,
+		"print Digest only")
 	try.To(idViewCmd.MarkPersistentFlagRequired("print-digest"))
+	try.To(idViewCmd.MarkPersistentFlagRequired("digest-only"))
 
 	idCmd.AddCommand(idViewCmd)
 }
