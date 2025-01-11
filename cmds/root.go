@@ -101,6 +101,56 @@ func init() {
 
 	// NOTE! Very important. Adds support for std flag pkg users: glog, err2
 	pflag.CommandLine.AddGoFlagSet(goflag.CommandLine)
+
+	rootCmd.SetUsageTemplate(`Usage:{{if .Runnable}}
+  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
+
+Aliases:
+  {{.NameAndAliases}}{{end}}{{if .HasExample}}
+
+Examples:
+{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
+
+Available Commands:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
+
+{{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
+
+Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
+  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
+
+Flags:
+{{.LocalFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasAvailableInheritedFlags}}
+
+Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
+  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
+
+Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
+`)
+
+	// Override the default help function, NOTE: we got exactly what we want with
+	// the changed Usage Template where we removed Global Flgs section.
+	// rootCmd.SetHelpFunc(myHelp)
+}
+
+func myHelp(cmd *cobra.Command, args []string) {
+	// Check if a specific help flag was provided
+	showGlobalFlags := len(args) > 0 && args[0] == "global-flags"
+
+	fmt.Println("Usage: myapp [flags] [command]")
+	fmt.Println("\nCommands:")
+	for _, c := range cmd.Commands() {
+		fmt.Printf("  %-10s %s\n", c.Name(), c.Short)
+	}
+	fmt.Println("\nUse 'myapp help [command]' for more information about a command.")
+
+	// Optionally show global flags
+	if showGlobalFlags {
+		fmt.Println("\nGlobal Flags:")
+		cmd.PersistentFlags().PrintDefaults()
+	}
 }
 
 func initConfig() {
