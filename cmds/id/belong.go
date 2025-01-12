@@ -16,13 +16,25 @@ import (
 
 // TODO: think about POW-lvl as and extra flag?
 
-var idBelongDoc = `TODO`
+var (
+	idBelongDoc = `The belong command counts web of trust of two identities.
+
+The command has two different ways to use it. Please see the examples.
+`
+
+	idBelongExample = `  # Both identities can be given as used DB ID (flags):
+  tdc id belong --rcvr-user-id=12 --sender-user-id=1
+
+  # or send Digest as a string from clipboard:
+  tdc id belong --rcvr-user-id=12 $(pbpaste)`
+)
 
 var idBelongCmd = &cobra.Command{
-	Use:   "belong",
-	Short: "list all trust domains we belong",
-	Long:  idBelongDoc,
-	Args:  cobra.MinimumNArgs(0),
+	Use:     "belong",
+	Short:   "list all trust domains we belong",
+	Long:    idBelongDoc,
+	Example: idBelongExample,
+	Args:    cobra.MinimumNArgs(0),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
