@@ -14,13 +14,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: think about POW-lvl as and extra flag?
-
 var (
 	idBelongDoc = `The belong command counts web of trust of two identities.
 
-The command has two different ways to use it. Please see the examples.
-`
+The command has two different ways to use it. Please see the examples for more
+information.`
 
 	idBelongExample = `  # Both identities can be given as used DB ID (flags):
   tdc id belong --rcvr-user-id=12 --sender-user-id=1

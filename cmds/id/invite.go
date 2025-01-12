@@ -17,21 +17,31 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: think about POW-lvl as and extra flag?
+var (
+	idInviteDoc = `The invite command start handshake protocol part where our end initiates
+invitation process.
 
-var idInviteDoc = `TODO`
+The invitation protocol is relatively complex network protocol where two
+parties: inviter (we with the invite command) and invitee, build
+cryptographically temperproof relationship between the parties. See more
+information from the invition documentation from our web site.`
+
+	idInviteExample = `  # Both identities can be given as used DB ID (flags):
+  tdc id invite --rcvr-user-id=12 --sender-user-id=1
+
+  # or send Digest as a string from clipboard:
+  tdc id belong --rcvr-user-id=12 $(pbpaste)`
+)
 
 var idInviteCmd = &cobra.Command{
-	Use:   "invite",
-	Short: "invites other party to our trust domains",
-	Long:  idInviteDoc,
+	Use:     "invite",
+	Short:   "invites other party to our trust domains",
+	Long:    idInviteDoc,
+	Example: idInviteExample,
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err)
 
-		try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
-		senderUser = try.To1(enclave.GetExistingUser(idInviteCmdData.SenderUserID))
-		rcvrUser = try.To1(enclave.GetExistingUser(idInviteCmdData.RcvrUserID))
-		try.To(enclave.Close())
+		readUsers()
 
 		//codec := nconn.CBOR_DECODER
 		codec := nats.JSON_ENCODER
@@ -43,12 +53,6 @@ var idInviteCmd = &cobra.Command{
 		}()
 
 		try.To(invitationHandshake())
-		// TODO: --------------------------------------
-		//  - how to do it with CLI, when we don't have data channel
-		//  - how about use nats-io!
-		//  - generate invitation> what is this?
-		//  = how to do challenge!
-		//user.Identity().Invite()
 
 		return nil
 	},
@@ -117,9 +121,6 @@ func invitationHandshake() (err error) {
 
 	assert.Equal(reply.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(reply.Sender.ID, idInviteCmdData.SenderUserID)
-	//try.To(reply.Indentity.CheckIntegrity())
-
-	// TODO: verify
 	assert.Equal(reply.Challenge.Position, todoRandom, "wrong PIN code")
 
 	pubKey := reply.Rcvr.KeyInfo.Public
@@ -131,18 +132,17 @@ func invitationHandshake() (err error) {
 	verified := reply.ChallengeSig.Verify(pubKey, sigMsg)
 	assert.That(verified, "cannot verify signature")
 
-	// TODO: send invitation Identity
+	// Their identity comes thru msg as a string, bring up the instance
 	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
 	assert.NotNil(rcvrUser.Identity())
+	try.To(rcvrUser.Identity().CheckIntegrity())
 	glog.V(3).Infoln("1. IC count:", rcvrUser.Identity().ICCount())
-	glog.V(3).Infoln("invite!!!")
 	invited := senderUser.Identity().Invite(
 		*rcvrUser.Identity(),
-		chain.WithEndpoint("TODO", true),
+		chain.WithEndpoint("TODO", true), // TODO: how to get from User?
 	)
-	_ = invited // TODO
-	rcvrUser.SetIdentity(&invited)
-	try.To(rcvrUser.Identity().CheckIntegrity())
+	rcvrUser.SetIdentity(&invited)               // set new invited identity
+	try.To(rcvrUser.Identity().CheckIntegrity()) // double safety
 	glog.V(3).Infoln("2. IC count:", rcvrUser.Identity().ICCount())
 	invitedMsg := Invitation{
 		Sender:      senderUser.RoleInfo,
@@ -153,12 +153,21 @@ func invitationHandshake() (err error) {
 	glog.V(3).Infoln("=== send new invited identity ===")
 	sendInvitationCh <- invitedMsg
 
+	// TODO: should we wait ACK from other end that the Invitation is DONE!
+
 	glog.V(3).Infoln("--- we'll sleep, to not close too already", subject2)
 	time.Sleep(10 * time.Millisecond) // TODO: do we need this? See Close ↑
 
 	glog.V(3).Infoln("all OK")
 
 	return nil
+}
+
+func readUsers() {
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+	senderUser = enclave.TryGetExistingUser(idInviteCmdData.SenderUserID)
+	rcvrUser = enclave.TryGetExistingUser(idInviteCmdData.RcvrUserID)
+	enclave.TryClose()
 }
 
 func makeInSubject(base string, target uint32) (chan Invitation, string) {

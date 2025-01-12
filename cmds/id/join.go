@@ -17,21 +17,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: think about POW-lvl as and extra flag?
+var (
+	idJoinDoc = `The join command start handshake protocol part where our end accepts invitation.
 
-var idJoinDoc = `TODO`
+The invitation protocol is relatively complex network protocol where two
+parties: inviter and invitee (we with the join command) build cryptographically
+temperproof relationship between the parties. See more information from the
+invittion command.`
+
+	idJoinExample = `  # Both identities can be given as used DB ID (flags):
+  tdc id invite --rcvr-user-id=12 --sender-user-id=1
+
+  # or send Digest as a string from clipboard:
+  tdc id belong --rcvr-user-id=12 $(pbpaste)`
+)
 
 var idJoinCmd = &cobra.Command{
-	Use:   "join",
-	Short: "accepts an invitation to join a trust domains presented to a user",
-	Long:  idJoinDoc,
+	Use:     "join",
+	Short:   "accepts an invitation to join a trust domains presented to a user",
+	Long:    idJoinDoc,
+	Example: idJoinExample,
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err)
 
-		try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
-		senderUser = try.To1(enclave.GetExistingUser(idInviteCmdData.SenderUserID))
-		rcvrUser = try.To1(enclave.GetExistingUser(idInviteCmdData.RcvrUserID))
-		try.To(enclave.Close())
+		readUsers()
 
 		//codec := nconn.CBOR_DECODER
 		codec := nats.JSON_ENCODER
@@ -119,8 +128,8 @@ func invitationHandshakeInvitee() (err error) {
 }
 
 func putUser(u enclave.User) {
-	try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 	glog.V(3).Infoln("*** put user, IC count:", u.Identity().ICCount())
-	try.To(enclave.PutUser(u))
-	try.To(enclave.Close())
+	enclave.TryPutUser(u)
+	enclave.TryClose()
 }
