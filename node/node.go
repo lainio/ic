@@ -281,7 +281,7 @@ func (n Node) WebOfTrustInfo(their Node) *WoTInfo {
 }
 
 func (n Node) Digest() digest.Digest {
-	assert.SNotEmpty(n.InviteeChains)
+	assert.SNotEmpty(n.InviteeChains, "cannot count Digest without ICs")
 
 	return digest.Digest{
 		IDK:     n.GetIDK().Public,
