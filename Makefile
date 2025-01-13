@@ -14,7 +14,7 @@ GO := go
 #GO := go1.18beta1
 TEST_ARGS ?= -benchmem
 
-check: lint test
+check: lint test cli
 
 cli:
 	$(eval VERSION = $(shell printf "Build v.%s on %s" "$(shell cat ./VERSION)" "$(shell date)"))
