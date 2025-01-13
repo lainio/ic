@@ -37,7 +37,18 @@ func tearDown() {
 func TestInitSealedBox(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	try.To(InitSealedBox(dbFilename, "", ""))
+	// default for testing
+	TryInitSealedBox(dbFilename, "", "")
+	TryClose()
+	// hex key
+	TryInitSealedBox(dbFilename, "",
+		"1669cffcb6aecd479d7fd6fcee7fe97eb176ebc26e116ff1f42f4e066ab2df0e")
+	TryClose()
+	// base58 key
+	TryInitSealedBox(dbFilename, "",
+		"HUbkSypCy4CVxNdsqM1TwyVyYA2LVz8PWX3YTCsQSmXq")
+	// leave it open for the rest of the tests
+	// TryClose()
 }
 
 func TestPutUserIDCount(t *testing.T) {

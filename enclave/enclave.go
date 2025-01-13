@@ -18,6 +18,7 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/findy-network/findy-common-go/crypto"
 	"github.com/findy-network/findy-common-go/crypto/db"
+	"github.com/findy-network/findy-common-go/x"
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -33,6 +34,8 @@ const (
 	userBucket bucket = iota
 	userIDCountBucket
 )
+
+const hexLen = 64
 
 var (
 	buckets = [][]byte{
@@ -63,11 +66,15 @@ func TryInitSealedBox(filename, backupName, key string) {
 func InitSealedBox(filename, backupName, key string) (err error) {
 	defer err2.Handle(&err)
 
-	gob.Register(User{})
-	if key == "" {
-		key = hexKey
+	keyLen := len(key)
+	var k []byte
+	if keyLen < hexLen && keyLen > 0 {
+		k = base58.Decode(key)
+	} else {
+		key = x.Whom(keyLen == 0, hexKey, key)
+		k, _ = hex.DecodeString(key)
 	}
-	k, _ := hex.DecodeString(key)
+
 	theCipher = crypto.NewCipher(k)
 	glog.V(1).Infoln("init enclave", filename)
 	sealedBoxFilename = filename
