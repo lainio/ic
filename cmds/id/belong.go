@@ -22,7 +22,6 @@ information.`
 
 	idBelongExample = `  # Both identities can be given as used DB ID (flags):
   tdc id belong --rcvr-user-id=12 --sender-user-id=1
-
   # or send Digest as a string from clipboard:
   tdc id belong --rcvr-user-id=12 $(pbpaste)`
 )

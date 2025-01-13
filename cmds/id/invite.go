@@ -28,7 +28,6 @@ information from the invition documentation from our web site.`
 
 	idInviteExample = `  # Both identities can be given as used DB ID (flags):
   tdc id invite --rcvr-user-id=12 --sender-user-id=1
-
   # or send Digest as a string from clipboard:
   tdc id belong --rcvr-user-id=12 $(pbpaste)`
 )
