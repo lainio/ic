@@ -14,13 +14,27 @@ import (
 
 // TODO: think about POW-lvl as and extra flag?
 
-var idFindDoc = `TODO`
+var idFindDoc = `The id find command finds identities according to given search parameters.
+
+The command can be used to find identities by their direct attributes or by the
+properties of their trust domains. Please see the examples for more
+information.`
+
+var idFindExample = `  # Find by user DB ID (pratically same as view command):
+    tdc id find 13
+  # find by digest (base58 formatted):
+    tdc id find --use-digest $(pbpaste) # digest is in clipboard
+  # find by a public key:
+    tdc id find TJtNVsFBQBynnV
+  # find by trust domain root public key (list all who belongs to that domain):
+    tdc id find --domain-pk TJtNVsFBQBynnV`
 
 var idFindCmd = &cobra.Command{
-	Use:   "find",
-	Short: "lists all trust ids for a user",
-	Long:  idFindDoc,
-	Args:  cobra.MinimumNArgs(1),
+	Use:     "find",
+	Short:   "lists all trust ids for a user",
+	Long:    idFindDoc,
+	Example: idFindExample,
+	Args:    cobra.MinimumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
