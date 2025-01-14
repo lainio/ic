@@ -11,9 +11,7 @@ import (
 	"github.com/lainio/ic/chain"
 	cmd "github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/enclave"
-	"github.com/lainio/ic/internal/nconn"
 	"github.com/lainio/ic/key"
-	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 )
 
@@ -21,9 +19,9 @@ var (
 	idJoinDoc = `The join command start handshake protocol part where our end accepts invitation.
 
 The invitation protocol is relatively complex network protocol where two
-parties: inviter and invitee (we with the join command) build cryptographically
-temperproof relationship between the parties. See more information from the
-invittion command.`
+parties: inviter and invitee (= we with the join command) build
+cryptographically temperproof relationship between the parties. See more
+information from the invittion command.`
 
 	idJoinExample = `  # Both identities can be given as used DB ID (flags):
   tdc id invite --rcvr-user-id=12 --sender-user-id=1
@@ -39,16 +37,9 @@ var idJoinCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err)
 
-		readUsers()
+		readUsersAndInitCodec()
 
-		//codec := nconn.CBOR_DECODER
-		codec := nats.JSON_ENCODER
-		ec = nconn.New(codec).EncodedConn
-		defer func() {
-			glog.V(3).Infoln("closing nats")
-			try.Out(ec.Drain()).Logf("drain failure")
-			ec.Close()
-		}()
+		defer flushAndCloseNats()
 
 		try.To(invitationHandshakeInvitee())
 
@@ -67,6 +58,9 @@ func init() {
 	flags.Uint32Var(&idInviteCmdData.SenderUserID, "sender-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["sender-user-id"]))
 	try.To(idInviteCmd.MarkPersistentFlagRequired("sender-user-id"))
+
+	flags.StringVar(&idInviteCmdData.Codec, "codec", "json",
+		cmd.FlagInfo("currently used codec with nats.io", "", envs["codec"]))
 
 	idCmd.AddCommand(idJoinCmd)
 }

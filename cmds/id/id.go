@@ -58,4 +58,5 @@ var envs = map[string]string{
 	"user-id":        "USER_ID",
 	"sender-user-id": "SENDER_USER_ID",
 	"rcvr-user-id":   "RCVR_USER_ID",
+	"codec":          "CODEC",
 }

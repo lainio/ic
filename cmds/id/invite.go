@@ -2,7 +2,6 @@ package id
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -22,14 +21,14 @@ var (
 invitation process.
 
 The invitation protocol is relatively complex network protocol where two
-parties: inviter (we with the invite command) and invitee, build
+parties: inviter (= we with the invite command) and invitee, build
 cryptographically temperproof relationship between the parties. See more
 information from the invition documentation from our web site.`
 
 	idInviteExample = `  # Both identities can be given as used DB ID (flags):
   tdc id invite --rcvr-user-id=12 --sender-user-id=1
-  # or send Digest as a string from clipboard:
-  tdc id belong --rcvr-user-id=12 $(pbpaste)`
+  # or send to Digest as a string from clipboard:
+  tdc id invite --rcvr-user-idk=$(pbpaste) --sender-user-id=1` // TODO: impl
 )
 
 var idInviteCmd = &cobra.Command{
@@ -40,16 +39,9 @@ var idInviteCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err)
 
-		readUsers()
+		readUsersAndInitCodec()
 
-		//codec := nconn.CBOR_DECODER
-		codec := nats.JSON_ENCODER
-		ec = nconn.New(codec).EncodedConn
-		defer func() {
-			glog.V(3).Infoln("closing nats")
-			try.Out(ec.Drain()).Logf("drain failure")
-			ec.Close()
-		}()
+		defer flushAndCloseNats()
 
 		try.To(invitationHandshake())
 
@@ -60,6 +52,7 @@ var idInviteCmd = &cobra.Command{
 var idInviteCmdData = struct {
 	SenderUserID uint32
 	RcvrUserID   uint32
+	Codec        string
 }{}
 
 var (
@@ -80,6 +73,9 @@ func init() {
 	flags.Uint32Var(&idInviteCmdData.SenderUserID, "sender-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["sender-user-id"]))
 	try.To(idInviteCmd.MarkPersistentFlagRequired("sender-user-id"))
+
+	flags.StringVar(&idInviteCmdData.Codec, "codec", "json",
+		cmd.FlagInfo("currently used codec with nats.io", "", envs["codec"]))
 
 	idCmd.AddCommand(idInviteCmd)
 }
@@ -154,19 +150,26 @@ func invitationHandshake() (err error) {
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
 
-	glog.V(3).Infoln("--- we'll sleep, to not close too already", subject2)
-	time.Sleep(10 * time.Millisecond) // TODO: do we need this? See Close ↑
-
 	glog.V(3).Infoln("all OK")
 
 	return nil
 }
 
-func readUsers() {
+func readUsersAndInitCodec() {
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 	senderUser = enclave.TryGetExistingUser(idInviteCmdData.SenderUserID)
 	rcvrUser = enclave.TryGetExistingUser(idInviteCmdData.RcvrUserID)
 	enclave.TryClose()
+
+	codec := idInviteCmdData.Codec
+	ec = nconn.New(codec).EncodedConn
+}
+func flushAndCloseNats() {
+	defer err2.Catch()
+
+	glog.V(3).Infoln("closing nats")
+	try.Out(ec.Flush()).Logf("flush failure")
+	ec.Close()
 }
 
 func makeInSubject(base string, target uint32) (chan Invitation, string) {
