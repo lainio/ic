@@ -37,10 +37,10 @@ var idInviteCmd = &cobra.Command{
 	Long:    idInviteDoc,
 	Example: idInviteExample,
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
-		defer err2.Handle(&err)
+		defer assert.PushAsserter(assert.Plain)()
+		defer err2.Handle(&err, nil)
 
 		readUsersAndInitCodec()
-
 		defer flushAndCloseNats()
 
 		try.To(invitationHandshake())
@@ -87,7 +87,8 @@ func init() {
 }
 
 func invitationHandshake() (err error) {
-	defer err2.Handle(&err)
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
 
 	sendInvitationCh, subject := makeOutSubject(subjectInvitationPropose, idInviteCmdData.RcvrUserID)
 	listenInvitationCh, subject2 := makeInSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
@@ -115,8 +116,9 @@ func invitationHandshake() (err error) {
 
 	fmt.Println("-- listen invitationProposal reply from", subject2)
 	reply := <-listenInvitationCh
-
 	glog.V(3).Infoln("=== reply received")
+
+	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
 
 	assert.Equal(reply.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(reply.Sender.ID, idInviteCmdData.SenderUserID)
@@ -153,10 +155,25 @@ func invitationHandshake() (err error) {
 	sendInvitationCh <- invitedMsg
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
+	// TODO: fix ouputs & tell how many new ICs we gave
 
 	glog.V(3).Infoln("all OK")
 
 	return nil
+}
+
+func onErrorInvitationReply(sendInvitationCh chan Invitation) err2.Handler {
+	return func(err error) error {
+		invitedMsg := Invitation{
+			Status: err.Error(),
+			Sender: senderUser.RoleInfo,
+			Rcvr:   rcvrUser.RoleInfo,
+		}
+		glog.V(5).Infoln("--- error handler")
+		sendInvitationCh <- invitedMsg
+		glog.V(5).Infoln("--- error handler sent")
+		return err
+	}
 }
 
 func readUsersAndInitCodec() {
@@ -205,6 +222,8 @@ func tryBindInChannelToSubject(subject string, invitationCh chan Invitation) {
 }
 
 type Invitation struct {
+	Status string
+
 	Sender enclave.RoleInfo // both parties..
 	Rcvr   enclave.RoleInfo // ..  keep them same
 

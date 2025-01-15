@@ -34,10 +34,10 @@ var idJoinCmd = &cobra.Command{
 	Long:    idJoinDoc,
 	Example: idJoinExample,
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
-		defer err2.Handle(&err)
+		defer assert.PushAsserter(assert.Plain)()
+		defer err2.Handle(&err, nil)
 
 		readUsersAndInitCodec()
-
 		defer flushAndCloseNats()
 
 		try.To(invitationHandshakeInvitee())
@@ -70,7 +70,8 @@ func init() {
 }
 
 func invitationHandshakeInvitee() (err error) {
-	defer err2.Handle(&err)
+	defer assert.PushAsserter(assert.Plain)() // asserts as errors
+	defer err2.Handle(&err, nil)
 
 	listenInvitationCh, subject := makeInSubject(subjectInvitationPropose, idInviteCmdData.RcvrUserID)
 	sendInvitationCh, subject2 := makeOutSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
@@ -109,7 +110,10 @@ func invitationHandshakeInvitee() (err error) {
 
 	reply := <-listenInvitationCh
 	fmt.Println("-- received reply", me.Rcvr.ID)
+
+	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 	assert.NotEmpty(reply.IdentityStr)
+
 	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
 	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
 	glog.V(3).Infoln("IC count:", rcvrUser.Identity().ICCount())
@@ -119,6 +123,8 @@ func invitationHandshakeInvitee() (err error) {
 	glog.V(3).Infoln("IC count:", rcvrUser.Identity().ICCount())
 
 	fmt.Println("-- all OK", subject2)
+
+	// TODO: fix ouputs & tell how many new ICs we got
 
 	return nil
 }
