@@ -2,7 +2,6 @@ package id
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -51,6 +50,11 @@ func init() {
 	defer err2.Catch()
 
 	flags := idJoinCmd.PersistentFlags()
+	flags.IntVar(&idInviteCmdData.PinCode, "pin-code", 0,
+		"secret PIN code for handshakes, etc.",
+	)
+	try.To(idInviteCmd.MarkPersistentFlagRequired("pin-code"))
+
 	flags.Uint32Var(&idInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["rcvr-user-id"]))
 	try.To(idJoinCmd.MarkPersistentFlagRequired("rcvr-user-id"))
@@ -72,21 +76,21 @@ func invitationHandshakeInvitee() (err error) {
 	sendInvitationCh, subject2 := makeOutSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
 
 	glog.V(3).Infoln("0. IC count:", rcvrUser.Identity().ICCount())
-	glog.V(3).Infoln("-- start to wait:", subject)
+	fmt.Println("-- start to wait:", subject)
 	invitationPropose := <-listenInvitationCh
 	glog.V(3).Infoln("<- we received invitation from:", invitationPropose.Sender.ID)
 
 	assert.Equal(invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(invitationPropose.Sender.ID, idInviteCmdData.SenderUserID)
 
-	todoRandom := 1234 // TODO: implement in utils or...
-	fmt.Println("pin CODE:", todoRandom)
+	fmt.Println("-- received invitation & challenge")
+	pinCode := idInviteCmdData.PinCode
 	challenge := chain.NewBlockFromData(invitationPropose.Challenge.Bytes())
-	challenge.Position = todoRandom
+	challenge.Position = pinCode
 
 	kh := key.NewFromInfo(rcvrUser.KeyInfo)
 	sig := try.To1(kh.Sign(challenge.Bytes()))
-	glog.V(3).Infoln("signature ok", todoRandom)
+	glog.V(3).Infoln("signature ok", pinCode)
 
 	me := Invitation{
 		Sender: senderUser.RoleInfo,
@@ -98,14 +102,13 @@ func invitationHandshakeInvitee() (err error) {
 		IdentityStr: rcvrUser.IdentityStr(),
 	}
 
-	glog.V(3).Infoln("--- we'll sleep", subject2)
-	time.Sleep(0 * time.Second)
-	glog.V(3).Infoln("--- we'll send", subject2)
+	fmt.Println("-- signed challenge ready, let's send it to", subject2)
 	sendInvitationCh <- me
 
-	glog.V(3).Infoln("--> rcvr ID:", me.Rcvr.ID)
+	fmt.Println("-- start to wait reply", subject)
 
 	reply := <-listenInvitationCh
+	fmt.Println("-- received reply", me.Rcvr.ID)
 	assert.NotEmpty(reply.IdentityStr)
 	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
 	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
@@ -115,7 +118,7 @@ func invitationHandshakeInvitee() (err error) {
 	putUser(rcvrUser)
 	glog.V(3).Infoln("IC count:", rcvrUser.Identity().ICCount())
 
-	glog.V(3).Infoln("--- all OK", subject2)
+	fmt.Println("-- all OK", subject2)
 
 	return nil
 }

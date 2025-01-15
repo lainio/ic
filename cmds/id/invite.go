@@ -53,6 +53,7 @@ var idInviteCmdData = struct {
 	SenderUserID uint32
 	RcvrUserID   uint32
 	Codec        string
+	PinCode      int
 }{}
 
 var (
@@ -66,13 +67,18 @@ func init() {
 	defer err2.Catch()
 
 	flags := idInviteCmd.PersistentFlags()
-	flags.Uint32Var(&idInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
-		cmd.FlagInfo("current user ID", "", envs["rcvr-user-id"]))
-	try.To(idInviteCmd.MarkPersistentFlagRequired("rcvr-user-id"))
+	flags.IntVar(&idInviteCmdData.PinCode, "pin-code", 0,
+		"secret PIN code for handshakes, etc.",
+	)
+	try.To(idInviteCmd.MarkPersistentFlagRequired("pin-code"))
 
 	flags.Uint32Var(&idInviteCmdData.SenderUserID, "sender-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["sender-user-id"]))
 	try.To(idInviteCmd.MarkPersistentFlagRequired("sender-user-id"))
+
+	flags.Uint32Var(&idInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
+		cmd.FlagInfo("current user ID", "", envs["rcvr-user-id"]))
+	try.To(idInviteCmd.MarkPersistentFlagRequired("rcvr-user-id"))
 
 	flags.StringVar(&idInviteCmdData.Codec, "codec", "json",
 		cmd.FlagInfo("currently used codec with nats.io", "", envs["codec"]))
@@ -88,19 +94,18 @@ func invitationHandshake() (err error) {
 
 	glog.V(3).Infoln("--- we'll send", subject)
 
-	todoRandom := 1234 // TODO: implement in utils or...
-	challenge, verify := chain.NewVerifyBlock(todoRandom)
+	fmt.Println("-- build invitation & challenge")
+	pinCode := idInviteCmdData.PinCode
+	challenge, verify := chain.NewVerifyBlock(pinCode)
 	invitationProposal := Invitation{
 		Sender:    senderUser.RoleInfo,
 		Rcvr:      rcvrUser.RoleInfo,
 		Challenge: challenge,
-		//Indentity: ,
 	}
-	assert.Equal(verify.Position, todoRandom)
-
-	fmt.Println("pin CODE:", todoRandom)
+	assert.Equal(verify.Position, pinCode)
 
 	glog.V(3).Infoln("=== send ===")
+	fmt.Println("-- send invitationProposal to", subject)
 	sendInvitationCh <- invitationProposal
 
 	glog.V(3).Infoln(
@@ -108,15 +113,14 @@ func invitationHandshake() (err error) {
 		"rcvr ID", invitationProposal.Rcvr.ID,
 	)
 
-	glog.V(3).Infoln("--- we'll start to listen", subject2)
-	glog.V(3).Infoln("=== listen ===")
+	fmt.Println("-- listen invitationProposal reply from", subject2)
 	reply := <-listenInvitationCh
 
 	glog.V(3).Infoln("=== reply received")
 
 	assert.Equal(reply.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(reply.Sender.ID, idInviteCmdData.SenderUserID)
-	assert.Equal(reply.Challenge.Position, todoRandom, "wrong PIN code")
+	assert.Equal(reply.Challenge.Position, pinCode, "wrong PIN code")
 
 	pubKey := reply.Rcvr.KeyInfo.Public
 	//pubKey := reply.Sender.KeyInfo.Public // Can be used to simulate failure
@@ -145,7 +149,7 @@ func invitationHandshake() (err error) {
 		IdentityStr: rcvrUser.IdentityStr(),
 	}
 
-	glog.V(3).Infoln("=== send new invited identity ===")
+	fmt.Println("-- all OK, send identity w/ Trust Domains to", subject)
 	sendInvitationCh <- invitedMsg
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
