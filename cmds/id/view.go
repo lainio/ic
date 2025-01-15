@@ -12,9 +12,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: think about POW-lvl as and extra flag?
-
-var idViewDoc = `TODO`
+var idViewDoc = `The view command shows identity information according User ID.`
 
 var idViewCmd = &cobra.Command{
 	Use:   "view",
@@ -41,13 +39,15 @@ var idViewCmd = &cobra.Command{
 			if idViewCmdData.DigestOnly {
 				fmt.Println(d)
 			}
+		} else if idViewCmdData.IDK {
+			idkStr := u.Identity().GetIDK().PKString()
+			fmt.Println(idkStr)
 		} else {
 			// TODO: extract to method
 			fmt.Printf(
 				"User ID: %d, Root: %v, Digest: {%v}, IC Count: %v\n",
 				u.ID,
 				x.Whom(u.Identity().IsRoot(), "yes", "no"),
-				//u.Identity().GetIDK().PKString(),
 				u.Identity().Digest(),
 				u.Identity().ICCount(),
 			)
@@ -64,6 +64,7 @@ var idViewCmd = &cobra.Command{
 }
 
 var idViewCmdData = struct {
+	IDK         bool
 	PrintDigest bool
 	DigestOnly  bool
 }{}
@@ -72,10 +73,13 @@ func init() {
 	defer err2.Catch()
 
 	flags := idViewCmd.PersistentFlags()
+	flags.BoolVarP(&idViewCmdData.IDK, "idk", "k", false,
+		"print IDK only")
 	flags.BoolVarP(&idViewCmdData.PrintDigest, "print-digest", "d", false,
 		"print Digest for transportation")
 	flags.BoolVarP(&idViewCmdData.DigestOnly, "digest-only", "o", false,
 		"print Digest only")
+
 	try.To(idViewCmd.MarkPersistentFlagRequired("print-digest"))
 	try.To(idViewCmd.MarkPersistentFlagRequired("digest-only"))
 
