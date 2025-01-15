@@ -93,9 +93,8 @@ func invitationHandshake() (err error) {
 	sendInvitationCh, subject := makeOutSubject(subjectInvitationPropose, idInviteCmdData.RcvrUserID)
 	listenInvitationCh, subject2 := makeInSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
 
-	glog.V(3).Infoln("--- we'll send", subject)
+	glog.V(3).Infoln("--- we'll build invitation & challenge", subject)
 
-	fmt.Println("-- build invitation & challenge")
 	pinCode := idInviteCmdData.PinCode
 	challenge, verify := chain.NewVerifyBlock(pinCode)
 	invitationProposal := Invitation{
@@ -106,17 +105,16 @@ func invitationHandshake() (err error) {
 	assert.Equal(verify.Position, pinCode)
 
 	glog.V(3).Infoln("=== send ===")
-	fmt.Println("-- send invitationProposal to", subject)
 	sendInvitationCh <- invitationProposal
 
 	glog.V(3).Infoln(
 		"--> sender ID", invitationProposal.Sender.ID,
 		"rcvr ID", invitationProposal.Rcvr.ID,
+		subject2,
 	)
 
-	fmt.Println("-- listen invitationProposal reply from", subject2)
 	reply := <-listenInvitationCh
-	glog.V(3).Infoln("=== reply received")
+	glog.V(3).Infoln("=== reply received", subject2)
 
 	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
 
@@ -137,25 +135,24 @@ func invitationHandshake() (err error) {
 	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
 	assert.NotNil(rcvrUser.Identity())
 	try.To(rcvrUser.Identity().CheckIntegrity())
-	glog.V(3).Infoln("1. IC count:", rcvrUser.Identity().ICCount())
+	firstCount := rcvrUser.Identity().ICCount()
 	invited := senderUser.Identity().Invite(
 		*rcvrUser.Identity(),
 		chain.WithEndpoint("TODO", true), // TODO: how to get from User?
 	)
 	rcvrUser.SetIdentity(&invited)               // set new invited identity
 	try.To(rcvrUser.Identity().CheckIntegrity()) // double safety
-	glog.V(3).Infoln("2. IC count:", rcvrUser.Identity().ICCount())
+	secondCount := rcvrUser.Identity().ICCount()
 	invitedMsg := Invitation{
 		Sender:      senderUser.RoleInfo,
 		Rcvr:        rcvrUser.RoleInfo,
 		IdentityStr: rcvrUser.IdentityStr(),
 	}
 
-	fmt.Println("-- all OK, send identity w/ Trust Domains to", subject)
+	fmt.Println("All OK, and introducing", secondCount-firstCount, "new Trust Domains")
 	sendInvitationCh <- invitedMsg
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
-	// TODO: fix ouputs & tell how many new ICs we gave
 
 	glog.V(3).Infoln("all OK")
 

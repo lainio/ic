@@ -77,14 +77,18 @@ func invitationHandshakeInvitee() (err error) {
 	sendInvitationCh, subject2 := makeOutSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
 
 	glog.V(3).Infoln("0. IC count:", rcvrUser.Identity().ICCount())
-	fmt.Println("-- start to wait:", subject)
+	glog.V(3).Infoln("-- start to wait:", subject)
+	fmt.Println(
+		"Ready to listen other invitation party.",
+		"\nPlease execute: `tdc id invite`, at their end.",
+	)
 	invitationPropose := <-listenInvitationCh
 	glog.V(3).Infoln("<- we received invitation from:", invitationPropose.Sender.ID)
 
 	assert.Equal(invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(invitationPropose.Sender.ID, idInviteCmdData.SenderUserID)
 
-	fmt.Println("-- received invitation & challenge")
+	glog.V(3).Infoln("-- received invitation & challenge")
 	pinCode := idInviteCmdData.PinCode
 	challenge := chain.NewBlockFromData(invitationPropose.Challenge.Bytes())
 	challenge.Position = pinCode
@@ -103,28 +107,26 @@ func invitationHandshakeInvitee() (err error) {
 		IdentityStr: rcvrUser.IdentityStr(),
 	}
 
-	fmt.Println("-- signed challenge ready, let's send it to", subject2)
+	glog.V(3).Infoln("-- signed challenge ready, let's send it to", subject2)
 	sendInvitationCh <- me
 
-	fmt.Println("-- start to wait reply", subject)
+	glog.V(3).Infoln("-- start to wait reply", subject)
 
 	reply := <-listenInvitationCh
-	fmt.Println("-- received reply", me.Rcvr.ID)
+	glog.V(3).Infoln("-- received reply", me.Rcvr.ID)
 
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 	assert.NotEmpty(reply.IdentityStr)
 
+	firstCount := rcvrUser.Identity().ICCount()
 	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
 	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
-	glog.V(3).Infoln("IC count:", rcvrUser.Identity().ICCount())
 	try.To(rcvrUser.Identity().CheckIntegrity())
+	secondCount := rcvrUser.Identity().ICCount()
 
 	putUser(rcvrUser)
-	glog.V(3).Infoln("IC count:", rcvrUser.Identity().ICCount())
 
-	fmt.Println("-- all OK", subject2)
-
-	// TODO: fix ouputs & tell how many new ICs we got
+	fmt.Println("All OK, and introducing", secondCount-firstCount, "new Trust Domains")
 
 	return nil
 }
