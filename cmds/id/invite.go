@@ -119,8 +119,15 @@ func invitationHandshake() (err error) {
 
 	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
 
-	assert.Equal(reply.Rcvr.ID, idInviteCmdData.RcvrUserID)
-	assert.Equal(reply.Sender.ID, idInviteCmdData.SenderUserID)
+	assert.Equal(reply.Rcvr.ID, idInviteCmdData.RcvrUserID,
+		"join cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
+		reply.Rcvr.ID, idInviteCmdData.RcvrUserID,
+	)
+	assert.Equal(
+		reply.Sender.ID, idInviteCmdData.SenderUserID,
+		"join cmd's user-sender-id (%v) not equal to our flag value (%v)",
+		reply.Sender.ID, idInviteCmdData.SenderUserID,
+	)
 	assert.Equal(reply.Challenge.Position, pinCode,
 		"wrong PIN code in the challenge")
 

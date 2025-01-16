@@ -87,8 +87,14 @@ func invitationHandshakeInvitee() (err error) {
 
 	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
 
-	assert.Equal(invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID)
-	assert.Equal(invitationPropose.Sender.ID, idInviteCmdData.SenderUserID)
+	assert.Equal(invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID,
+		"invite cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
+		invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID,
+	)
+	assert.Equal(invitationPropose.Sender.ID, idInviteCmdData.SenderUserID,
+		"invite cmd's user-sender-id (%v) not equal to our flag value (%v)",
+		invitationPropose.Sender.ID, idInviteCmdData.SenderUserID,
+	)
 
 	glog.V(3).Infoln("-- received invitation & challenge")
 	pinCode := idInviteCmdData.PinCode
