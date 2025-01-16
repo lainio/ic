@@ -10,14 +10,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: think about POW-lvl as and extra flag?
+var idUsersDoc = `The users command lists all users from our enclave.`
 
-var idUsersDoc = `TODO`
+var idUsersExample = `  # search all users:
+    tdc id users
+  # search trust domains only:
+    tdc id users --only-domains
+  # search NON trust domains only:
+    tdc id users --non-domains
+`
 
 var idUsersCmd = &cobra.Command{
-	Use:   "users",
-	Short: "lists all users in this enclave",
-	Long:  idUsersDoc,
+	Use:     "users",
+	Short:   "lists all users in this enclave",
+	Long:    idUsersDoc,
+	Example: idUsersExample,
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err)
 
@@ -25,7 +32,10 @@ var idUsersCmd = &cobra.Command{
 		users := enclave.TryGetAllUsers()
 		glog.V(3).Infoln("count of users:", len(users))
 		for _, v := range users {
-			if idUsersCmdData.Domains && !v.Identity().IsRoot() {
+			if idUsersCmdData.DomainsOnly && !v.Identity().IsRoot() {
+				continue
+			}
+			if idUsersCmdData.NonDomainsOnly && v.Identity().IsRoot() {
 				continue
 			}
 			fmt.Printf(
@@ -41,19 +51,19 @@ var idUsersCmd = &cobra.Command{
 	},
 }
 
-// TODO: flags:
-//  - see chain.WithEndpoint, etc.
-
 var idUsersCmdData = struct {
-	Domains bool
+	DomainsOnly    bool
+	NonDomainsOnly bool
 }{}
 
 func init() {
 	defer err2.Catch()
 
 	flags := idUsersCmd.PersistentFlags()
-	flags.BoolVar(&idUsersCmdData.Domains, "only-domains", false,
+	flags.BoolVar(&idUsersCmdData.DomainsOnly, "only-domains", false,
 		"lists only users that are trust domains")
+	flags.BoolVar(&idUsersCmdData.NonDomainsOnly, "non-domains", false,
+		"lists only users that are NOT trust domains")
 
 	idCmd.AddCommand(idUsersCmd)
 }
