@@ -12,8 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: think about POW-lvl as and extra flag?
-
 var idFindDoc = `The id find command finds identities according to given search parameters.
 
 The command can be used to find identities by their direct attributes or by the

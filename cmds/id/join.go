@@ -23,9 +23,9 @@ cryptographically temperproof relationship between the parties. See more
 information from the invittion command.`
 
 	idJoinExample = `  # Both identities can be given as used DB ID (flags):
-  tdc id invite --rcvr-user-id=12 --sender-user-id=1
+    tdc id invite --rcvr-user-id=12 --sender-user-id=1
   # or send Digest as a string from clipboard:
-  tdc id belong --rcvr-user-id=12 $(pbpaste)`
+    tdc id belong --rcvr-user-id=12 $(pbpaste)`
 )
 
 var idJoinCmd = &cobra.Command{

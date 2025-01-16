@@ -21,9 +21,9 @@ The command has two different ways to use it. Please see the examples for more
 information.`
 
 	idBelongExample = `  # Both identities can be given as used DB ID (flags):
-  tdc id belong --rcvr-user-id=12 --sender-user-id=1
+    tdc id belong --rcvr-user-id=12 --sender-user-id=1
   # or send to Digest as a string from clipboard:
-  tdc id belong --rcvr-user-idk=$(pbpaste) --sender-user-id=1` // TODO: impl
+    tdc id belong --rcvr-user-idk=$(pbpaste) --sender-user-id=1` // TODO: impl
 )
 
 var idBelongCmd = &cobra.Command{

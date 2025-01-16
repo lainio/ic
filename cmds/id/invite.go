@@ -27,9 +27,9 @@ cryptographically temperproof relationship between the parties. See more
 information from the invition documentation from our web site.`
 
 	idInviteExample = `  # Both identities can be given as used DB ID (flags):
-  tdc id invite --rcvr-user-id=12 --sender-user-id=1
+    tdc id invite --rcvr-user-id=12 --sender-user-id=1
   # or send to Digest as a string from clipboard:
-  tdc id invite --rcvr-user-idk=$(pbpaste) --sender-user-id=1` // TODO: impl
+    tdc id invite --rcvr-user-idk=$(pbpaste) --sender-user-id=1` // TODO: impl
 )
 
 var idInviteCmd = &cobra.Command{

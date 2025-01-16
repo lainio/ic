@@ -17,9 +17,9 @@ import (
 var idNewDoc = `The id new command creates either a new identity domain or a new trust domain.`
 
 var idNewExample = `  # Create a new identity domain
-  tdc id new
+    tdc id new
   # Create a new trust domain
-  tdc id new --trust-domain
+    tdc id new --trust-domain
 `
 
 var idNewCmd = &cobra.Command{
