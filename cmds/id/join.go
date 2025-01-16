@@ -79,11 +79,13 @@ func invitationHandshakeInvitee() (err error) {
 	glog.V(3).Infoln("0. IC count:", rcvrUser.Identity().ICCount())
 	glog.V(3).Infoln("-- start to wait:", subject)
 	fmt.Println(
-		"Ready to listen other invitation party.",
-		"\nPlease execute: `tdc id invite`, at their end.",
+		"Ready to listen inviter.",
+		"\nPlease execute: `tdc id invite ..`, at their end.",
 	)
-	invitationPropose := <-listenInvitationCh
+	invitationPropose := <-listenInvitationCh //////////////////////////////
 	glog.V(3).Infoln("<- we received invitation from:", invitationPropose.Sender.ID)
+
+	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
 
 	assert.Equal(invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(invitationPropose.Sender.ID, idInviteCmdData.SenderUserID)
@@ -108,20 +110,21 @@ func invitationHandshakeInvitee() (err error) {
 	}
 
 	glog.V(3).Infoln("-- signed challenge ready, let's send it to", subject2)
-	sendInvitationCh <- me
+	sendInvitationCh <- me //////////////////////////////////////////
 
 	glog.V(3).Infoln("-- start to wait reply", subject)
 
-	reply := <-listenInvitationCh
-	glog.V(3).Infoln("-- received reply", me.Rcvr.ID)
+	reply := <-listenInvitationCh //////////////////////////////////////////
+	glog.V(3).Infoln("-- received reply", me.Rcvr.ID, ", let's verify it..")
 
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 	assert.NotEmpty(reply.IdentityStr)
 
 	firstCount := rcvrUser.Identity().ICCount()
-	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
+	idClone := rcvrUser.MakeIdentityFromStr(reply.IdentityStr)
+	try.To(idClone.CheckIntegrity())
 	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
-	try.To(rcvrUser.Identity().CheckIntegrity())
+	rcvrUser.SetIdentity(idClone)
 	secondCount := rcvrUser.Identity().ICCount()
 
 	putUser(rcvrUser)

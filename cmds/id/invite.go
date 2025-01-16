@@ -2,6 +2,7 @@ package id
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -114,13 +115,14 @@ func invitationHandshake() (err error) {
 	)
 
 	reply := <-listenInvitationCh
-	glog.V(3).Infoln("=== reply received", subject2)
+	glog.V(3).Infoln("=== challenge+reply received", subject2)
 
 	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
 
 	assert.Equal(reply.Rcvr.ID, idInviteCmdData.RcvrUserID)
 	assert.Equal(reply.Sender.ID, idInviteCmdData.SenderUserID)
-	assert.Equal(reply.Challenge.Position, pinCode, "wrong PIN code")
+	assert.Equal(reply.Challenge.Position, pinCode,
+		"wrong PIN code in the challenge")
 
 	pubKey := reply.Rcvr.KeyInfo.Public
 	//pubKey := reply.Sender.KeyInfo.Public // Can be used to simulate failure
@@ -133,15 +135,15 @@ func invitationHandshake() (err error) {
 
 	// Their identity comes thru msg as a string, bring up the instance
 	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
-	assert.NotNil(rcvrUser.Identity())
+	assert.NotNil(rcvrUser.Identity(), "cannot read & create identity")
 	try.To(rcvrUser.Identity().CheckIntegrity())
 	firstCount := rcvrUser.Identity().ICCount()
 	invited := senderUser.Identity().Invite(
 		*rcvrUser.Identity(),
 		chain.WithEndpoint("TODO", true), // TODO: how to get from User?
 	)
-	rcvrUser.SetIdentity(&invited)               // set new invited identity
-	try.To(rcvrUser.Identity().CheckIntegrity()) // double safety
+	rcvrUser.SetIdentity(&invited) // set new invited identity
+	try.To(rcvrUser.Identity().CheckIntegrity())
 	secondCount := rcvrUser.Identity().ICCount()
 	invitedMsg := Invitation{
 		Sender:      senderUser.RoleInfo,
@@ -153,8 +155,6 @@ func invitationHandshake() (err error) {
 	sendInvitationCh <- invitedMsg
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
-
-	glog.V(3).Infoln("all OK")
 
 	return nil
 }
@@ -168,6 +168,8 @@ func onErrorInvitationReply(sendInvitationCh chan Invitation) err2.Handler {
 		}
 		glog.V(5).Infoln("--- error handler")
 		sendInvitationCh <- invitedMsg
+		time.Sleep(100 * time.Millisecond) // Flush isn't enough!
+		ec.Flush()
 		glog.V(5).Infoln("--- error handler sent")
 		return err
 	}

@@ -323,10 +323,15 @@ func (u User) IdentityStr() string {
 	return base58.Encode(u.IdentityCBOR)
 }
 
-func (u *User) SetIdentityFromStr(idStr string) {
+func (u *User) MakeIdentityFromStr(idStr string) *identity.Identity {
 	d := base58.Decode(idStr)
 	id := identity.NewFromData(d, key.NewFromInfo(u.KeyInfo))
-	u.SetIdentity(&id)
+	return &id
+}
+
+func (u *User) SetIdentityFromStr(idStr string) {
+	id := u.MakeIdentityFromStr(idStr)
+	u.SetIdentity(id)
 }
 
 func (u User) Identity() *identity.Identity {
