@@ -2,6 +2,7 @@ package enclave
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"slices"
 	"testing"
@@ -78,9 +79,13 @@ func TestNewUser(t *testing.T) {
 		u = newU
 		root = newU
 	}
-	for range 10 {
-		newU := NewUser()
+	var lastAlias string
+	for i := range 10 {
+		alias := fmt.Sprintf("alias_%v", i)
+		lastAlias = alias
+		newU := NewUserWithAlias(alias)
 		assert.NotNil(newU.identity)
+		assert.Equal(newU.Alias, alias)
 		try.To(PutUser(newU))
 		u = newU
 	}
@@ -93,12 +98,14 @@ func TestNewUser(t *testing.T) {
 	u.SetIdentity(&invit)
 	try.To(PutUser(u))
 	assert.Equal(u.Identity().ICCount(), 1)
+	assert.Equal(u.Alias, lastAlias)
 
 	u2, found := try.To2(GetUser(u.ID))
 	assert.Equal(u.ID, u2.ID)
 	assert.That(found)
 	assert.NotNil(u2.identity)
 	assert.Equal(u2.Identity().ICCount(), 1)
+	assert.Equal(u2.Alias, lastAlias)
 
 	users1 := try.To1(GetAllUsers())
 	assert.SNotEmpty(users1)
@@ -119,8 +126,20 @@ func TestGetUser(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	u2, found := try.To2(GetUser(emailAddress))
-	assert.NotNil(u2.identity)
 	assert.That(found)
+	assert.NotNil(u2.identity)
+
+	u3, found3 := try.To2(GetUserByIDK(u2.KeyInfo.Public))
+	assert.That(found3)
+	assert.NotNil(u3.identity)
+	assert.Equal(u3.ID, u2.ID)
+	assert.DeepEqual(u3.KeyInfo, u2.KeyInfo)
+
+	u3, found3 = TryGetUserByIDK(u2.KeyInfo.Public)
+	assert.That(found3)
+	assert.NotNil(u3.identity)
+	assert.Equal(u3.ID, u2.ID)
+	assert.DeepEqual(u3.KeyInfo, u2.KeyInfo)
 
 	users := try.To1(GetAllUsers())
 	assert.SNotEmpty(users)
@@ -135,6 +154,10 @@ func TestGetExistingUser(t *testing.T) {
 
 	u := try.To1(GetExistingUser(emailAddress))
 	assert.NotZero(u.ID)
+
+	u2 := TryGetExistingUserByIDK(u.KeyInfo.Public)
+	assert.Equal(u2.ID, u.ID)
+	assert.That(u2.KeyInfo.Public.Equal(u.KeyInfo.Public))
 
 	_, err := GetExistingUser(emailNotCreated)
 	assert.Error(err)

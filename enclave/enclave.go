@@ -126,6 +126,23 @@ func PutUser(u User) (err error) {
 	return nil
 }
 
+func TryGetUserByIDK(idk key.Public) (u User, exist bool) {
+	return try.To2(GetUserByIDK(idk))
+}
+
+func GetUserByIDK(idk key.Public) (u User, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	users := TryGetAllUsers()
+	for _, u := range users {
+		if u.KeyInfo.Public.Equal(idk) {
+			return GetUser(u.ID)
+		}
+	}
+
+	return
+}
+
 func TryGetUser(id uint32) (u User, exist bool) {
 	return try.To2(GetUser(id))
 }
@@ -149,6 +166,22 @@ func GetUser(id uint32) (u User, exist bool, err error) {
 	}
 
 	return NewUserFromData(value.Data), already, err
+}
+
+func TryGetExistingUserByIDK(idk key.Public) (u User) {
+	return try.To1(GetExistingUserByIDK(idk))
+}
+
+func GetExistingUserByIDK(idk key.Public) (u User, err error) {
+	defer err2.Handle(&err)
+	
+	u, already := try.To2(GetUserByIDK(idk))
+
+	if !already {
+		return u, fmt.Errorf("user (%v) not exist", idk)
+	}
+
+	return
 }
 
 func TryGetExistingUser(id uint32) (u User) {
@@ -294,6 +327,7 @@ var (
 type RoleInfo struct {
 	ID      uint32
 	KeyInfo key.Info
+	Alias   string
 }
 
 // User is data type for our Identities. It works as a wrapper for [identity]
@@ -348,6 +382,12 @@ func uint32ToBytes(v uint32) []byte {
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, v)
 	return b
+}
+
+func NewUserWithAlias(alias string, flags ...chain.Opts) User {
+	u := NewUser(flags...)
+	u.Alias = alias
+	return u
 }
 
 func NewUser(flags ...chain.Opts) User {
