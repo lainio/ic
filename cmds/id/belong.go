@@ -20,10 +20,11 @@ var (
 The command has two different ways to use it. Please see the examples for more
 information.`
 
-	idBelongExample = `  # Both identities can be given as used DB ID (flags):
-    tdc id belong --rcvr-user-id=12 --sender-user-id=1
-  # or send to Digest as a string from clipboard:
-    tdc id belong --rcvr-user-idk=$(pbpaste) --sender-user-id=1` // TODO: impl
+	idBelongExample = `  # Both identities can be given as user ID (flags):
+    tdc id belong --id-type=db 12 1
+  # or give identities by their IDK:
+    tdc id belong --id-type=idk 12 $(pbpaste) # second from clipboard
+`
 )
 
 var idBelongCmd = &cobra.Command{
@@ -33,13 +34,14 @@ var idBelongCmd = &cobra.Command{
 	Example: idBelongExample,
 	Args:    cobra.MinimumNArgs(0),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
+		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 
 		var senderDigest *digest.Digest
 		if idInviteCmdData.SenderUserID == 0 {
-			assert.SLonger(args, 0, "user ID: argument missing")
+			assert.SNotEmpty(args, "user ID: argument missing")
 			dig := digest.NewFromString(args[0])
 			senderDigest = &dig
 		} else {
