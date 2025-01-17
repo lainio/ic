@@ -39,8 +39,9 @@ var idUsersCmd = &cobra.Command{
 				continue
 			}
 			fmt.Printf(
-				"User ID: %d, PK: %v, IC Count: %v, Root: %v\n",
+				"User ID: %d, '%v', PK: %v, IC Count: %v, Root: %v\n",
 				v.ID,
+				v.Alias,
 				v.Identity().GetIDK().PKString(),
 				v.Identity().ICCount(),
 				x.Whom(v.Identity().IsRoot(), "yes", "no"),
