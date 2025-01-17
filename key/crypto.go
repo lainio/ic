@@ -28,6 +28,10 @@ var Enclave enclave.Secure = enclave.New(
 
 type Public []byte
 
+func (p Public) Equal(rhs Public) bool {
+	return bytes.Equal(p, rhs)
+}
+
 func (p Public) String() string {
 	pk := base58.Encode(p)
 	return pk
@@ -39,6 +43,10 @@ func (p Public) PKString() string {
 }
 
 type ID []byte
+
+func (id ID) Equal(rhs ID) bool {
+	return bytes.Equal(id, rhs)
+}
 
 func (id ID) String() string {
 	s := base58.Encode(id)
