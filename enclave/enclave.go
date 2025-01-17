@@ -12,6 +12,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -126,23 +127,6 @@ func PutUser(u User) (err error) {
 	return nil
 }
 
-func TryGetUserByIDK(idk key.Public) (u User, exist bool) {
-	return try.To2(GetUserByIDK(idk))
-}
-
-func GetUserByIDK(idk key.Public) (u User, exist bool, err error) {
-	defer err2.Handle(&err)
-
-	users := TryGetAllUsers()
-	for _, u := range users {
-		if u.KeyInfo.Public.Equal(idk) {
-			return GetUser(u.ID)
-		}
-	}
-
-	return
-}
-
 func TryGetUser(id uint32) (u User, exist bool) {
 	return try.To2(GetUser(id))
 }
@@ -168,6 +152,23 @@ func GetUser(id uint32) (u User, exist bool, err error) {
 	return NewUserFromData(value.Data), already, err
 }
 
+func TryGetUserByIDK(idk key.Public) (u User, exist bool) {
+	return try.To2(GetUserByIDK(idk))
+}
+
+func GetUserByIDK(idk key.Public) (u User, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	users := TryGetAllUsers()
+	for _, u := range users {
+		if u.KeyInfo.Public.Equal(idk) {
+			return GetUser(u.ID)
+		}
+	}
+
+	return
+}
+
 func TryGetExistingUserByIDK(idk key.Public) (u User) {
 	return try.To1(GetExistingUserByIDK(idk))
 }
@@ -179,6 +180,100 @@ func GetExistingUserByIDK(idk key.Public) (u User, err error) {
 
 	if !already {
 		return u, fmt.Errorf("user (%v) not exist", idk)
+	}
+
+	return
+}
+
+func TryGetExistingUserByType(t, d string) (u User) {
+	return try.To1(GetExistingUserByType(t, d))
+}
+
+func GetExistingUserByType(t, d string) (u User, err error) {
+	defer err2.Handle(&err)
+
+	u, already := try.To2(GetUserByType(t, d))
+
+	if !already {
+		return u, fmt.Errorf("user (%v) not exist", d)
+	}
+
+	return
+}
+
+func TryGetUserByType(t, d string) (u User, exist bool) {
+	return try.To2(GetUserByType(t, d))
+}
+
+func GetUserByType(t, d string) (u User, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	users := TryGetAllUsers()
+	for _, u := range users {
+		if found, u := Equal(t, d, u); found {
+			return u, true, nil
+		}
+	}
+
+	return
+}
+
+func Equal(t, d string, rhs User) (ok bool, u User) {
+	switch t {
+	case "db":
+		ok = try.To1(strconv.Atoi(d)) == int(rhs.ID)
+		if ok {
+			u = TryGetExistingUser(rhs.ID)
+		}
+	case "idk":
+		ok = rhs.KeyInfo.Public.PKString() == d
+		if ok {
+			u = TryGetExistingUserByIDK(rhs.KeyInfo.Public)
+		}
+	case "digest":
+		ok = rhs.Identity().Digest().Base58() == d
+		if ok {
+			u = TryGetExistingUserByDigest(d)
+		}
+	case "alias":
+		ok = rhs.Alias == d
+		assert.NotImplemented()
+	}
+	if ok {
+		return
+	}
+	ok = false
+	return
+}
+
+func TryGetExistingUserByDigest(d string) (u User) {
+	return try.To1(GetExistingUserByDigest(d))
+}
+
+func GetExistingUserByDigest(d string) (u User, err error) {
+	defer err2.Handle(&err)
+
+	u, already := try.To2(GetUserByDigest(d))
+
+	if !already {
+		return u, fmt.Errorf("user (%v) not exist", d)
+	}
+
+	return
+}
+
+func TryGetUserByDigest(d string) (u User, exist bool) {
+	return try.To2(GetUserByDigest(d))
+}
+
+func GetUserByDigest(d string) (u User, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	users := TryGetAllUsers()
+	for _, u := range users {
+		if u.Identity().Digest().Base58() == d {
+			return GetUser(u.ID)
+		}
 	}
 
 	return

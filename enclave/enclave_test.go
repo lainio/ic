@@ -141,6 +141,13 @@ func TestGetUser(t *testing.T) {
 	assert.Equal(u3.ID, u2.ID)
 	assert.DeepEqual(u3.KeyInfo, u2.KeyInfo)
 
+	digest := u2.Identity().Digest().Base58()
+	u4, found4 := try.To2(GetUserByDigest(digest))
+	assert.That(found4)
+	assert.NotNil(u4.identity)
+	assert.Equal(u4.ID, u2.ID)
+	assert.DeepEqual(u4.KeyInfo, u2.KeyInfo)
+
 	users := try.To1(GetAllUsers())
 	assert.SNotEmpty(users)
 
@@ -158,6 +165,12 @@ func TestGetExistingUser(t *testing.T) {
 	u2 := TryGetExistingUserByIDK(u.KeyInfo.Public)
 	assert.Equal(u2.ID, u.ID)
 	assert.That(u2.KeyInfo.Public.Equal(u.KeyInfo.Public))
+
+	digest := u2.Identity().Digest().Base58()
+	u4 := TryGetExistingUserByType("digest", digest)
+	assert.NotNil(u4.identity)
+	assert.Equal(u4.ID, u2.ID)
+	assert.DeepEqual(u4.KeyInfo, u2.KeyInfo)
 
 	_, err := GetExistingUser(emailNotCreated)
 	assert.Error(err)
