@@ -1,6 +1,7 @@
 package id
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/lainio/err2"
@@ -10,11 +11,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TODO
+var idDoc = `The id command is parent command a group of commands for the identity.
 
-var idDoc = `id, aka trust id command.
-
-TODO.`
+Please note that all of the id command's flags are inherited to subcommands and
+awailable for them.`
 
 var idCmd = &cobra.Command{
 	Use:   "id",
@@ -31,6 +31,7 @@ var idCmd = &cobra.Command{
 var CmdData = struct {
 	WalletFilename string
 	MasterKey      string
+	Type           ArgType
 }{}
 
 func PrintCmdData() {
@@ -47,6 +48,11 @@ func init() {
 	flags.StringVar(&CmdData.WalletFilename, "wallet", "",
 		cmd.FlagInfo("filename for identity wallet", "", envs["wallet"]))
 
+	try.To(CmdData.Type.Set("db"))
+	flags.VarP(&CmdData.Type, "type", "t",
+		cmd.FlagInfo("Type of arguments (db|digest|idk|alias)", "", envs["type"]))
+
+	try.To(idCmd.MarkPersistentFlagRequired("type"))
 	try.To(idCmd.MarkPersistentFlagRequired("master-key"))
 	try.To(idCmd.MarkPersistentFlagRequired("wallet"))
 	cmd.RootCmd().AddCommand(idCmd)
@@ -59,4 +65,36 @@ var envs = map[string]string{
 	"sender-user-id": "SENDER_USER_ID",
 	"rcvr-user-id":   "RCVR_USER_ID",
 	"codec":          "CODEC",
+	"type":           "TYPE",
+}
+
+///////////////////////////////////////////////////////////////////////////
+
+type ArgType string
+
+const (
+	DBType     ArgType = "db"
+	DigestType ArgType = "digest"
+	IDKType    ArgType = "idk"
+	AliasType  ArgType = "alias"
+)
+
+// Validate the flag value
+func (t *ArgType) String() string {
+	return string(*t)
+}
+
+func (t *ArgType) Set(value string) error {
+	switch value {
+	case string(DBType), string(DigestType),
+		string(IDKType), string(AliasType):
+		*t = ArgType(value)
+		return nil
+	default:
+		return errors.New("must be one of [db, digest, idk, alias]")
+	}
+}
+
+func (t *ArgType) Type() string {
+	return "ArgType"
 }
