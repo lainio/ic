@@ -174,7 +174,7 @@ func TryGetExistingUserByIDK(idk key.Public) (u User) {
 
 func GetExistingUserByIDK(idk key.Public) (u User, err error) {
 	defer err2.Handle(&err)
-	
+
 	u, already := try.To2(GetUserByIDK(idk))
 
 	if !already {
