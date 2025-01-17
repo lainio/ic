@@ -222,6 +222,9 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 // i.e., ICs including a correct RootIDK. If not returns nil.
 //
 // See [WebOfTrustInfo] for cases where you have both [Node]s.
+//
+// TODO: Study the [Digest] because if we don't have RootIDKs there we can have
+// only asymmetric WoT queries!
 func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	var (
 		found bool
