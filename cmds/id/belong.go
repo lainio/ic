@@ -7,23 +7,22 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	cmd "github.com/lainio/ic/cmds"
-	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/enclave"
 	"github.com/lainio/ic/hop"
-	"github.com/lainio/ic/identity"
 	"github.com/spf13/cobra"
 )
 
 var (
 	idBelongDoc = `The belong command counts web of trust of two identities.
 
-The command has two different ways to use it. Please see the examples for more
-information.`
+The command has several different ways to use it. The 'belong' command takes two
+arguments which point what Identities we querieng. The --type flag to tell
+format used in arguments. Please see the examples for more information.`
 
-	idBelongExample = `  # Both identities can be given as user ID (flags):
-    tdc id belong --id-type=db 12 1
-  # or give identities by their IDK:
-    tdc id belong --id-type=idk 12 $(pbpaste) # second from clipboard
+	idBelongExample = `  # Identities can be given as user IDs:
+    tdc id belong --type=db 12 1
+  # or give identities by their IDK string:
+    tdc id belong --type=idk asbaasbaasba $(pbpaste) # second from clipboard
 `
 )
 
@@ -32,37 +31,23 @@ var idBelongCmd = &cobra.Command{
 	Short:   "list all trust domains we belong",
 	Long:    idBelongDoc,
 	Example: idBelongExample,
-	Args:    cobra.MinimumNArgs(0),
+	Args:    cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 
-		var senderDigest *digest.Digest
-		if idInviteCmdData.SenderUserID == 0 {
-			assert.SNotEmpty(args, "user ID: argument missing")
-			dig := digest.NewFromString(args[0])
-			senderDigest = &dig
-		} else {
-			senderUser = enclave.TryGetExistingUser(idInviteCmdData.SenderUserID)
-			dig := senderUser.Identity().Digest()
-			senderDigest = &dig
-		}
-		rcvrUser = enclave.TryGetExistingUser(idInviteCmdData.RcvrUserID)
-		var idFromDig identity.Identity
-		users := enclave.TryGetAllUsers()
-		for _, v := range users {
-			equal := v.Identity().Digest().Equal(*senderDigest)
-			if equal {
-				idFromDig = *v.Identity()
-				break
-			}
-		}
+		senderUser := enclave.TryGetExistingUserByType(string(CmdData.Type), args[0])
+		rcvrUser := enclave.TryGetExistingUserByType(string(CmdData.Type), args[1])
 		enclave.TryClose()
 
+		// TODO: using Digest with WoT doesn't give symmetric results if we
+		// don't add RootIDKs to it
 		//wot := rcvrUser.Identity().WoT(senderDigest)
-		wot := rcvrUser.Identity().WebOfTrust(idFromDig)
+
+		idFromDig := senderUser.Identity()
+		wot := rcvrUser.Identity().WebOfTrust(*idFromDig)
 		if wot == nil || wot.Hops == hop.NotConnected {
 			return fmt.Errorf("identities don't share trust domains")
 		}
