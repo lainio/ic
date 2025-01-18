@@ -31,21 +31,14 @@ var idUsersCmd = &cobra.Command{
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 		users := enclave.TryGetAllUsers()
 		glog.V(3).Infoln("count of users:", len(users))
-		for _, v := range users {
-			if idUsersCmdData.DomainsOnly && !v.Identity().IsRoot() {
+		for _, user := range users {
+			if idUsersCmdData.DomainsOnly && !user.Identity().IsRoot() {
 				continue
 			}
-			if idUsersCmdData.NonDomainsOnly && v.Identity().IsRoot() {
+			if idUsersCmdData.NonDomainsOnly && user.Identity().IsRoot() {
 				continue
 			}
-			fmt.Printf(
-				"User ID: %d, '%v', PK: %v, IC Count: %v, Root: %v\n",
-				v.ID,
-				v.Alias,
-				v.Identity().GetIDK().PKString(),
-				v.Identity().ICCount(),
-				x.Whom(v.Identity().IsRoot(), "yes", "no"),
-			)
+			printInfoln(user)
 		}
 
 		return nil
@@ -67,4 +60,15 @@ func init() {
 		"lists only users that are NOT trust domains")
 
 	idCmd.AddCommand(idUsersCmd)
+}
+
+func printInfoln(user enclave.User) {
+	fmt.Printf(
+		"UserID: %2d, PK: %v, ICs: %2v, Root: %-3v, '%v'\n",
+		user.ID,
+		user.Identity().GetIDK().PKString(),
+		user.Identity().ICCount(),
+		x.Whom(user.Identity().IsRoot(), "yes", "no"),
+		user.Alias,
+	)
 }
