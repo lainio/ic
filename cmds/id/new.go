@@ -45,12 +45,15 @@ var idNewCmd = &cobra.Command{
 
 		try.To(enclave.PutUser(user))
 		myID := user.Identity()
-
 		if idNewCmdData.IDK {
 			fmt.Println(myID.GetIDK().Public.PKString())
-		} else if idNewCmdData.UserID {
+			idNewCmdData.Verbose = false
+		}
+		if idNewCmdData.UserID {
 			fmt.Println(user.ID)
-		} else if idNewCmdData.Verbose {
+			idNewCmdData.Verbose = false
+		}
+		if idNewCmdData.Verbose {
 			fmt.Printf("The user ID (%v) of the new identity, IDK: %v\n",
 				user.ID,
 				myID.GetIDK().Public.PKString(),
