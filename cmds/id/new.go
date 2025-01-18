@@ -13,15 +13,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// TODO: think about POW-lvl as and extra flag?
-
 var idNewDoc = `The id new command creates either a new identity domain or a new trust domain.`
 
 var idNewExample = `  # Create a new identity domain
     tdc id new
   # Create a new trust domain
     tdc id new --trust-domain
-  # Create a new identity domain with name, i.e., alias
+  # Create a new domain with the name, a.k.a alias
     tdc id new "Alias Name"
 `
 
@@ -48,7 +46,16 @@ var idNewCmd = &cobra.Command{
 		try.To(enclave.PutUser(user))
 		myID := user.Identity()
 
-		fmt.Println("The user ID of the new identity:", user.ID)
+		if idNewCmdData.IDK {
+			fmt.Println(myID.GetIDK().Public.PKString())
+		} else if idNewCmdData.UserID {
+			fmt.Println(user.ID)
+		} else if idNewCmdData.Verbose {
+			fmt.Printf("The user ID (%v) of the new identity, IDK: %v\n",
+				user.ID,
+				myID.GetIDK().Public.PKString(),
+			)
+		}
 
 		glog.V(5).Infoln("IDK:", myID.GetIDK())
 		assert.Equal(myID.IsRoot(), idNewCmdData.IsDomain)
@@ -57,11 +64,11 @@ var idNewCmd = &cobra.Command{
 	},
 }
 
-// TODO: flags:
-//  - see chain.WithEndpoint, etc.
-
 var idNewCmdData = struct {
 	IsDomain bool
+	Verbose  bool
+	IDK      bool
+	UserID   bool
 }{}
 
 func init() {
@@ -70,6 +77,12 @@ func init() {
 	flags := idNewCmd.PersistentFlags()
 	flags.BoolVar(&idNewCmdData.IsDomain, "trust-domain", false,
 		"is this a trust domain")
+	flags.BoolVar(&idNewCmdData.Verbose, "verbose", true,
+		"use verbose output, overridden by --idk or --user-id")
+	flags.BoolVar(&idNewCmdData.IDK, "idk", false,
+		"output IDK")
+	flags.BoolVar(&idNewCmdData.UserID, "user-id", false,
+		"output user ID")
 
 	idCmd.AddCommand(idNewCmd)
 }
