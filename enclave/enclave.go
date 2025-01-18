@@ -237,12 +237,47 @@ func Equal(t, d string, rhs User) (ok bool, u User) {
 		}
 	case "alias":
 		ok = rhs.Alias == d
-		assert.NotImplemented()
+		if ok {
+			u = TryGetExistingUserByAlias(d)
+		}
 	}
 	if ok {
 		return
 	}
 	ok = false
+	return
+}
+
+func TryGetExistingUserByAlias(d string) (u User) {
+	return try.To1(GetExistingUserByAlias(d))
+}
+
+func GetExistingUserByAlias(d string) (u User, err error) {
+	defer err2.Handle(&err)
+
+	u, already := try.To2(GetUserByAlias(d))
+
+	if !already {
+		return u, fmt.Errorf("user (%v) not exist", d)
+	}
+
+	return
+}
+
+func TryGetUserByAlias(d string) (u User, exist bool) {
+	return try.To2(GetUserByAlias(d))
+}
+
+func GetUserByAlias(d string) (u User, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	users := TryGetAllUsers()
+	for _, u := range users {
+		if u.Alias == d {
+			return GetUser(u.ID)
+		}
+	}
+
 	return
 }
 

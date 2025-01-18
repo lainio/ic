@@ -71,8 +71,9 @@ func TestNewUser(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	var root, u User
-	for range 2 { // roots
-		newU := NewUser(chain.WithAllowRouting(true))
+	for i := range 2 { // roots
+		alias := fmt.Sprintf("root_alias_%d", i+1)
+		newU := NewUserWithAlias(alias, chain.WithAllowRouting(true))
 		assert.NotNil(newU.identity)
 		assert.That(newU.identity.IsRoot())
 		try.To(PutUser(newU))
@@ -147,6 +148,15 @@ func TestGetUser(t *testing.T) {
 	assert.NotNil(u4.identity)
 	assert.Equal(u4.ID, u2.ID)
 	assert.DeepEqual(u4.KeyInfo, u2.KeyInfo)
+
+	alias := u2.Alias
+	assert.NotEmpty(alias)
+	assert.Equal(alias, "root_alias_1") // see the alias name in TestNewUser
+	u5, found5 := try.To2(GetUserByAlias(alias))
+	assert.That(found5)
+	assert.NotNil(u5.identity)
+	assert.Equal(u5.ID, u2.ID)
+	assert.DeepEqual(u5.KeyInfo, u2.KeyInfo)
 
 	users := try.To1(GetAllUsers())
 	assert.SNotEmpty(users)
