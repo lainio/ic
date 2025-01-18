@@ -38,7 +38,7 @@ var idUsersCmd = &cobra.Command{
 			if idUsersCmdData.NonDomainsOnly && user.Identity().IsRoot() {
 				continue
 			}
-			printInfoln(user)
+			printInfoln(user, idUsersCmdData.Chains)
 		}
 
 		return nil
@@ -48,6 +48,7 @@ var idUsersCmd = &cobra.Command{
 var idUsersCmdData = struct {
 	DomainsOnly    bool
 	NonDomainsOnly bool
+	Chains         bool
 }{}
 
 func init() {
@@ -58,11 +59,13 @@ func init() {
 		"lists only users that are trust domains")
 	flags.BoolVar(&idUsersCmdData.NonDomainsOnly, "non-domains", false,
 		"lists only users that are NOT trust domains")
+	flags.BoolVar(&idUsersCmdData.Chains, "chains", false,
+		"lists invitee chains also")
 
 	idCmd.AddCommand(idUsersCmd)
 }
 
-func printInfoln(user enclave.User) {
+func printInfoln(user enclave.User, chains bool) {
 	fmt.Printf(
 		"UserID: %2d, PK: %v, ICs: %2v, Root: %-3v, '%v'\n",
 		user.ID,
@@ -71,4 +74,12 @@ func printInfoln(user enclave.User) {
 		x.Whom(user.Identity().IsRoot(), "yes", "no"),
 		user.Alias,
 	)
+	if chains { // TODO: all root ones print one reduntant IC
+		if user.Identity().ICCount() > 0 {
+			for _, ic := range user.Identity().InviteeChains {
+				pkStr := ic.FirstBlock().Invitee.PKString()
+				fmt.Println("- Invitee Root PK", pkStr)
+			}
+		}
+	}
 }

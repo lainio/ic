@@ -1,10 +1,8 @@
 package id
 
 import (
-	"fmt"
 	"strconv"
 
-	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -44,19 +42,7 @@ var idFindCmd = &cobra.Command{
 
 		for _, u := range users {
 			if calcSearch(args[0], u) {
-				fmt.Printf(
-					"User ID: %d, PK: %v, IC Count: %v, Root: %v\n",
-					u.ID,
-					u.Identity().GetIDK().PKString(),
-					u.Identity().ICCount(),
-					x.Whom(u.Identity().IsRoot(), "yes", "no"),
-				)
-				if u.Identity().ICCount() > 0 {
-					for _, ic := range u.Identity().InviteeChains {
-						pkStr := ic.FirstBlock().Invitee.PKString()
-						fmt.Println("- Invitee Root PK", pkStr)
-					}
-				}
+				printInfoln(u, true)
 			}
 		}
 

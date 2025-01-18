@@ -2,9 +2,7 @@ package id
 
 import (
 	"fmt"
-	"strconv"
 
-	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -24,9 +22,11 @@ var idViewCmd = &cobra.Command{
 
 		assert.SLonger(args, 0, "user ID: argument missing")
 
-		userID := uint32(try.To1(strconv.Atoi(args[0]))) //nolintlint
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-		rcvrUser = try.To1(enclave.GetExistingUser(userID))
+		rcvrUser = try.To1(enclave.GetExistingUserByType(
+			CmdData.Type.String(),
+			args[0]),
+		)
 		try.To(enclave.Close())
 
 		u := rcvrUser
@@ -43,20 +43,7 @@ var idViewCmd = &cobra.Command{
 			idkStr := u.Identity().GetIDK().PKString()
 			fmt.Println(idkStr)
 		} else {
-			// TODO: extract to method
-			fmt.Printf(
-				"User ID: %d, Root: %v, Digest: {%v}, IC Count: %v\n",
-				u.ID,
-				x.Whom(u.Identity().IsRoot(), "yes", "no"),
-				u.Identity().Digest(),
-				u.Identity().ICCount(),
-			)
-			if u.Identity().ICCount() > 0 {
-				for _, ic := range u.Identity().InviteeChains {
-					pkStr := ic.FirstBlock().Invitee.PKString()
-					fmt.Println("- Invitee Root PK", pkStr)
-				}
-			}
+			printInfoln(u, true)
 		}
 
 		return nil
