@@ -262,15 +262,27 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.DeepEqual(wot.CommonInviterPubKey, daveIDK)
 	assert.Equal(wot.Hops, 1)
 	assert.That(wot.SameChain)
+	root2IDK := key.Public(try.To1(root2.CBORPublicKey()))
 	digestDave := &digest.Digest{
-		IDK:     daveIDK,
-		RootIDK: daveIDK,
-		Hops:    0,
+		IDK: daveIDK,
+		Roots: []digest.RootInfo{
+			{
+				IDK:  daveIDK,
+				Hops: 0,
+			},
+			{
+				IDK:  root2IDK,
+				Hops: 1,
+			},
+		},
 	}
 
 	// Let's test our new Digest() method
 	digestDave2 := dave.Node.Digest()
-	assert.DeepEqual(digestDave, &digestDave2)
+	assert.Equal(digestDave.Roots[1].IDK.PKString(), digestDave2.Roots[1].IDK.PKString())
+	assert.Equal(digestDave.Roots[1].Hops, digestDave2.Roots[1].Hops)
+
+	assert.DeepEqual(&digestDave2, digestDave)
 
 	wot2 := eve.WoT(&digestDave2) // Let'r try our other WoT method
 	assert.NotNil(wot2)
@@ -311,9 +323,11 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.Equal(level, 0)
 
 	digestAlice := &digest.Digest{
-		IDK:     aliceIDK,
-		RootIDK: root1IDK,
-		Hops:    1,
+		IDK: aliceIDK,
+		Roots: []digest.RootInfo{{
+			IDK:  root1IDK,
+			Hops: 1,
+		}},
 	}
 	digestAlice2 := alice.Node.Digest()
 	assert.DeepEqual(digestAlice, &digestAlice2)
@@ -331,9 +345,11 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.Equal(wot2.Hops, 4, "root was root1")
 
 	digestRoot1 := &digest.Digest{
-		IDK:     root1IDK,
-		RootIDK: root1IDK,
-		Hops:    0,
+		IDK: root1IDK,
+		Roots: []digest.RootInfo{{
+			IDK:  root1IDK,
+			Hops: 0,
+		}},
 	}
 	digest2Root1 := root1.Node.Digest()
 	assert.DeepEqual(digestRoot1, &digest2Root1)

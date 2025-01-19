@@ -234,7 +234,7 @@ func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 
 	// find the shortest if possible
 	for _, c := range n.InviteeChains {
-		_, currentLvl := c.Find(digest.RootIDK)
+		_, currentLvl := c.Find(digest.Roots[0].IDK)
 		if currentLvl != hop.NotConnected {
 			if lvl.PickShorter(currentLvl) {
 				// locations are in the same IC: - 1 if for our own block
@@ -247,9 +247,9 @@ func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	if found {
 		return &WoTInfo{
 			SameChain:           true,
-			Hops:                hops + digest.Hops,
+			Hops:                hops + digest.Roots[0].Hops,
 			CommonInviterLevel:  lvl, // their lvl in IC
-			CommonInviterPubKey: digest.RootIDK,
+			CommonInviterPubKey: digest.Roots[0].IDK,
 		}
 	}
 	return nil
@@ -286,10 +286,19 @@ func (n Node) WebOfTrustInfo(their Node) *WoTInfo {
 func (n Node) Digest() digest.Digest {
 	assert.SNotEmpty(n.InviteeChains, "cannot count Digest without ICs")
 
+	roots := make([]digest.RootInfo, 0, n.ICCount())
+	for _, c := range n.InviteeChains {
+		ridk := digest.RootInfo{
+			IDK:  c.FirstBlock().Public(),
+			Hops: c.Len() - 1, // 1 = root
+		}
+		roots = append(roots, ridk)
+	}
 	return digest.Digest{
-		IDK:     n.GetIDK().Public,
-		RootIDK: n.InviteeChains[0].FirstBlock().Public(),
-		Hops:    n.InviteeChains[0].Len() - 1, /*1 = root*/
+		IDK: n.GetIDK().Public,
+		//RootIDK: n.InviteeChains[0].FirstBlock().Public(),
+		Roots: roots,
+		//Hops:    n.InviteeChains[0].Len() - 1, /*1 = root*/
 	}
 }
 
@@ -308,8 +317,9 @@ func (n Node) IsInviterFor(their Node) bool {
 // IsRoot tells if the node is a root. A root has a self started IC always.
 // To formally test that we are really root we follow these rules:
 //   - we have 1 IC which length == 1 (root IC exists always) OR
-//   - we have several IC AND we test that the self startest's
-//     pubkey is equal to second chains last block's pubkey
+//   - we have several IC where we have the 1st IC which len == 1 AND
+//     which pubkey is equal to second chains last block's pubkey, i.e.,
+//     the second chain (and 3rd, etc.) are the actual ICs where we are invitee
 func (n Node) IsRoot() bool {
 	return (n.ICCount() == 1 && n.InviteeChains[0].Len() == 1) ||
 		(n.ICCount() > 1 &&
