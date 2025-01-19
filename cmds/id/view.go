@@ -23,11 +23,11 @@ var idViewCmd = &cobra.Command{
 		assert.SLonger(args, 0, "user ID: argument missing")
 
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-		rcvrUser = try.To1(enclave.GetExistingUserByType(
+		rcvrUser = enclave.TryGetExistingUserByType(
 			CmdData.Type.String(),
-			args[0]),
+			args[0],
 		)
-		try.To(enclave.Close())
+		enclave.TryClose()
 
 		u := rcvrUser
 
