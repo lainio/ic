@@ -335,14 +335,14 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 2,
+	assert.Equal(wot2.Hops, 1,
 		"hop comes from alice's Digest where it's 2, and we are in same IC")
 
 	wot2 = grace.WoT(digestAlice)
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 2, "alice's digest")
+	assert.Equal(wot2.Hops, 1, "alice's digest")
 
 	digestRoot1 := &digest.Digest{
 		IDK: root1IDK,
@@ -436,29 +436,39 @@ func testWebOfTrustInfo(t *testing.T) {
 		assert.SLen(daveDig.Roots, 2)
 		root2Dig := root2.Digest()
 		assert.SLen(root2Dig.Roots, 1)
-		assert.That(root2Dig.Roots[0].IDK.Equal(daveDig.Roots[1].IDK))
-		//assert.That(root2Dig.Roots[0].IDK.Equal(daveDig.Roots[0].IDK))
+		wot := dave.WoT(root2Dig)
+		assert.NotNil(wot)
 		root2WotWithDave := root2.WoT(daveDig)
-		assert.Nil(root2WotWithDave)
+		assert.NotNil(root2WotWithDave)
 	}
 
 	eveWotDave := dave.WoT(eveDig)
 	assert.NotNil(eveWotDave)
 
-	//         ┌ root2  ┐                root3    ┐
-	//         ↓        ↓                  │      ↓
-	//       carol    dave-2-chains        │     ivan
-	//            ↓     ↓                  │
-	//           eve(root-is-dave)         │
-	//           ↓                         ↓
-	//        eve(key-rotated) ­───────>─  heidi
-	ivan := entity{Hand: key.NewHand()}
-	ivan.Node = root3.Invite(
-		root3.Handle,
-		ivan.Node,
-		*ivan.Info, chain.WithPosition(1))
-	assert.SLen(ivan.InviteeChains, 1)
-	assert.SLen(ivan.InviteeChains[0].Blocks, 2, "ivan's root is 'root3'")
+	{
+		//         ┌ root2  ┐                root3    ┐
+		//         ↓        ↓                  │      ↓
+		//       carol    dave-2-chains        │     ivan
+		//            ↓     ↓                  │
+		//           eve(root-is-dave)         │
+		//           ↓                         ↓
+		//        eve(key-rotated) ­───────>─  heidi
+		ivan := entity{Hand: key.NewHand()}
+		ivan.Node = root3.Invite(
+			root3.Handle,
+			ivan.Node,
+			*ivan.Info, chain.WithPosition(1))
+		assert.SLen(ivan.InviteeChains, 1)
+		assert.SLen(ivan.InviteeChains[0].Blocks, 2, "ivan's root is 'root3'")
+		ivanDig := ivan.Digest()
+		wot := eve.WoT(ivanDig)
+		assert.Nil(wot)
+		wot = heidi.WoT(ivanDig)
+		assert.NotNil(wot)
+		assert.Equal(wot.Hops, 1, "common invitor is root3")
+		assert.ThatNot(wot.SameChain,
+			"correct, but we don't have enough info to calc with Digest")
+	}
 }
 
 func testCheckIntegrity(t *testing.T) {

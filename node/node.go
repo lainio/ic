@@ -37,14 +37,24 @@ type Node struct {
 }
 
 // WoTInfo includes most important information about WoT.
+//
+// NOTE that when [digest.Digest] is used for WoT calculations results are very
+// conservative.
 type WoTInfo struct {
 	// Hops tells how far the the other end is when traversing thru the
-	// CommonInviter. NOTE that if parties don't have WoT this is
-	// hop.NotConnected.
+	// CommonInviter.
+	//
+	// NOTE that if parties don't have WoT this is hop.NotConnected.
 	Hops hop.Distance
 
-	// SameChain tells if two parties are in the same Invitation Chain (IC).
-	// You should take this to count when make decisions about Hops.
+	// SameChain tells (conservatively) if two parties are in the same
+	// Invitation Chain (IC). You should take this to count when make decisions
+	// about Hops.
+	//
+	// NOTE that with [digest.Digest] we cannot calculate this for sure
+	//
+	// NOTE that if we don't bring [Node] sync thru network, this isn't correct
+	// in time's function
 	SameChain bool
 
 	// CommonInviterLevel is hops from root, i.e. how far away it's from
@@ -228,13 +238,17 @@ func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 		bestHop hop.Distance = hop.NewNotConnected()
 	)
 
-	for _, d := range digest.Roots {
-		wot := n.doWoTPerRootInd(0, digest)
+	for i, d := range digest.Roots {
+		wot := n.doWoTPerRootInd(i, digest)
 		if wot != nil {
 			if bestHop.PickShorter(d.Hops) {
 				best = wot
 			}
 		}
+	}
+	if best != nil {
+		_, ourParent := n.Find(digest.IDK)
+		best.SameChain = ourParent // this is very conservative
 	}
 	return best
 }
@@ -244,15 +258,14 @@ func (n Node) doWoTPerRootInd(i int, digest *digest.Digest) *WoTInfo {
 	var (
 		found bool
 		hops  = hop.NewNotConnected()
-		lvl   = hop.NewNotConnected()
 	)
 
 	// Check if our Roots match, if so take data from digest
 	for _, c := range n.InviteeChains {
-		//_, currentLvl := c.Find(digest.Roots[i].IDK)
-		ridk := c.FirstBlock().Public()
-		if digest.Roots[i].IDK.Equal(ridk) {
-			hops = digest.Roots[i].Hops
+		_, currentLvl := c.Find(digest.Roots[i].IDK)
+		//ridk := c.FirstBlock().Public()
+		if currentLvl != hop.NotConnected {
+			hops = currentLvl
 			found = true
 		}
 	}
@@ -261,7 +274,7 @@ func (n Node) doWoTPerRootInd(i int, digest *digest.Digest) *WoTInfo {
 		return &WoTInfo{
 			SameChain:           true,
 			Hops:                hops + digest.Roots[i].Hops,
-			CommonInviterLevel:  lvl, // their lvl in IC
+			CommonInviterLevel:  digest.Roots[i].Hops, // their lvl in IC
 			CommonInviterPubKey: digest.Roots[i].IDK,
 		}
 	}
