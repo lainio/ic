@@ -11,10 +11,16 @@ func TestNewFromString(t *testing.T) {
 	hand := key.NewHand()
 	d := Digest{
 		IDK: hand.Public,
-		Roots: []RootInfo{{
-			IDK:  hand.Public,
-			Hops: 0,
-		}},
+		Roots: []RootInfo{
+			{
+				IDK:  hand.Public,
+				Hops: 0,
+			},
+			{
+				IDK:  hand.Public,
+				Hops: 0,
+			},
+		},
 	}
 
 	type args struct {

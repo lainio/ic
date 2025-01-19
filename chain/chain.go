@@ -246,7 +246,7 @@ func (c Chain) IsInviterFor(invitee Chain) bool {
 func (c Chain) Find(IDK key.Public) (b Block, found hop.Distance) {
 	found = hop.NewNotConnected()
 	for i, block := range c.Blocks {
-		if bytes.Equal(block.Public(), IDK) {
+		if block.Public().Equal(IDK) {
 			return block, hop.Distance(i)
 		}
 	}

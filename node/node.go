@@ -222,9 +222,6 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 // i.e., ICs including a correct RootIDK. If not returns nil.
 //
 // See [WebOfTrustInfo] for cases where you have both [Node]s.
-//
-// TODO: Study the [Digest] because if we don't have RootIDKs there we can have
-// only asymmetric WoT queries!
 func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	var (
 		best    *WoTInfo
@@ -242,6 +239,7 @@ func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	return best
 }
 
+// doWoTPerRootInd calculates WoT for each RootIDK in the Digest.
 func (n Node) doWoTPerRootInd(i int, digest *digest.Digest) *WoTInfo {
 	var (
 		found bool
@@ -249,15 +247,13 @@ func (n Node) doWoTPerRootInd(i int, digest *digest.Digest) *WoTInfo {
 		lvl   = hop.NewNotConnected()
 	)
 
-	// find the shortest if possible
+	// Check if our Roots match, if so take data from digest
 	for _, c := range n.InviteeChains {
-		_, currentLvl := c.Find(digest.Roots[i].IDK)
-		if currentLvl != hop.NotConnected {
-			if lvl.PickShorter(currentLvl) {
-				// locations are in the same IC: - 1 if for our own block
-				hops = c.Len() - 1 - lvl
-				found = true
-			}
+		//_, currentLvl := c.Find(digest.Roots[i].IDK)
+		ridk := c.FirstBlock().Public()
+		if digest.Roots[i].IDK.Equal(ridk) {
+			hops = digest.Roots[i].Hops
+			found = true
 		}
 	}
 
@@ -300,7 +296,7 @@ func (n Node) WebOfTrustInfo(their Node) *WoTInfo {
 	}
 }
 
-func (n Node) Digest() digest.Digest {
+func (n Node) Digest() *digest.Digest {
 	assert.SNotEmpty(n.InviteeChains, "cannot count Digest without ICs")
 
 	roots := make([]digest.RootInfo, 0, n.ICCount())
@@ -311,11 +307,9 @@ func (n Node) Digest() digest.Digest {
 		}
 		roots = append(roots, ridk)
 	}
-	return digest.Digest{
-		IDK: n.GetIDK().Public,
-		//RootIDK: n.InviteeChains[0].FirstBlock().Public(),
+	return &digest.Digest{
+		IDK:   n.GetIDK().Public,
 		Roots: roots,
-		//Hops:    n.InviteeChains[0].Len() - 1, /*1 = root*/
 	}
 }
 
