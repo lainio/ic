@@ -287,7 +287,7 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, daveIDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 0, "digestDave2 is root")
+	assert.Equal(wot2.Hops, 1, "digestDave2 is root")
 
 	wot = NewWoTInfo(bob.Node, carol.Node)
 	assert.Equal(wot.CommonInviterLevel, hop.NotConnected)
@@ -335,14 +335,14 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 1,
+	assert.Equal(wot2.Hops, 3,
 		"hop comes from alice's Digest where it's 2, and we are in same IC")
 
 	wot2 = grace.WoT(digestAlice)
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 1, "alice's digest")
+	assert.Equal(wot2.Hops, 4, "alice's digest")
 
 	digestRoot1 := &digest.Digest{
 		IDK: root1IDK,
@@ -358,13 +358,13 @@ func testWebOfTrustInfo(t *testing.T) {
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 0, "thru digestRoot1")
+	assert.Equal(wot2.Hops, 2, "thru digestRoot1")
 
 	wot2 = grace.WoT(digestRoot1)
 	assert.NotNil(wot2)
 	assert.DeepEqual(wot2.CommonInviterPubKey, root1IDK)
 	assert.That(wot2.SameChain)
-	assert.Equal(wot2.Hops, 0)
+	assert.Equal(wot2.Hops, 3)
 
 	wot = NewWoTInfo(frank.Node, grace.Node)
 	assert.Equal(wot.CommonInviterLevel, 1)
@@ -465,7 +465,7 @@ func testWebOfTrustInfo(t *testing.T) {
 		assert.Nil(wot)
 		wot = heidi.WoT(ivanDig)
 		assert.NotNil(wot)
-		assert.Equal(wot.Hops, 1, "common invitor is root3")
+		assert.Equal(wot.Hops, 2, "common invitor is root3")
 		assert.ThatNot(wot.SameChain,
 			"correct, but we don't have enough info to calc with Digest")
 	}

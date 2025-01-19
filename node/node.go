@@ -258,6 +258,7 @@ func (n Node) doWoTPerRootInd(i int, digest *digest.Digest) *WoTInfo {
 	var (
 		found bool
 		hops  = hop.NewNotConnected()
+		lvl   = hop.NewNotConnected()
 	)
 
 	// Check if our Roots match, if so take data from digest
@@ -265,16 +266,19 @@ func (n Node) doWoTPerRootInd(i int, digest *digest.Digest) *WoTInfo {
 		_, currentLvl := c.Find(digest.Roots[i].IDK)
 		//ridk := c.FirstBlock().Public()
 		if currentLvl != hop.NotConnected {
-			hops = currentLvl
-			found = true
+			if lvl.PickShorter(currentLvl) {
+				// locations are in the same IC: - 1 if for our own block
+				hops = c.Len() - 1 - lvl
+				found = true
+			}
 		}
 	}
 
 	if found {
 		return &WoTInfo{
-			SameChain:           true,
+			SameChain:           false,
 			Hops:                hops + digest.Roots[i].Hops,
-			CommonInviterLevel:  digest.Roots[i].Hops, // their lvl in IC
+			CommonInviterLevel:  lvl, // their lvl in IC
 			CommonInviterPubKey: digest.Roots[i].IDK,
 		}
 	}
