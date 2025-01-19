@@ -227,6 +227,23 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 // only asymmetric WoT queries!
 func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	var (
+		best    *WoTInfo
+		bestHop hop.Distance = hop.NewNotConnected()
+	)
+
+	for _, d := range digest.Roots {
+		wot := n.doWoTPerRootInd(0, digest)
+		if wot != nil {
+			if bestHop.PickShorter(d.Hops) {
+				best = wot
+			}
+		}
+	}
+	return best
+}
+
+func (n Node) doWoTPerRootInd(i int, digest *digest.Digest) *WoTInfo {
+	var (
 		found bool
 		hops  = hop.NewNotConnected()
 		lvl   = hop.NewNotConnected()
@@ -234,7 +251,7 @@ func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 
 	// find the shortest if possible
 	for _, c := range n.InviteeChains {
-		_, currentLvl := c.Find(digest.Roots[0].IDK)
+		_, currentLvl := c.Find(digest.Roots[i].IDK)
 		if currentLvl != hop.NotConnected {
 			if lvl.PickShorter(currentLvl) {
 				// locations are in the same IC: - 1 if for our own block
@@ -247,9 +264,9 @@ func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	if found {
 		return &WoTInfo{
 			SameChain:           true,
-			Hops:                hops + digest.Roots[0].Hops,
+			Hops:                hops + digest.Roots[i].Hops,
 			CommonInviterLevel:  lvl, // their lvl in IC
-			CommonInviterPubKey: digest.Roots[0].IDK,
+			CommonInviterPubKey: digest.Roots[i].IDK,
 		}
 	}
 	return nil
