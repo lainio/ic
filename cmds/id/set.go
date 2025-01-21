@@ -7,13 +7,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var idSetDoc = `The 'set' command set identity information according to its arguments.`
+var idSetDoc = `The 'set' command set identity information according to its arguments.
+
+List of the Identity attributes that can be updated: 'alias'.`
+
+var idSetExample = `  # Set new alias:
+    tdc id set alias 'New Alias Name Here'
+`
 
 var idSetCmd = &cobra.Command{
-	Use:   "set",
-	Short: "set information for your Identity",
-	Long:  idSetDoc,
-	Args:  cobra.ExactArgs(3),
+	Use:     "set",
+	Short:   "set information for your Identity",
+	Long:    idSetDoc,
+	Example: idSetExample,
+	Args:    cobra.ExactArgs(3),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
