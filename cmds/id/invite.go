@@ -227,6 +227,9 @@ func tryBindInChannelToSubject(subject string, invitationCh chan Invitation) {
 	try.To1(ec.BindRecvChan(subject, invitationCh))
 }
 
+// Invitation TODO: should we try to do already some meta modeling? E.g. we
+// have IdentityStr field which is very specific. Maybe we should rename it at
+// least before we continue with the pw.Connection?
 type Invitation struct {
 	Status string
 

@@ -23,10 +23,10 @@ type Node struct {
 	InviteeChains []chain.Chain
 
 	ChainsInviter []chain.Chain // TODO: if the node is service, this will be
-	// too large. We need extremely good reason to have this kind of storage.
-	// Also we will have service type inviters who will have we large count of
-	// invitees. And if that's something we don't need, we don't store it.
-	// However, if it's small and doesn't matter, let's think about it then.
+	// too large. We will solve this with meta modeling and the second info
+	// structure after chain.Chain will be pw.Pairwise
+	// TODO: after we have 2 different Tx types: Chain & Pairwise, we can start
+	// to fidure out Tx type and if it's needed. YAGNI princible.
 	//
 	// TODO: However, we should got something that we invtie additional members
 	// to the network. They should sign something that we can proof that we
