@@ -38,13 +38,15 @@ var idBelongCmd = &cobra.Command{
 
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 
-		senderUser := enclave.TryGetExistingUserByType(string(CmdData.Type), args[0])
-		rcvrUser := enclave.TryGetExistingUserByType(string(CmdData.Type), args[1])
+		senderUser := enclave.TryGetExistingUserByType(
+			cmd.Flags().Type.String(),
+			args[0],
+		)
+		rcvrUser := enclave.TryGetExistingUserByType(
+			cmd.Flags().Type.String(), 
+			args[1],
+		)
 		enclave.TryClose()
-
-		// TODO: using Digest with WoT doesn't give symmetric results if we
-		// don't add RootIDKs to it
-		//wot := rcvrUser.Identity().WoT(senderDigest)
 
 		idFromDig := senderUser.Identity()
 		wot := rcvrUser.Identity().WebOfTrust(*idFromDig)

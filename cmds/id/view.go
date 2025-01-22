@@ -6,6 +6,7 @@ import (
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	cmd "github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/enclave"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +25,7 @@ var idViewCmd = &cobra.Command{
 
 		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 		rcvrUser = enclave.TryGetExistingUserByType(
-			CmdData.Type.String(),
+			cmd.Flags().Type.String(),
 			args[0],
 		)
 		enclave.TryClose()

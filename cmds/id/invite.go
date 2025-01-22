@@ -180,6 +180,8 @@ func invitationHandshake() (err error) {
 	return nil
 }
 
+// TODO: refactor to root lvl ////////////////////////////////////////////
+
 func onErrorInvitationReply(sendInvitationCh chan Invitation) err2.Handler {
 	return func(err error) error {
 		invitedMsg := Invitation{
