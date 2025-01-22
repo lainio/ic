@@ -103,10 +103,10 @@ func invitationHandshake() (err error) {
 		Rcvr:      rcvrUser.RoleInfo,
 		Challenge: challenge,
 	}
-	assert.Equal(verify.Position, pinCode)
+	assert.Equal(verify.Position, pinCode, "challeng building error")
 
 	glog.V(3).Infoln("=== send ===")
-	sendInvitationCh <- invitationProposal
+	sendInvitationCh <- invitationProposal ////////////////////////////////
 
 	glog.V(3).Infoln(
 		"--> sender ID", invitationProposal.Sender.ID,
@@ -114,7 +114,7 @@ func invitationHandshake() (err error) {
 		subject2,
 	)
 
-	reply := <-listenInvitationCh
+	reply := <-listenInvitationCh /////////////////////////////////////////
 	glog.V(3).Infoln("=== challenge+reply received", subject2)
 
 	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
@@ -132,11 +132,12 @@ func invitationHandshake() (err error) {
 		"wrong PIN code in the challenge")
 
 	pubKey := reply.Rcvr.KeyInfo.Public
-	//pubKey := reply.Sender.KeyInfo.Public // Can be used to simulate failure
 
-	//sigMsg := reply.Challenge.Bytes() // TODO: try with verify block
+	// We'll use our end's msg data that the other end cannot just sign some
+	// other block!!
 	sigMsg := verify.Bytes()
-	//sigMsg := []byte{1,2,3,4,5}
+	// We use their signature and their pubKey, but our constructed msg. If not
+	// we should verify their given message separately.
 	verified := reply.ChallengeSig.Verify(pubKey, sigMsg)
 	assert.That(verified, "cannot verify signature")
 
@@ -144,24 +145,37 @@ func invitationHandshake() (err error) {
 	rcvrUser.SetIdentityFromStr(reply.IdentityStr)
 	assert.NotNil(rcvrUser.Identity(), "cannot read & create identity")
 	try.To(rcvrUser.Identity().CheckIntegrity())
-	firstCount := rcvrUser.Identity().ICCount()
+
+	firstCount := rcvrUser.Identity().ICCount() // user reporting
 	invited := senderUser.Identity().Invite(
 		*rcvrUser.Identity(),
-		chain.WithEndpoint("TODO", true), // TODO: how to get from User?
+		// TODO: how to get from the other end User? Property list in reply?
+		// TODO: which side decides if there is conflict?
+		chain.WithEndpoint("TODO", true),
 	)
 	rcvrUser.SetIdentity(&invited) // set new invited identity
+	// let's check that everything is OK before sending it forward
 	try.To(rcvrUser.Identity().CheckIntegrity())
-	secondCount := rcvrUser.Identity().ICCount()
+	secondCount := rcvrUser.Identity().ICCount() // user reporting
 	invitedMsg := Invitation{
 		Sender:      senderUser.RoleInfo,
 		Rcvr:        rcvrUser.RoleInfo,
 		IdentityStr: rcvrUser.IdentityStr(),
 	}
 
-	fmt.Println("All OK, and introducing", secondCount-firstCount, "new Trust Domains")
-	sendInvitationCh <- invitedMsg
+	fmt.Println(
+		"All OK, and introducing",
+		secondCount-firstCount,
+		"new Trust Domains",
+	)
+	sendInvitationCh <- invitedMsg ////////////////////////////////////////
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
+	//  - maybe the cannot save data or some other exception happens
+	//  - if we rely on their successful, which might be the case in other
+	//  protocols...
+
+	// TODO: their ACK would be the place to save something in this end if..
 
 	return nil
 }
