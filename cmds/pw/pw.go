@@ -7,6 +7,7 @@ import (
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
 	cmd "github.com/lainio/ic/cmds"
+	"github.com/lainio/ic/internal/protocol"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -31,7 +32,7 @@ var pwCmd = &cobra.Command{
 var CmdData = struct {
 	WalletFilename string
 	MasterKey      string
-	Type           ArgType
+	Type           cmd.ArgType
 }{}
 
 func PrintCmdData() {
@@ -43,16 +44,11 @@ func init() {
 	defer err2.Catch()
 
 	flags := pwCmd.PersistentFlags()
-	flags.StringVar(&CmdData.MasterKey, "master-key", "",
+	flags.StringVar(&protocol.CmdData.MasterKey, "master-key", "",
 		cmd.FlagInfo("agent JWT token", "", envs["master-key"]))
-	flags.StringVar(&CmdData.WalletFilename, "wallet", "",
+	flags.StringVar(&protocol.CmdData.WalletFilename, "wallet", "",
 		cmd.FlagInfo("filename for identity wallet", "", envs["wallet"]))
 
-	try.To(CmdData.Type.Set("db"))
-	flags.VarP(&CmdData.Type, "type", "t",
-		cmd.FlagInfo("Type of arguments (db|digest|idk|alias)", "", envs["type"]))
-
-	try.To(pwCmd.MarkPersistentFlagRequired("type"))
 	try.To(pwCmd.MarkPersistentFlagRequired("master-key"))
 	try.To(pwCmd.MarkPersistentFlagRequired("wallet"))
 	cmd.RootCmd().AddCommand(pwCmd)

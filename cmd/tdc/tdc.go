@@ -5,6 +5,7 @@ import (
 	"github.com/lainio/ic/cmds"
 	_ "github.com/lainio/ic/cmds/domain"
 	_ "github.com/lainio/ic/cmds/id"
+	_ "github.com/lainio/ic/cmds/pw"
 )
 
 func main() {

@@ -9,7 +9,6 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	cmd "github.com/lainio/ic/cmds"
-	"github.com/lainio/ic/enclave"
 	"github.com/lainio/ic/hop"
 	"github.com/spf13/cobra"
 )
@@ -38,17 +37,7 @@ var idBelongCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
-
-		senderUser := enclave.TryGetExistingUserByType(
-			cmd.Flags().Type.String(),
-			args[0],
-		)
-		rcvrUser := enclave.TryGetExistingUserByType(
-			cmd.Flags().Type.String(),
-			args[1],
-		)
-		enclave.TryClose()
+		senderUser, rcvrUser := protocol.ReadParties(args[0], args[1])
 
 		idFromDig := senderUser.Identity()
 		wot := rcvrUser.Identity().WebOfTrust(*idFromDig)

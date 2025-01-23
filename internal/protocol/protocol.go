@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/lainio/ic/cmds"
+
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -274,6 +276,20 @@ func MakeOutSubject(base string, target uint32) (chan Invitation, string) {
 	TryBindOutChannelToSubject(subject, invitationCh)
 	glog.V(3).Infoln("=== Out CHANNEL created: ", subject)
 	return invitationCh, subject
+}
+
+func ReadParties(senderArg, rcvrArg string) (s, r enclave.User) {
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+	senderUser := enclave.TryGetExistingUserByType(
+		cmds.Flags().Type.String(),
+		senderArg,
+	)
+	rcvrUser := enclave.TryGetExistingUserByType(
+		cmds.Flags().Type.String(),
+		rcvrArg,
+	)
+	enclave.TryClose()
+	return senderUser, rcvrUser
 }
 
 func TryBindOutChannelToSubject(subject string, invitationCh chan Invitation) {
