@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 
+	"github.com/lainio/ic/internal/protocol"
+
 	"github.com/findy-network/findy-common-go/x"
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -28,7 +30,7 @@ var idUsersCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, _ []string) (err error) {
 		defer err2.Handle(&err)
 
-		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
 		users := enclave.TryGetAllUsers()
 		glog.V(3).Infoln("count of users:", len(users))
 		for _, user := range users {

@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 
+	"github.com/lainio/ic/internal/protocol"
+
 	"github.com/findy-network/findy-common-go/x"
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -32,7 +34,7 @@ var idNewCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
-		try.To(enclave.InitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey))
+		try.To(enclave.InitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey))
 		alias := x.Whom(len(args) == 1, args[0], "")
 		var user enclave.User
 		var extraArgs []chain.Opts

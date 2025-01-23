@@ -5,6 +5,7 @@ import (
 	"github.com/lainio/err2/assert"
 	cmd "github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/enclave"
+	"github.com/lainio/ic/internal/protocol"
 	"github.com/spf13/cobra"
 )
 
@@ -27,16 +28,16 @@ var idSetCmd = &cobra.Command{
 
 		attrib := args[1]
 		value := args[2]
-		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-		rcvrUser = enclave.TryGetExistingUserByType(
+		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
+		protocol.RcvrUser = enclave.TryGetExistingUserByType(
 			cmd.Flags().Type.String(),
 			args[0],
 		)
 
 		switch attrib {
 		case "alias":
-			rcvrUser.Alias = value
-			enclave.TryPutUser(rcvrUser)
+			protocol.RcvrUser.Alias = value
+			enclave.TryPutUser(protocol.RcvrUser)
 		default:
 			assert.NotImplemented()
 		}

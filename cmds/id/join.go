@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 
+	"github.com/lainio/ic/internal/protocol"
+
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -37,8 +39,8 @@ var idJoinCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		readUsersAndInitCodec()
-		defer flushAndCloseNats()
+		protocol.ReadUsersAndInitCodec()
+		defer protocol.FlushAndCloseNats()
 
 		try.To(invitationHandshakeInvitee())
 
@@ -50,20 +52,20 @@ func init() {
 	defer err2.Catch()
 
 	flags := idJoinCmd.PersistentFlags()
-	flags.IntVar(&idInviteCmdData.PinCode, "pin-code", 0,
+	flags.IntVar(&protocol.IdInviteCmdData.PinCode, "pin-code", 0,
 		"secret PIN code for handshakes, etc.",
 	)
 	try.To(idInviteCmd.MarkPersistentFlagRequired("pin-code"))
 
-	flags.Uint32Var(&idInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
+	flags.Uint32Var(&protocol.IdInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["rcvr-user-id"]))
 	try.To(idJoinCmd.MarkPersistentFlagRequired("rcvr-user-id"))
 
-	flags.Uint32Var(&idInviteCmdData.SenderUserID, "sender-user-id", 0,
+	flags.Uint32Var(&protocol.IdInviteCmdData.SenderUserID, "sender-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["sender-user-id"]))
 	try.To(idInviteCmd.MarkPersistentFlagRequired("sender-user-id"))
 
-	flags.StringVar(&idInviteCmdData.Codec, "codec", "json",
+	flags.StringVar(&protocol.IdInviteCmdData.Codec, "codec", "json",
 		cmd.FlagInfo("currently used codec with nats.io", "", envs["codec"]))
 
 	idCmd.AddCommand(idJoinCmd)
@@ -73,10 +75,10 @@ func invitationHandshakeInvitee() (err error) {
 	defer assert.PushAsserter(assert.Plain)() // asserts as errors
 	defer err2.Handle(&err, nil)
 
-	listenInvitationCh, subject := makeInSubject(subjectInvitationPropose, idInviteCmdData.RcvrUserID)
-	sendInvitationCh, subject2 := makeOutSubject(subjectInvitationReply, idInviteCmdData.RcvrUserID)
+	listenInvitationCh, subject := protocol.MakeInSubject(protocol.SubjectInvitationPropose, protocol.IdInviteCmdData.RcvrUserID)
+	sendInvitationCh, subject2 := protocol.MakeOutSubject(protocol.SubjectInvitationReply, protocol.IdInviteCmdData.RcvrUserID)
 
-	glog.V(3).Infoln("0. IC count:", rcvrUser.Identity().ICCount())
+	glog.V(3).Infoln("0. IC count:", protocol.RcvrUser.Identity().ICCount())
 	glog.V(3).Infoln("-- start to wait:", subject)
 	fmt.Println(
 		"Ready to listen inviter.",
@@ -85,34 +87,37 @@ func invitationHandshakeInvitee() (err error) {
 	invitationPropose := <-listenInvitationCh //////////////////////////////
 	glog.V(3).Infoln("<- we received invitation from:", invitationPropose.Sender.ID)
 
-	defer err2.Handle(&err, onErrorInvitationReply(sendInvitationCh))
-
-	assert.Equal(invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID,
-		"invite cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
-		invitationPropose.Rcvr.ID, idInviteCmdData.RcvrUserID,
+	defer err2.Handle(&err, protocol.OnErrorReply(
+		sendInvitationCh,
+		protocol.InvitationType),
 	)
-	assert.Equal(invitationPropose.Sender.ID, idInviteCmdData.SenderUserID,
+
+	assert.Equal(invitationPropose.Rcvr.ID, protocol.IdInviteCmdData.RcvrUserID,
+		"invite cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
+		invitationPropose.Rcvr.ID, protocol.IdInviteCmdData.RcvrUserID,
+	)
+	assert.Equal(invitationPropose.Sender.ID, protocol.IdInviteCmdData.SenderUserID,
 		"invite cmd's user-sender-id (%v) not equal to our flag value (%v)",
-		invitationPropose.Sender.ID, idInviteCmdData.SenderUserID,
+		invitationPropose.Sender.ID, protocol.IdInviteCmdData.SenderUserID,
 	)
 
 	glog.V(3).Infoln("-- received invitation & challenge")
-	pinCode := idInviteCmdData.PinCode
+	pinCode := protocol.IdInviteCmdData.PinCode
 	challenge := chain.NewBlockFromData(invitationPropose.Challenge.Bytes())
 	challenge.Position = pinCode
 
-	kh := key.NewFromInfo(rcvrUser.KeyInfo)
+	kh := key.NewFromInfo(protocol.RcvrUser.KeyInfo)
 	sig := try.To1(kh.Sign(challenge.Bytes()))
 	glog.V(3).Infoln("signature ok", pinCode)
 
-	me := Invitation{
-		Sender: senderUser.RoleInfo,
-		Rcvr:   rcvrUser.RoleInfo,
+	me := protocol.Invitation{
+		Sender: protocol.SenderUser.RoleInfo,
+		Rcvr:   protocol.RcvrUser.RoleInfo,
 
 		Challenge:    challenge,
 		ChallengeSig: sig,
 
-		IdentityStr: rcvrUser.IdentityStr(),
+		IdentityStr: protocol.RcvrUser.IdentityStr(),
 	}
 
 	glog.V(3).Infoln("-- signed challenge ready, let's send it to", subject2)
@@ -126,14 +131,14 @@ func invitationHandshakeInvitee() (err error) {
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 	assert.NotEmpty(reply.IdentityStr, "identity data is missing")
 
-	firstCount := rcvrUser.Identity().ICCount() // UI reporting
-	idClone := rcvrUser.MakeIdentityFromStr(reply.IdentityStr)
+	firstCount := protocol.RcvrUser.Identity().ICCount() // UI reporting
+	idClone := protocol.RcvrUser.MakeIdentityFromStr(reply.IdentityStr)
 	try.To(idClone.CheckIntegrity())
 	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
-	rcvrUser.SetIdentity(idClone)
-	secondCount := rcvrUser.Identity().ICCount() // UI reporting
+	protocol.RcvrUser.SetIdentity(idClone)
+	secondCount := protocol.RcvrUser.Identity().ICCount() // UI reporting
 
-	putUser(rcvrUser) // TODO: this can fail! other end doesn't know it now!
+	putUser(protocol.RcvrUser) // TODO: this can fail! other end doesn't know it now!
 
 	// TODO: send ACK to other end now
 	fmt.Println("All OK, and introducing", secondCount-firstCount, "new Trust Domains")
@@ -142,7 +147,7 @@ func invitationHandshakeInvitee() (err error) {
 }
 
 func putUser(u enclave.User) {
-	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+	enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
 	glog.V(3).Infoln("*** put user, IC count:", u.Identity().ICCount())
 	enclave.TryPutUser(u)
 	enclave.TryClose()

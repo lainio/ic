@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 
+	"github.com/lainio/ic/internal/protocol"
+
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -36,14 +38,14 @@ var idBelongCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
 
 		senderUser := enclave.TryGetExistingUserByType(
 			cmd.Flags().Type.String(),
 			args[0],
 		)
 		rcvrUser := enclave.TryGetExistingUserByType(
-			cmd.Flags().Type.String(), 
+			cmd.Flags().Type.String(),
 			args[1],
 		)
 		enclave.TryClose()
@@ -63,11 +65,11 @@ func init() {
 	defer err2.Catch()
 
 	flags := idBelongCmd.PersistentFlags()
-	flags.Uint32Var(&idInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
+	flags.Uint32Var(&protocol.IdInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["rcvr-user-id"]))
 	try.To(idBelongCmd.MarkPersistentFlagRequired("rcvr-user-id"))
 
-	flags.Uint32Var(&idInviteCmdData.SenderUserID, "sender-user-id", 0,
+	flags.Uint32Var(&protocol.IdInviteCmdData.SenderUserID, "sender-user-id", 0,
 		cmd.FlagInfo("current user ID", "", envs["sender-user-id"]))
 	try.To(idBelongCmd.MarkPersistentFlagRequired("sender-user-id"))
 

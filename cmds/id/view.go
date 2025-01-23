@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 
+	"github.com/lainio/ic/internal/protocol"
+
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -23,14 +25,14 @@ var idViewCmd = &cobra.Command{
 
 		assert.SLonger(args, 0, "user ID: argument missing")
 
-		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-		rcvrUser = enclave.TryGetExistingUserByType(
+		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
+		protocol.RcvrUser = enclave.TryGetExistingUserByType(
 			cmd.Flags().Type.String(),
 			args[0],
 		)
 		enclave.TryClose()
 
-		u := rcvrUser
+		u := protocol.RcvrUser
 
 		if idViewCmdData.PrintDigest || idViewCmdData.DigestOnly {
 			d := u.Identity().Digest()

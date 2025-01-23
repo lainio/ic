@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 
+	"github.com/lainio/ic/internal/protocol"
+
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
 	cmd "github.com/lainio/ic/cmds"
@@ -27,13 +29,8 @@ var idCmd = &cobra.Command{
 	},
 }
 
-var CmdData = struct {
-	WalletFilename string
-	MasterKey      string
-}{}
-
 func PrintCmdData() {
-	cb := try.To1(yaml.Marshal(CmdData))
+	cb := try.To1(yaml.Marshal(protocol.CmdData))
 	fmt.Println(string(cb))
 }
 
@@ -41,9 +38,9 @@ func init() {
 	defer err2.Catch()
 
 	flags := idCmd.PersistentFlags()
-	flags.StringVar(&CmdData.MasterKey, "master-key", "",
+	flags.StringVar(&protocol.CmdData.MasterKey, "master-key", "",
 		cmd.FlagInfo("agent JWT token", "", envs["master-key"]))
-	flags.StringVar(&CmdData.WalletFilename, "wallet", "",
+	flags.StringVar(&protocol.CmdData.WalletFilename, "wallet", "",
 		cmd.FlagInfo("filename for identity wallet", "", envs["wallet"]))
 
 	try.To(idCmd.MarkPersistentFlagRequired("master-key"))

@@ -3,6 +3,8 @@ package id
 import (
 	"strconv"
 
+	"github.com/lainio/ic/internal/protocol"
+
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -36,7 +38,7 @@ var idFindCmd = &cobra.Command{
 
 		assert.SLonger(args, 0, "user ID: argument missing")
 
-		enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
 		users := enclave.TryGetAllUsers()
 		try.To(enclave.Close())
 
