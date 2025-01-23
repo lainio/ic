@@ -29,6 +29,8 @@ func PairwiseHandshake() (err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
+	assert.NotZero(IdInviteCmdData.RcvrUserID)
+
 	pwSendCh, pwSendSubject := MakeOutSubject(
 		subjectPairwisePropose,
 		IdInviteCmdData.RcvrUserID,
@@ -38,8 +40,7 @@ func PairwiseHandshake() (err error) {
 		IdInviteCmdData.RcvrUserID,
 	)
 
-	glog.V(3).Infoln("--- we'll build PW: invitation & challenge",
-		pwSendSubject)
+	glog.V(3).Infoln("--- we'll build PW: invitation & challenge", pwSendSubject)
 
 	pinCode := IdInviteCmdData.PinCode
 	challenge, verify := chain.NewVerifyBlock(pinCode)
@@ -289,14 +290,22 @@ func ReadParties(senderArg, rcvrArg string) (s, r enclave.User) {
 		rcvrArg,
 	)
 	enclave.TryClose()
+	codec := IdInviteCmdData.Codec
+	Ec = nconn.New(codec).EncodedConn
 	return senderUser, rcvrUser
 }
 
 func TryBindOutChannelToSubject(subject string, invitationCh chan Invitation) {
+	assert.NotNil(Ec)
+	assert.NotEmpty(subject)
+	assert.CNotNil(invitationCh)
 	try.To(Ec.BindSendChan(subject, invitationCh))
 }
 
 func TryBindInChannelToSubject(subject string, invitationCh chan Invitation) {
+	assert.NotNil(Ec)
+	assert.NotEmpty(subject)
+	assert.CNotNil(invitationCh)
 	try.To1(Ec.BindRecvChan(subject, invitationCh))
 }
 

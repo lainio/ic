@@ -48,7 +48,8 @@ var pwConnectCmd = &cobra.Command{
 		}
 		fmt.Println(wot)
 
-		// TODO: start the pw protocol
+		protocol.IdInviteCmdData.RcvrUserID = rcvrUser.ID
+		protocol.IdInviteCmdData.SenderUserID = senderUser.ID
 		try.To(protocol.PairwiseHandshake())
 
 		return nil
