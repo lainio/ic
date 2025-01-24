@@ -26,8 +26,10 @@ var (
 )
 
 func PairwiseHandshakeInit() (err error) {
+	glog.V(3).Infoln("\n=== PW HS INIT ===\n")
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
+	defer FlushAndCloseNats()
 
 	assert.NotZero(IdInviteCmdData.RcvrUserID)
 
@@ -53,20 +55,21 @@ func PairwiseHandshakeInit() (err error) {
 	}
 	assert.Equal(verify.Position, pinCode, "challenge building error")
 
-	glog.V(3).Infoln("*** send ***")
+	glog.V(3).Infoln("→ will send pw proposal and challenge")
 	pwSendCh <- invitationProposal /////////  SEND  ///////////////
-
 	glog.V(3).Infoln(
-		"--> sender ID", invitationProposal.Sender.ID,
+		"==> sender ID", invitationProposal.Sender.ID,
 		"rcvr ID", invitationProposal.Rcvr.ID,
 		pwListenSub,
 	)
 
+	glog.V(3).Infoln("← start to listen")
 	reply := <-pwListenCh ////////////  LISTEN  ///////////////////
-	glog.V(3).Infoln("=== pairwise received", pwListenSub)
+	glog.V(3).Infoln("<== pairwise CHALLENGE reply received", pwListenSub)
 
 	defer err2.Handle(&err, OnErrorReply(pwSendCh, PWType))
 
+	assert.Equal(reply.Type, PWType)
 	assert.Equal(reply.Rcvr.ID, IdInviteCmdData.RcvrUserID,
 		"join cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
 		reply.Rcvr.ID, IdInviteCmdData.RcvrUserID,
@@ -95,7 +98,7 @@ func PairwiseHandshakeInit() (err error) {
 	try.To(RcvrUser.Identity().CheckIntegrity())
 
 	firstCount := RcvrUser.Identity().ICCount() // user reporting
-	invited := SenderUser.Identity().Invite(
+	invited := SenderUser.Identity().Invite(    // TODO: not needed in PW
 		*RcvrUser.Identity(),
 		// TODO: how to get from the other end User? Property list in reply?
 		// TODO: which side decides if there is conflict?
@@ -112,13 +115,15 @@ func PairwiseHandshakeInit() (err error) {
 		IdentityStr: RcvrUser.IdentityStr(),
 	}
 
+	glog.V(3).Infoln("→ start send pw ACCEPTED msg")
+	pwSendCh <- invitedMsg ////////////  SEND  ////////////////////
+	glog.V(3).Infoln("==> pw accepted msg")
+
 	fmt.Println(
 		"All OK, and introducing",
 		secondCount-firstCount,
 		"new Trust Domains",
 	)
-	pwSendCh <- invitedMsg ////////////  SEND  ////////////////////
-
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
 	//  - maybe the cannot save data or some other exception happens
 	//  - if we rely on their successful, which might be the case in other
@@ -130,8 +135,10 @@ func PairwiseHandshakeInit() (err error) {
 }
 
 func PairwiseHandshakeJoin() (err error) {
+	glog.V(3).Infoln("\n=== PW HS JOIN ===\n")
 	defer assert.PushAsserter(assert.Plain)() // asserts as errors
 	defer err2.Handle(&err, nil)
+	defer FlushAndCloseNats()
 
 	assert.NotZero(IdInviteCmdData.RcvrUserID)
 	assert.NotZero(IdInviteCmdData.SenderUserID)
@@ -151,8 +158,9 @@ func PairwiseHandshakeJoin() (err error) {
 		"Ready to listen addresser.",
 		"\nPlease execute: `tdc pw connect -- ..`, at their end.",
 	)
+	glog.V(3).Infoln("← listening pw invitation reply")
 	connectPropose := <-pwListenCh //////////  LISTEN  //////////
-	glog.V(3).Infoln("<- we received connnect propose from:",
+	glog.V(3).Infoln("<== we received connnect propose from:",
 		connectPropose.Sender.ID)
 
 	defer err2.Handle(&err, OnErrorReply(
@@ -160,6 +168,7 @@ func PairwiseHandshakeJoin() (err error) {
 		PWType),
 	)
 
+	assert.Equal(connectPropose.Type, PWType)
 	assert.Equal(connectPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
 		"pw addresser cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
 		connectPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
@@ -169,14 +178,14 @@ func PairwiseHandshakeJoin() (err error) {
 		connectPropose.Sender.ID, IdInviteCmdData.SenderUserID,
 	)
 
-	glog.V(3).Infoln("-- received pw start & challenge")
+	glog.V(3).Infoln("-- received PW start & CHALLENGE")
 	pinCode := IdInviteCmdData.PinCode
 	challenge := chain.NewBlockFromData(connectPropose.Challenge.Bytes())
 	challenge.Position = pinCode
 
 	kh := key.NewFromInfo(RcvrUser.KeyInfo)
 	sig := try.To1(kh.Sign(challenge.Bytes()))
-	glog.V(3).Infoln("signature ok", pinCode)
+	glog.V(3).Infoln("signature ok, and sleep 4 sec...", pinCode)
 
 	me := Invitation{
 		Type:   PWType,
@@ -189,12 +198,13 @@ func PairwiseHandshakeJoin() (err error) {
 		IdentityStr: RcvrUser.IdentityStr(),
 	}
 
-	glog.V(3).Infoln("-- signed challenge ready, let's send it to", pwSendSub)
+	glog.V(3).Infoln("→ sending CHALLENGE reply")
 	pwSendCh <- me ////////////  SEND  //////////////////////
+	glog.V(3).Infoln("==> signed CHALLENGE sent", pwSendSub)
 
-	glog.V(3).Infoln("-- start to wait a reply", pwListenSub)
+	glog.V(3).Infoln("← start to wait a reply", pwListenSub)
 	reply := <-pwListenCh ////////////  LISTEN  ////////////////////
-	glog.V(3).Infoln("-- received a reply", me.Rcvr.ID, ", let's verify it..")
+	glog.V(3).Infoln("<== received a reply", me.Rcvr.ID, ", let's verify it..")
 
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 	assert.NotEmpty(reply.IdentityStr, "identity data is missing")
