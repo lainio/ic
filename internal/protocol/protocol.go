@@ -42,10 +42,11 @@ func PairwiseHandshakeInit() (err error) {
 		IdInviteCmdData.RcvrUserID,
 	)
 
-	glog.V(3).Infoln("--- START we'll build PW: invitation & challenge",
-		pwSendSubject)
-
 	pinCode := IdInviteCmdData.PinCode
+	glog.V(3).Infof(
+		"--- build PW to (%v):\ninvitation & challenge: OUR PIN-code:\n %v",
+		pwSendSubject, pinCode)
+
 	challenge, verify := chain.NewVerifyBlock(pinCode)
 	invitationProposal := Invitation{
 		Type:      PWType,
@@ -80,7 +81,7 @@ func PairwiseHandshakeInit() (err error) {
 		reply.Sender.ID, IdInviteCmdData.SenderUserID,
 	)
 	assert.Equal(reply.Challenge.Position, pinCode,
-		"wrong PIN code in the challenge")
+		"wrong PIN code (%d) in the challenge", pinCode)
 
 	pubKey := reply.Rcvr.KeyInfo.Public
 
@@ -154,9 +155,9 @@ func PairwiseHandshakeJoin() (err error) {
 
 	glog.V(3).Infoln("0. IC count:", RcvrUser.Identity().ICCount())
 	glog.V(3).Infoln("-- start to wait:", pwListenSub)
-	fmt.Println(
-		"Ready to listen addresser.",
-		"\nPlease execute: `tdc pw connect -- ..`, at their end.",
+	fmt.Printf("Ready to listen addresser. Please execute:\n"+
+		"\t`tdc pw connect --pin-code=%v ..`, at their end.\n",
+		IdInviteCmdData.PinCode,
 	)
 	glog.V(3).Infoln("← listening pw invitation reply")
 	connectPropose := <-pwListenCh //////////  LISTEN  //////////
@@ -185,7 +186,7 @@ func PairwiseHandshakeJoin() (err error) {
 
 	kh := key.NewFromInfo(RcvrUser.KeyInfo)
 	sig := try.To1(kh.Sign(challenge.Bytes()))
-	glog.V(3).Infoln("signature ok, and sleep 4 sec...", pinCode)
+	glog.V(3).Infoln("signature ok, OUR PIN-code:\n", pinCode)
 
 	me := Invitation{
 		Type:   PWType,
@@ -276,7 +277,7 @@ func InvitationHandshake() (err error) {
 		reply.Sender.ID, IdInviteCmdData.SenderUserID,
 	)
 	assert.Equal(reply.Challenge.Position, pinCode,
-		"wrong PIN code in the challenge")
+		"wrong PIN code (%d) in the challenge", pinCode)
 
 	pubKey := reply.Rcvr.KeyInfo.Public
 
