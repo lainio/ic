@@ -499,6 +499,7 @@ func (u *User) SetIdentityFromStr(idStr string) {
 }
 
 func (u User) Identity() *identity.Identity {
+	assert.NotNil(u.identity)
 	assert.That(bytes.Equal(u.identity.Bytes(), u.IdentityCBOR))
 	return u.identity
 }
