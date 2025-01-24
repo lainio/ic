@@ -25,26 +25,28 @@ var (
 	Ec *nats.EncodedConn
 )
 
-func PairwiseHandshake() (err error) {
+func PairwiseHandshakeInit() (err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
 	assert.NotZero(IdInviteCmdData.RcvrUserID)
 
 	pwSendCh, pwSendSubject := MakeOutSubject(
-		subjectPairwisePropose,
+		SubjectPairwisePropose,
 		IdInviteCmdData.RcvrUserID,
 	)
 	pwListenCh, pwListenSub := MakeInSubject(
-		subjectPairwiseReply,
+		SubjectPairwiseReply,
 		IdInviteCmdData.RcvrUserID,
 	)
 
-	glog.V(3).Infoln("--- we'll build PW: invitation & challenge", pwSendSubject)
+	glog.V(3).Infoln("--- START we'll build PW: invitation & challenge",
+		pwSendSubject)
 
 	pinCode := IdInviteCmdData.PinCode
 	challenge, verify := chain.NewVerifyBlock(pinCode)
 	invitationProposal := Invitation{
+		Type:      PWType,
 		Sender:    SenderUser.RoleInfo,
 		Rcvr:      RcvrUser.RoleInfo,
 		Challenge: challenge,
@@ -52,7 +54,7 @@ func PairwiseHandshake() (err error) {
 	assert.Equal(verify.Position, pinCode, "challenge building error")
 
 	glog.V(3).Infoln("*** send ***")
-	pwSendCh <- invitationProposal ////////////////////////////////
+	pwSendCh <- invitationProposal /////////  SEND  ///////////////
 
 	glog.V(3).Infoln(
 		"--> sender ID", invitationProposal.Sender.ID,
@@ -60,7 +62,7 @@ func PairwiseHandshake() (err error) {
 		pwListenSub,
 	)
 
-	reply := <-pwListenCh /////////////////////////////////////////
+	reply := <-pwListenCh ////////////  LISTEN  ///////////////////
 	glog.V(3).Infoln("=== pairwise received", pwListenSub)
 
 	defer err2.Handle(&err, OnErrorReply(pwSendCh, PWType))
@@ -115,7 +117,7 @@ func PairwiseHandshake() (err error) {
 		secondCount-firstCount,
 		"new Trust Domains",
 	)
-	pwSendCh <- invitedMsg ////////////////////////////////////////
+	pwSendCh <- invitedMsg ////////////  SEND  ////////////////////
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
 	//  - maybe the cannot save data or some other exception happens
@@ -125,6 +127,98 @@ func PairwiseHandshake() (err error) {
 	// TODO: their ACK would be the place to save something in this end if..
 
 	return nil
+}
+
+func PairwiseHandshakeJoin() (err error) {
+	defer assert.PushAsserter(assert.Plain)() // asserts as errors
+	defer err2.Handle(&err, nil)
+
+	assert.NotZero(IdInviteCmdData.RcvrUserID)
+	assert.NotZero(IdInviteCmdData.SenderUserID)
+
+	pwListenCh, pwListenSub := MakeInSubject(
+		SubjectPairwisePropose,
+		IdInviteCmdData.RcvrUserID,
+	)
+	pwSendCh, pwSendSub := MakeOutSubject(
+		SubjectPairwiseReply,
+		IdInviteCmdData.RcvrUserID,
+	)
+
+	glog.V(3).Infoln("0. IC count:", RcvrUser.Identity().ICCount())
+	glog.V(3).Infoln("-- start to wait:", pwListenSub)
+	fmt.Println(
+		"Ready to listen addresser.",
+		"\nPlease execute: `tdc pw connect -- ..`, at their end.",
+	)
+	connectPropose := <-pwListenCh //////////  LISTEN  //////////
+	glog.V(3).Infoln("<- we received connnect propose from:",
+		connectPropose.Sender.ID)
+
+	defer err2.Handle(&err, OnErrorReply(
+		pwSendCh,
+		PWType),
+	)
+
+	assert.Equal(connectPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
+		"pw addresser cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
+		connectPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
+	)
+	assert.Equal(connectPropose.Sender.ID, IdInviteCmdData.SenderUserID,
+		"pw addresser cmd's user-sender-id (%v) not equal to our flag value (%v)",
+		connectPropose.Sender.ID, IdInviteCmdData.SenderUserID,
+	)
+
+	glog.V(3).Infoln("-- received pw start & challenge")
+	pinCode := IdInviteCmdData.PinCode
+	challenge := chain.NewBlockFromData(connectPropose.Challenge.Bytes())
+	challenge.Position = pinCode
+
+	kh := key.NewFromInfo(RcvrUser.KeyInfo)
+	sig := try.To1(kh.Sign(challenge.Bytes()))
+	glog.V(3).Infoln("signature ok", pinCode)
+
+	me := Invitation{
+		Type:   PWType,
+		Sender: SenderUser.RoleInfo,
+		Rcvr:   RcvrUser.RoleInfo,
+
+		Challenge:    challenge,
+		ChallengeSig: sig,
+
+		IdentityStr: RcvrUser.IdentityStr(),
+	}
+
+	glog.V(3).Infoln("-- signed challenge ready, let's send it to", pwSendSub)
+	pwSendCh <- me ////////////  SEND  //////////////////////
+
+	glog.V(3).Infoln("-- start to wait a reply", pwListenSub)
+	reply := <-pwListenCh ////////////  LISTEN  ////////////////////
+	glog.V(3).Infoln("-- received a reply", me.Rcvr.ID, ", let's verify it..")
+
+	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
+	assert.NotEmpty(reply.IdentityStr, "identity data is missing")
+
+	// We should build pw if other end gives us something we need for it?
+	//	idClone := RcvrUser.MakeIdentityFromStr(reply.IdentityStr)
+	//	try.To(idClone.CheckIntegrity())
+	//	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
+	//	RcvrUser.SetIdentity(idClone)
+
+	fmt.Println("__________________ save connection todo ________")
+	// PutUser(RcvrUser) // TODO: this can fail! other end doesn't know it now!
+
+	// TODO: send ACK to other end now
+	fmt.Println("All OK")
+
+	return nil
+}
+
+func PutUser(u enclave.User) {
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+	glog.V(3).Infoln("*** put user, IC count:", u.Identity().ICCount())
+	enclave.TryPutUser(u)
+	enclave.TryClose()
 }
 
 // TODO: simalar to PairwiseHandshake
@@ -149,7 +243,7 @@ func InvitationHandshake() (err error) {
 	assert.Equal(verify.Position, pinCode, "challeng building error")
 
 	glog.V(3).Infoln("=== send ===")
-	sendInvitationCh <- invitationProposal ////////////////////////////////
+	sendInvitationCh <- invitationProposal //////////  SEND  //////////////
 
 	glog.V(3).Infoln(
 		"--> sender ID", invitationProposal.Sender.ID,
@@ -157,7 +251,7 @@ func InvitationHandshake() (err error) {
 		subject2,
 	)
 
-	reply := <-listenInvitationCh /////////////////////////////////////////
+	reply := <-listenInvitationCh ////////////  LISTEN  ///////////////////
 	glog.V(3).Infoln("=== challenge+reply received", subject2)
 
 	defer err2.Handle(&err, OnErrorReply(sendInvitationCh, InvitationType))
@@ -212,7 +306,7 @@ func InvitationHandshake() (err error) {
 		secondCount-firstCount,
 		"new Trust Domains",
 	)
-	sendInvitationCh <- invitedMsg ////////////////////////////////////////
+	sendInvitationCh <- invitedMsg ////////////  SEND  ////////////////////
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
 	//  - maybe the cannot save data or some other exception happens
@@ -281,18 +375,18 @@ func MakeOutSubject(base string, target uint32) (chan Invitation, string) {
 
 func ReadParties(senderArg, rcvrArg string) (s, r enclave.User) {
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-	senderUser := enclave.TryGetExistingUserByType(
+	SenderUser = enclave.TryGetExistingUserByType(
 		cmds.Flags().Type.String(),
 		senderArg,
 	)
-	rcvrUser := enclave.TryGetExistingUserByType(
+	RcvrUser = enclave.TryGetExistingUserByType(
 		cmds.Flags().Type.String(),
 		rcvrArg,
 	)
 	enclave.TryClose()
 	codec := IdInviteCmdData.Codec
 	Ec = nconn.New(codec).EncodedConn
-	return senderUser, rcvrUser
+	return SenderUser, RcvrUser
 }
 
 func TryBindOutChannelToSubject(subject string, invitationCh chan Invitation) {
@@ -329,7 +423,7 @@ type Invitation struct {
 type ProtType string
 
 const (
-	PWType         ProtType = "pw"
+	PWType         ProtType = "pairwise"
 	InvitationType ProtType = "invitation"
 )
 
@@ -354,9 +448,9 @@ const (
 )
 
 const (
-	subjectPairwisePropose = "PW_PROPOSE"
-	subjectPairwiseReply   = "PW_REPLY"
-	subjectPairwiseACK     = "PW_ACK"
+	SubjectPairwisePropose = "PW_PROPOSE"
+	SubjectPairwiseReply   = "PW_REPLY"
+	SubjectPairwiseACK     = "PW_ACK"
 )
 
 var IdInviteCmdData = struct {

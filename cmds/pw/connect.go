@@ -50,7 +50,12 @@ var pwConnectCmd = &cobra.Command{
 
 		protocol.IdInviteCmdData.RcvrUserID = rcvrUser.ID
 		protocol.IdInviteCmdData.SenderUserID = senderUser.ID
-		try.To(protocol.PairwiseHandshake())
+
+		if addresser { // TODO: bug?
+			try.To(protocol.PairwiseHandshakeInit())
+		} else {
+			try.To(protocol.PairwiseHandshakeJoin())
+		}
 
 		return nil
 	},
