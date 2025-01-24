@@ -15,7 +15,7 @@ linters-settings:
           - pkg: "io/ioutil"
             desc: "ioutil is deprecated starting with Go 1.16"
   funlen:
-    lines: 100
+    lines: 140 # protocol functions can be long, but simple
     statements: 100
   goconst:
     min-len: 2
