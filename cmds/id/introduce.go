@@ -20,7 +20,6 @@ The command has several different ways to use it. The 'introduce' command takes 
 arguments which point what Identities we introduceing. The --type flag to tell
 format used in arguments. Please see the examples for more information.`
 
-	//nolint:gosec // we don't have hard-coded identities here
 	idIntroduceExample = `  # Identities can be given as DB IDs:
     tdc id introduce --type=db 12 1
   # or give IDK string:
