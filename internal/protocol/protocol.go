@@ -99,7 +99,7 @@ func PairwiseHandshakeInit() (err error) {
 	try.To(RcvrUser.Identity().CheckIntegrity())
 
 	firstCount := RcvrUser.Identity().ICCount() // user reporting
-	invited := SenderUser.Identity().Invite( // TODO: not needed in PW
+	invited := SenderUser.Identity().Invite(    // TODO: not needed in PW
 		*RcvrUser.Identity(),
 		// TODO: how to get from the other end User? Property list in reply?
 		// TODO: which side decides if there is conflict?
