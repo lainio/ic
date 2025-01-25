@@ -99,7 +99,7 @@ func PairwiseHandshakeInit() (err error) {
 	try.To(RcvrUser.Identity().CheckIntegrity())
 
 	firstCount := RcvrUser.Identity().ICCount() // user reporting
-	invited := SenderUser.Identity().Invite(    // TODO: not needed in PW
+	invited := SenderUser.Identity().Invite( // TODO: not needed in PW
 		*RcvrUser.Identity(),
 		// TODO: how to get from the other end User? Property list in reply?
 		// TODO: which side decides if there is conflict?
@@ -478,3 +478,80 @@ var CmdData = struct {
 	WalletFilename string
 	MasterKey      string
 }{}
+
+func InvitationHandshakeInvitee() (err error) {
+	defer assert.PushAsserter(assert.Plain)() // asserts as errors
+	defer err2.Handle(&err, nil)
+
+	listenInvitationCh, subject := MakeInSubject(SubjectInvitationPropose, IdInviteCmdData.RcvrUserID)
+	sendInvitationCh, subject2 := MakeOutSubject(SubjectInvitationReply, IdInviteCmdData.RcvrUserID)
+
+	glog.V(3).Infoln("0. IC count:", RcvrUser.Identity().ICCount())
+	glog.V(3).Infoln("-- start to wait:", subject)
+	fmt.Println(
+		"Ready to listen inviter.",
+		"\nPlease execute: `tdc id invite ..`, at their end.",
+	)
+	invitationPropose := <-listenInvitationCh //////////////////////////////
+	glog.V(3).Infoln("<- we received invitation from:", invitationPropose.Sender.ID)
+
+	defer err2.Handle(&err, OnErrorReply(
+		sendInvitationCh,
+		InvitationType),
+	)
+
+	assert.Equal(invitationPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
+		"invite cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
+		invitationPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
+	)
+	assert.Equal(invitationPropose.Sender.ID, IdInviteCmdData.SenderUserID,
+		"invite cmd's user-sender-id (%v) not equal to our flag value (%v)",
+		invitationPropose.Sender.ID, IdInviteCmdData.SenderUserID,
+	)
+
+	pinCode := IdInviteCmdData.PinCode
+	glog.V(3).Infoln("-- received invitation & challenge, --pin-code:\n",
+		pinCode,
+	)
+	challenge := chain.NewBlockFromData(invitationPropose.Challenge.Bytes())
+	challenge.Position = pinCode
+
+	kh := key.NewFromInfo(RcvrUser.KeyInfo)
+	sig := try.To1(kh.Sign(challenge.Bytes()))
+	glog.V(3).Infoln("signature ok", pinCode)
+
+	me := Invitation{
+		Sender: SenderUser.RoleInfo,
+		Rcvr:   RcvrUser.RoleInfo,
+
+		Challenge:    challenge,
+		ChallengeSig: sig,
+
+		IdentityStr: RcvrUser.IdentityStr(),
+	}
+
+	glog.V(3).Infoln("-- signed challenge ready, let's send it to", subject2)
+	sendInvitationCh <- me //////////////////////////////////////////
+
+	glog.V(3).Infoln("-- start to wait a reply", subject)
+
+	reply := <-listenInvitationCh //////////////////////////////////////////
+	glog.V(3).Infoln("-- received a reply", me.Rcvr.ID, ", let's verify it..")
+
+	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
+	assert.NotEmpty(reply.IdentityStr, "identity data is missing")
+
+	firstCount := RcvrUser.Identity().ICCount() // UI reporting
+	idClone := RcvrUser.MakeIdentityFromStr(reply.IdentityStr)
+	try.To(idClone.CheckIntegrity())
+	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
+	RcvrUser.SetIdentity(idClone)
+	secondCount := RcvrUser.Identity().ICCount() // UI reporting
+
+	PutUser(RcvrUser) // TODO: this can fail! other end doesn't know it now!
+
+	// TODO: send ACK to other end now
+	fmt.Println("All OK, and introducing", secondCount-firstCount, "new Trust Domains")
+
+	return nil
+}
