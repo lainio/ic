@@ -46,7 +46,7 @@ func init() {
 	defer err2.Catch()
 
 	flags := idInviteCmd.PersistentFlags()
-	flags.IntVar(&protocol.IdInviteCmdData.PinCode, "pin-code", 0,
+	flags.IntVar(&protocol.IdInviteCmdData.PinCode, "pin-code", 1,
 		"secret PIN code for handshakes, etc.",
 	)
 	try.To(idInviteCmd.MarkPersistentFlagRequired("pin-code"))
@@ -64,5 +64,3 @@ func init() {
 
 	idCmd.AddCommand(idInviteCmd)
 }
-
-// TODO: refactor to root lvl ////////////////////////////////////////////

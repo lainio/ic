@@ -179,7 +179,9 @@ func PairwiseHandshakeJoin() (err error) {
 		connectPropose.Sender.ID, IdInviteCmdData.SenderUserID,
 	)
 
-	glog.V(3).Infoln("-- received PW start & CHALLENGE")
+	glog.V(3).Infoln("-- received PW start & CHALLENGE, our PIN-code:\n",
+		IdInviteCmdData.PinCode,
+	)
 	pinCode := IdInviteCmdData.PinCode
 	challenge := chain.NewBlockFromData(connectPropose.Challenge.Bytes())
 	challenge.Position = pinCode
@@ -232,8 +234,6 @@ func PutUser(u enclave.User) {
 	enclave.TryClose()
 }
 
-// TODO: simalar to PairwiseHandshake
-
 func InvitationHandshake() (err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
@@ -241,7 +241,10 @@ func InvitationHandshake() (err error) {
 	sendInvitationCh, subject := MakeOutSubject(SubjectInvitationPropose, IdInviteCmdData.RcvrUserID)
 	listenInvitationCh, subject2 := MakeInSubject(SubjectInvitationReply, IdInviteCmdData.RcvrUserID)
 
-	glog.V(3).Infoln("--- we'll build invitation & challenge", subject)
+	glog.V(3).Infoln("--- we'll build invitation & challenge", subject,
+	"--pin-code:\n",
+		IdInviteCmdData.PinCode,
+)
 
 	pinCode := IdInviteCmdData.PinCode
 	challenge, verify := chain.NewVerifyBlock(pinCode)

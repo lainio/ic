@@ -52,7 +52,7 @@ func init() {
 	defer err2.Catch()
 
 	flags := idJoinCmd.PersistentFlags()
-	flags.IntVar(&protocol.IdInviteCmdData.PinCode, "pin-code", 0,
+	flags.IntVar(&protocol.IdInviteCmdData.PinCode, "pin-code", 1,
 		"secret PIN code for handshakes, etc.",
 	)
 	try.To(idInviteCmd.MarkPersistentFlagRequired("pin-code"))
@@ -101,8 +101,10 @@ func invitationHandshakeInvitee() (err error) {
 		invitationPropose.Sender.ID, protocol.IdInviteCmdData.SenderUserID,
 	)
 
-	glog.V(3).Infoln("-- received invitation & challenge")
 	pinCode := protocol.IdInviteCmdData.PinCode
+	glog.V(3).Infoln("-- received invitation & challenge, --pin-code:\n",
+		pinCode,
+	)
 	challenge := chain.NewBlockFromData(invitationPropose.Challenge.Bytes())
 	challenge.Position = pinCode
 
