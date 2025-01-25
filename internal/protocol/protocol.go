@@ -237,6 +237,7 @@ func PutUser(u enclave.User) {
 func InvitationHandshake() (err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
+	defer FlushAndCloseNats()
 
 	sendInvitationCh, subject := MakeOutSubject(SubjectInvitationPropose, IdInviteCmdData.RcvrUserID)
 	listenInvitationCh, subject2 := MakeInSubject(SubjectInvitationReply, IdInviteCmdData.RcvrUserID)
@@ -482,6 +483,7 @@ var CmdData = struct {
 func InvitationHandshakeInvitee() (err error) {
 	defer assert.PushAsserter(assert.Plain)() // asserts as errors
 	defer err2.Handle(&err, nil)
+	defer FlushAndCloseNats()
 
 	listenInvitationCh, subject := MakeInSubject(SubjectInvitationPropose, IdInviteCmdData.RcvrUserID)
 	sendInvitationCh, subject2 := MakeOutSubject(SubjectInvitationReply, IdInviteCmdData.RcvrUserID)
