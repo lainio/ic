@@ -1,14 +1,11 @@
 package pw
 
 import (
-	"fmt"
-
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
 	cmd "github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/internal/protocol"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 var pwDoc = `The pw command is parent command a group of commands for the identity.
@@ -26,17 +23,6 @@ var pwCmd = &cobra.Command{
 	Run: func(c *cobra.Command, _ []string) {
 		cmd.SubCmdNeeded(c)
 	},
-}
-
-var CmdData = struct {
-	WalletFilename string
-	MasterKey      string
-	Type           cmd.ArgType
-}{}
-
-func PrintCmdData() {
-	cb := try.To1(yaml.Marshal(CmdData))
-	fmt.Println(string(cb))
 }
 
 func init() {
