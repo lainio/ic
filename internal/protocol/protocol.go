@@ -242,9 +242,9 @@ func InvitationHandshake() (err error) {
 	listenInvitationCh, subject2 := MakeInSubject(SubjectInvitationReply, IdInviteCmdData.RcvrUserID)
 
 	glog.V(3).Infoln("--- we'll build invitation & challenge", subject,
-	"--pin-code:\n",
+		"--pin-code:\n",
 		IdInviteCmdData.PinCode,
-)
+	)
 
 	pinCode := IdInviteCmdData.PinCode
 	challenge, verify := chain.NewVerifyBlock(pinCode)
