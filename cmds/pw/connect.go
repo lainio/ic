@@ -42,8 +42,10 @@ var pwConnectCmd = &cobra.Command{
 
 		senderUser, rcvrUser := protocol.ReadParties(args[0], args[1])
 
-		pwFromDig := senderUser.Identity()
-		wot := rcvrUser.Identity().WebOfTrust(*pwFromDig)
+		// use full identities to get easily full picture about WoT
+		senderIdentity := senderUser.Identity()
+		rcvrIdentity := rcvrUser.Identity()
+		wot := rcvrIdentity.WebOfTrust(*senderIdentity)
 		if wot == nil || wot.Hops == hop.NotConnected {
 			return fmt.Errorf("identities don't share trust domains")
 		}
