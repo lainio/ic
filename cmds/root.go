@@ -74,7 +74,7 @@ func Flags() *RootFlags {
 type RootFlags struct {
 	cfgFile string
 	dryRun  bool
-	codec   string
+	Codec   string
 	Type    ArgType
 }
 
@@ -102,7 +102,7 @@ func init() {
 	flags := rootCmd.PersistentFlags()
 	flags.StringVar(&rootFlags.cfgFile, "config", "", FlagInfo("configuration file", "", rootEnvs["config"]))
 	flags.BoolVarP(&rootFlags.dryRun, "dry-run", "n", false, FlagInfo("perform a trial run with no changes made", "", rootEnvs["dry-run"]))
-	flags.StringVar(&rootFlags.codec, "codec", "json",
+	flags.StringVar(&rootFlags.Codec, "codec", "json",
 		FlagInfo("currently used codec with nats.io", "", rootEnvs["codec"]))
 	try.To(rootFlags.Type.Set("db"))
 	flags.VarP(&rootFlags.Type, "type", "t",
