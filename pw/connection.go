@@ -1,6 +1,12 @@
 package pw
 
-import "github.com/lainio/ic/key"
+import (
+	"bytes"
+	"encoding/gob"
+
+	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/key"
+)
 
 // Connection is compact data structure to save pw information. It's more
 // compact that [chain.Block], which is one of the reasons we are using it
@@ -11,18 +17,55 @@ type Connection struct {
 	// than Block structure. We are almost symmetric. How about Endpoint? By
 	// using PW specific endpoints we could have more dynamic, and the solution
 	// would symmetric and for that beautiful.
-	We   key.Info 
-	They key.Info
-	// or... only their IDK?
-	IDK      key.Public
+	IsAddressers bool
+
+	Addresser ConnEndpoint
+	Addressee ConnEndpoint
+}
+
+type ConnEndpoint struct {
+	// this are the field we know now
+	//
+
+	key.Info
+
 	Endpoint string // TODO: we start with simple, but probably later we...
 }
 
-func New(idk key.Public, ep string) Connection {
-	return Connection{
-		IDK:      idk,
-		Endpoint: ep,
+// Key is interface method for key/value DB. Our db indexing use cases are 99%
+// that we need to find out if the other end is already in our db, and that's
+// why we use [IsAddressers] field to select the correct IDK.
+func (c *Connection) Key() []byte {
+	if c.IsAddressers {
+		return c.Addressee.Public
 	}
+	return c.Addresser.Public
+}
+
+func (c *Connection) Data() []byte {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	try.To(enc.Encode(c))
+	return buf.Bytes()
+}
+
+func New(isAddresser bool, addresser, addressee ConnEndpoint) *Connection {
+	return &Connection{
+		IsAddressers: isAddresser,
+		Addresser:    addresser,
+		Addressee:    addresser,
+	}
+}
+
+func NewFromData(b []byte) (c *Connection) {
+	if len(b) == 0 {
+		return nil
+	}
+	buf := bytes.NewReader(b)
+	dec := gob.NewDecoder(buf)
+	try.To(dec.Decode(&c))
+
+	return
 }
 
 // TODO: currently our DB solution is based on User structure which
@@ -32,3 +75,15 @@ func New(idk key.Public, ep string) Connection {
 //  - we should not forget that pws are important as a persistent structures
 //  - we should remember that inside each pws the ongoing communication will be
 //  saved in case it's msg based.
+
+// TODO: the spec:
+//
+// We should have 2 buckets:
+//   1. pw initiated by us
+//   2. pw initiated by them
+// -> this would make it easier to search and stored stuff. Let's see how it
+// affects to the PW.
+//   - we could use correct names from the protocol: addresser, addressee,
+//   inviter, invitee, and now by depending in what bucket these connections are
+//   the indexing must be done according to that => we should include the bucket
+//   flag to the actual data structure. (done)

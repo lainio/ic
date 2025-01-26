@@ -27,6 +27,7 @@ import (
 	"github.com/lainio/ic/chain"
 	"github.com/lainio/ic/identity"
 	"github.com/lainio/ic/key"
+	"github.com/lainio/ic/pw"
 )
 
 type bucket = byte
@@ -34,6 +35,8 @@ type bucket = byte
 const (
 	userBucket bucket = iota
 	userIDCountBucket
+	pwBucketSender
+	pwBucketReceiver
 )
 
 const hexLen = 64
@@ -42,6 +45,8 @@ var (
 	buckets = [][]byte{
 		{userBucket},
 		{userIDCountBucket},
+		{pwBucketSender},
+		{pwBucketReceiver},
 	}
 	sealedBoxFilename string
 
@@ -103,6 +108,74 @@ func WipeSealedBox() {
 
 func BackupTicker(interval time.Duration) (done chan<- struct{}) {
 	return db.BackupTicker(interval)
+}
+
+func PutReceiversPW(pw *pw.Connection) (err error) {
+	defer err2.Handle(&err)
+
+	try.To(db.AddKeyValueToBucket(buckets[pwBucketReceiver],
+		&db.Data{
+			Data: pw.Data(),
+			Read: encrypt,
+		},
+		&db.Data{
+			Data: pw.Key(),
+			Read: hash,
+		},
+	))
+
+	return nil
+}
+
+func PutSendersPW(pw *pw.Connection) (err error) {
+	defer err2.Handle(&err)
+
+	try.To(db.AddKeyValueToBucket(buckets[pwBucketSender],
+		&db.Data{
+			Data: pw.Data(),
+			Read: encrypt,
+		},
+		&db.Data{
+			Data: pw.Key(),
+			Read: hash,
+		},
+	))
+
+	return nil
+}
+
+func GetReceiversPW(idk key.Public) (conn *pw.Connection, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	value := &db.Data{
+		Write: decrypt,
+	}
+	exist = try.To1(db.GetKeyValueFromBucket(buckets[pwBucketReceiver],
+		&db.Data{
+			Data: idk,
+			Read: hash,
+		},
+		value,
+	))
+	conn = pw.NewFromData(value.Data)
+	return
+}
+
+func GetSendersPW(idk key.Public) (conn *pw.Connection, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	value := &db.Data{
+		Write: decrypt,
+	}
+	exist = try.To1(db.GetKeyValueFromBucket(buckets[pwBucketSender],
+		&db.Data{
+			Data: idk,
+			Read: hash,
+		},
+		value,
+	))
+	conn = pw.NewFromData(value.Data)
+	return
 }
 
 func TryPutUser(u User) {

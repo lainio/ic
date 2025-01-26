@@ -10,6 +10,8 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/key"
+	"github.com/lainio/ic/pw"
 )
 
 const dbFilename = "MEMORY_fido-enclave.bolt"
@@ -50,6 +52,40 @@ func TestInitSealedBox(t *testing.T) {
 		"HUbkSypCy4CVxNdsqM1TwyVyYA2LVz8PWX3YTCsQSmXq")
 	// leave it open for the rest of the tests
 	// TryClose()
+}
+
+func TestPutSendersPW(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	h1 := key.NewHand()
+	h2 := key.NewHand()
+	weAreAddresser := true
+	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
+	h2Endp := pw.ConnEndpoint{Info: *h2.Info, Endpoint: "h2_endp"}
+
+	conn1 := pw.New(weAreAddresser, h1Endp, h2Endp)
+	try.To(PutSendersPW(conn1))
+	dbConn1, found := try.To2(GetSendersPW(conn1.Addresser.Public))
+	assert.That(found)
+	assert.That(dbConn1.Addresser.Public.Equal(conn1.Addresser.Public))
+	assert.DeepEqual(dbConn1, conn1)
+}
+
+func TestPutReceiversPW(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	h1 := key.NewHand()
+	h2 := key.NewHand()
+	weAreAddresser := true
+	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
+	h2Endp := pw.ConnEndpoint{Info: *h2.Info, Endpoint: "h2_endp"}
+
+	conn1 := pw.New(weAreAddresser, h1Endp, h2Endp)
+	try.To(PutReceiversPW(conn1))
+	dbConn1, found := try.To2(GetReceiversPW(conn1.Addresser.Public))
+	assert.That(found)
+	assert.That(dbConn1.Addresser.Public.Equal(conn1.Addresser.Public))
+	assert.DeepEqual(dbConn1, conn1)
 }
 
 func TestPutUserIDCount(t *testing.T) {
