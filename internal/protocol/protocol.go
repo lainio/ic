@@ -356,7 +356,7 @@ func ReadUsersAndInitCodec() {
 	RcvrUser = enclave.TryGetExistingUser(IdInviteCmdData.RcvrUserID)
 	enclave.TryClose()
 
-	codec := IdInviteCmdData.Codec
+	codec := cmds.Flags().Codec
 	Ec = nconn.New(codec).EncodedConn
 }
 
@@ -399,7 +399,7 @@ func ReadParties(senderArg, rcvrArg string) (s, r enclave.User) {
 		rcvrArg,
 	)
 	enclave.TryClose()
-	codec := IdInviteCmdData.Codec
+	codec := cmds.Flags().Codec
 	Ec = nconn.New(codec).EncodedConn
 	return SenderUser, RcvrUser
 }
@@ -421,6 +421,11 @@ func TryBindInChannelToSubject(subject string, invitationCh chan Invitation) {
 // Invitation TODO: should we try to do already some meta modeling? E.g. we
 // have IdentityStr field which is very specific. Maybe we should rename it at
 // least before we continue with the pw.Connection?
+//
+// TODO: we should rename this. it's alreadly used in two places. todo: courrent
+// names idea: Handshake.
+// TODO: Also we shouldhave separated header, and way to bring dynamic fields
+// when needed?
 type Invitation struct {
 	Type   ProtType
 	Status string
@@ -433,6 +438,8 @@ type Invitation struct {
 
 	IdentityStr string // CBOR string in base58
 	//Identity *identity.Identity // not used yet
+
+	Endpoint string
 }
 
 type ProtType string
@@ -471,7 +478,6 @@ const (
 var IdInviteCmdData = struct {
 	SenderUserID uint32
 	RcvrUserID   uint32
-	Codec        string
 	PinCode      int
 }{}
 
@@ -488,11 +494,12 @@ func InvitationHandshakeInvitee() (err error) {
 	listenInvitationCh, subject := MakeInSubject(SubjectInvitationPropose, IdInviteCmdData.RcvrUserID)
 	sendInvitationCh, subject2 := MakeOutSubject(SubjectInvitationReply, IdInviteCmdData.RcvrUserID)
 
+	pinCode := IdInviteCmdData.PinCode
 	glog.V(3).Infoln("0. IC count:", RcvrUser.Identity().ICCount())
 	glog.V(3).Infoln("-- start to wait:", subject)
-	fmt.Println(
-		"Ready to listen inviter.",
-		"\nPlease execute: `tdc id invite ..`, at their end.",
+	fmt.Printf("Ready to listen inviter.\n"+
+		"Please execute: `tdc id introduce --pin-code=%v ..`, at their end.\n",
+		pinCode,
 	)
 	invitationPropose := <-listenInvitationCh //////////////////////////////
 	glog.V(3).Infoln("<- we received invitation from:", invitationPropose.Sender.ID)
@@ -511,8 +518,8 @@ func InvitationHandshakeInvitee() (err error) {
 		invitationPropose.Sender.ID, IdInviteCmdData.SenderUserID,
 	)
 
-	pinCode := IdInviteCmdData.PinCode
-	glog.V(3).Infoln("-- received invitation & challenge, --pin-code:\n",
+	glog.V(3).Infoln(
+		"-- received invitation & challenge, --pin-code:\n",
 		pinCode,
 	)
 	challenge := chain.NewBlockFromData(invitationPropose.Challenge.Bytes())
