@@ -42,6 +42,13 @@ func (c *Connection) Key() []byte {
 	return c.Addresser.Public
 }
 
+func (c *Connection) String() string {
+	if c.IsAddressers {
+		return c.Addressee.Public.String()
+	}
+	return c.Addresser.Public.String()
+}
+
 func (c *Connection) Data() []byte {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
