@@ -37,7 +37,7 @@ var idIntroduceCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		senderUser, rcvrUser := protocol.ReadParties(args[0], args[1])
+		senderUser, rcvrUser := protocol.ReadParties(args...)
 
 		protocol.IdInviteCmdData.RcvrUserID = rcvrUser.ID
 		protocol.IdInviteCmdData.SenderUserID = senderUser.ID

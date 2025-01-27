@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	pwConnectDoc = `The connect command run the new pairwise build protocol.
+	pwConnectDoc = `The connect command opens a secure pipe to the second party of our pairwise.
 
 We can either be the party hwo starts the protocol (addresser) or the party who
 accept the protocol (addressee).
@@ -40,7 +40,7 @@ var pwConnectCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		senderUser, rcvrUser := protocol.ReadParties(args[0], args[1])
+		senderUser, rcvrUser := protocol.ReadParties(args...)
 
 		// use full identities to get easily full picture about WoT
 		senderIdentity := senderUser.Identity()
@@ -59,10 +59,6 @@ var pwConnectCmd = &cobra.Command{
 		return nil
 	},
 }
-
-var (
-	isAddresser bool
-)
 
 func init() {
 	defer err2.Catch()

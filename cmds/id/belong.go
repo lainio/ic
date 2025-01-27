@@ -37,7 +37,7 @@ var idBelongCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		senderUser, rcvrUser := protocol.ReadParties(args[0], args[1])
+		senderUser, rcvrUser := protocol.ReadParties(args...)
 
 		idFromDig := senderUser.Identity()
 		wot := rcvrUser.Identity().WebOfTrust(*idFromDig)
