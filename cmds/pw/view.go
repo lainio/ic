@@ -1,8 +1,10 @@
 package pw
 
 import (
+	"fmt"
 	"math/rand/v2"
 
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/internal/protocol"
@@ -37,10 +39,11 @@ var pwViewCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		idk := []byte{1, 2, 3}
-		_ = protocol.ViewPW(idk)
+		idk := base58.Decode(args[0])
+		pconn := protocol.ViewPW(idk)
 
 		// todo: show pw info = pconn
+		fmt.Println("pairwise connection:", pconn)
 
 		return nil
 	},

@@ -135,33 +135,21 @@ func PairwiseHandshakeInit() (err error) {
 	assert.NotNil(RcvrUser.Identity(), "cannot read & create identity")
 	try.To(RcvrUser.Identity().CheckIntegrity())
 
-	firstCount := RcvrUser.Identity().ICCount() // user reporting
-	invited := SenderUser.Identity().Invite(    // TODO: not needed in PW
-		*RcvrUser.Identity(),
-		// TODO: how to get from the other end User? Property list in reply?
-		// TODO: which side decides if there is conflict?
-		chain.WithEndpoint("TODO", true),
-	)
-	RcvrUser.SetIdentity(&invited) // set new invited identity
-	// let's check that everything is OK before sending it forward
-	try.To(RcvrUser.Identity().CheckIntegrity())
-	secondCount := RcvrUser.Identity().ICCount() // user reporting
 	invitedMsg := Invitation{
-		Type:        PWType,
-		Sender:      SenderUser.RoleInfo,
-		Rcvr:        RcvrUser.RoleInfo,
-		IdentityStr: RcvrUser.IdentityStr(),
+		Type:   PWType,
+		Sender: SenderUser.RoleInfo,
+		Rcvr:   RcvrUser.RoleInfo,
 	}
 
 	glog.V(3).Infoln("→ start send pw ACCEPTED msg")
 	pwSendCh <- invitedMsg ////////////  SEND  ////////////////////
 	glog.V(3).Infoln("==> pw accepted msg")
 
-	fmt.Println(
-		"All OK, and introducing",
-		secondCount-firstCount,
-		"new Trust Domains",
+	fmt.Printf(
+		"All OK, pairwise connection reference: '%v'\n",
+		RcvrUser.KeyInfo.Public.String(),
 	)
+
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
 	//  - maybe the cannot save data or some other exception happens
 	//  - if we rely on their successful, which might be the case in other
@@ -247,10 +235,12 @@ func PairwiseHandshakeJoin() (err error) {
 	glog.V(3).Infoln("<== received a reply", me.Rcvr.ID, ", let's verify it..")
 
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
-	assert.NotEmpty(reply.IdentityStr, "identity data is missing")
 
 	// TODO: send ACK to other end now
-	fmt.Println("All OK")
+	fmt.Printf(
+		"All OK, pairwise connection reference: '%v'\n",
+		SenderUser.KeyInfo.Public.String(),
+	)
 
 	return nil
 }
@@ -416,20 +406,41 @@ func MakeOutSubject(base string, target uint32) (chan Invitation, string) {
 	return invitationCh, subject
 }
 
-func ReadParties(senderArg, rcvrArg string) (s, r enclave.User) {
+func ReadParties(parties ...string) (s, r enclave.User) { // TODO: return slice
+	assert.SNotEmpty(parties)
+
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 	SenderUser = enclave.TryGetExistingUserByType(
 		cmds.Flags().Type.String(),
-		senderArg,
+		parties[sender],
 	)
-	RcvrUser = enclave.TryGetExistingUserByType(
-		cmds.Flags().Type.String(),
-		rcvrArg,
-	)
+	if len(parties) > 1 {
+		RcvrUser = enclave.TryGetExistingUserByType(
+			cmds.Flags().Type.String(),
+			parties[rcvr],
+		)
+	}
 	enclave.TryClose()
 	codec := cmds.Flags().Codec
 	Ec = nconn.New(codec).EncodedConn
 	return SenderUser, RcvrUser
+}
+
+func ViewPW(IDK key.Public) (pconn *pw.Connection) {
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+	var found bool
+	pconn, found = try.To2(enclave.GetSendersPW(IDK))
+	if found {
+		return
+	}
+	pconn, found = try.To2(enclave.GetReceiversPW(IDK))
+	if found {
+		return
+	}
+	enclave.TryClose()
+	codec := cmds.Flags().Codec
+	Ec = nconn.New(codec).EncodedConn
+	return
 }
 
 func TryBindOutChannelToSubject(subject string, invitationCh chan Invitation) {
@@ -501,6 +512,11 @@ const (
 	SubjectPairwisePropose = "PW_PROPOSE"
 	SubjectPairwiseReply   = "PW_REPLY"
 	SubjectPairwiseACK     = "PW_ACK"
+)
+
+const (
+	sender = iota
+	rcvr
 )
 
 var IdInviteCmdData = struct {
