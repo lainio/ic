@@ -54,25 +54,21 @@ var pwConnectCmd = &cobra.Command{
 		protocol.IdInviteCmdData.RcvrUserID = rcvrUser.ID
 		protocol.IdInviteCmdData.SenderUserID = senderUser.ID
 
-		if addresser {
-			try.To(protocol.PairwiseHandshakeInit())
-		} else {
-			try.To(protocol.PairwiseHandshakeJoin())
-		}
+		try.To(protocol.PairwiseHandshake(isAddresser))
 
 		return nil
 	},
 }
 
 var (
-	addresser bool
+	isAddresser bool
 )
 
 func init() {
 	defer err2.Catch()
 
 	flags := pwConnectCmd.PersistentFlags()
-	flags.BoolVarP(&addresser, "addresser", "a", false,
+	flags.BoolVarP(&isAddresser, "addresser", "a", false,
 		"handshake starts as addresser other side is addressee")
 
 	flags.IntVar(

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/lainio/ic/cmds"
+	"github.com/lainio/ic/pw"
 
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -24,6 +25,42 @@ var (
 
 	Ec *nats.EncodedConn
 )
+
+func PairwiseHandshake(isAddresser bool) (err error) {
+	defer err2.Handle(&err)
+
+	if isAddresser {
+		try.To(PairwiseHandshakeInit())
+	} else {
+		try.To(PairwiseHandshakeJoin())
+	}
+	savePW(isAddresser)
+
+	return nil
+}
+
+func savePW(isAddresser bool) {
+	glog.V(3).Infoln("saving PW as addresser:", isAddresser)
+	senderEndp := pw.ConnEndpoint{
+		Info:     SenderUser.KeyInfo,
+		Endpoint: "TODO",
+	}
+	rcvrEndp := pw.ConnEndpoint{
+		Info:     RcvrUser.KeyInfo,
+		Endpoint: "TODO",
+	}
+	pwConn := pw.New(isAddresser, senderEndp, rcvrEndp)
+
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+	if isAddresser {
+		glog.V(3).Infoln("saving PW as a sender")
+		try.To(enclave.PutSendersPW(pwConn))
+	} else {
+		glog.V(3).Infoln("saving PW as a receiver")
+		try.To(enclave.PutReceiversPW(pwConn))
+	}
+	enclave.TryClose()
+}
 
 func PairwiseHandshakeInit() (err error) {
 	glog.V(3).Infoln("\n=== PW HS INIT ===\n")
@@ -211,15 +248,6 @@ func PairwiseHandshakeJoin() (err error) {
 
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 	assert.NotEmpty(reply.IdentityStr, "identity data is missing")
-
-	// We should build pw if other end gives us something we need for it?
-	//	idClone := RcvrUser.MakeIdentityFromStr(reply.IdentityStr)
-	//	try.To(idClone.CheckIntegrity())
-	//	glog.V(3).Infoln("<- we received invitation_ACK from:", reply.Sender.ID)
-	//	RcvrUser.SetIdentity(idClone)
-
-	fmt.Println("__________________ save connection todo ________")
-	// PutUser(RcvrUser) // TODO: this can fail! other end doesn't know it now!
 
 	// TODO: send ACK to other end now
 	fmt.Println("All OK")
