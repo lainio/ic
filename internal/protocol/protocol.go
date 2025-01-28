@@ -52,13 +52,8 @@ func savePW(isAddresser bool) {
 	pwConn := pw.New(isAddresser, senderEndp, rcvrEndp)
 
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-	if isAddresser {
-		glog.V(3).Infoln("saving PW as a sender")
-		try.To(enclave.PutSendersPW(pwConn))
-	} else {
-		glog.V(3).Infoln("saving PW as a receiver")
-		try.To(enclave.PutReceiversPW(pwConn))
-	}
+	glog.V(3).Infoln("saving PW as isAddresser:", isAddresser)
+	try.To(enclave.PutPW(isAddresser, pwConn))
 	enclave.TryClose()
 }
 
@@ -237,6 +232,9 @@ func PairwiseHandshakeJoin() (err error) {
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 
 	// TODO: send ACK to other end now
+	// TODO: need 2 lvl printing, or start to use stderr, stdout:
+	//  - tokens, etc. to stdout
+	//  - information about progress etc. to stderr
 	fmt.Printf(
 		"All OK, pairwise connection reference: '%v'\n",
 		SenderUser.KeyInfo.Public.String(),

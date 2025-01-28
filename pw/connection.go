@@ -19,7 +19,7 @@ type Connection struct {
 	// than Block structure. We are almost symmetric. How about Endpoint? By
 	// using PW specific endpoints we could have more dynamic, and the solution
 	// would symmetric and for that beautiful.
-	IsAddressers bool
+	IsAddresser bool
 
 	Addresser ConnEndpoint
 	Addressee ConnEndpoint
@@ -38,16 +38,27 @@ type ConnEndpoint struct {
 // that we need to find out if the other end is already in our db, and that's
 // why we use [IsAddressers] field to select the correct IDK.
 func (c *Connection) Key() []byte {
-	if c.IsAddressers {
+	return c.TheirIDK()
+}
+
+func (c *Connection) TheirIDK() key.Public {
+	if c.IsAddresser {
+		return c.Addressee.Public
+	}
+	return c.Addresser.Public
+}
+
+func (c *Connection) OurIDK() key.Public {
+	if !c.IsAddresser {
 		return c.Addressee.Public
 	}
 	return c.Addresser.Public
 }
 
 func (c *Connection) String() string {
-	start := fmt.Sprintf("Addresser: %v", x.Whom(c.IsAddressers, "Yes", "No "))
+	start := fmt.Sprintf("Addresser: %v", x.Whom(c.IsAddresser, "Yes", "No "))
 	idk := c.Addresser.PKString()
-	if c.IsAddressers {
+	if c.IsAddresser {
 		idk = c.Addressee.PKString()
 	}
 	return fmt.Sprintf("%s, Ref IDK: %v, A-er: %v, A-ee: %v",
@@ -63,9 +74,9 @@ func (c *Connection) Data() []byte {
 
 func New(isAddresser bool, addresser, addressee ConnEndpoint) *Connection {
 	return &Connection{
-		IsAddressers: isAddresser,
-		Addresser:    addresser,
-		Addressee:    addressee,
+		IsAddresser: isAddresser,
+		Addresser:   addresser,
+		Addressee:   addressee,
 	}
 }
 

@@ -49,7 +49,7 @@ var pwHandshakeCmd = &cobra.Command{
 		if wot == nil || wot.Hops == hop.NotConnected {
 			return fmt.Errorf("identities don't share trust domains")
 		}
-		fmt.Println(wot)
+		Println(wot)
 
 		protocol.IdInviteCmdData.RcvrUserID = rcvrUser.ID
 		protocol.IdInviteCmdData.SenderUserID = senderUser.ID
@@ -60,8 +60,16 @@ var pwHandshakeCmd = &cobra.Command{
 	},
 }
 
+func Println(a ...any) (n int) {
+	if !plain {
+		return try.To1(fmt.Println(a...))
+	}
+	return 0
+}
+
 var (
 	isAddresser bool
+	plain       bool
 )
 
 func init() {
@@ -70,6 +78,9 @@ func init() {
 	flags := pwHandshakeCmd.PersistentFlags()
 	flags.BoolVarP(&isAddresser, "addresser", "a", false,
 		"handshake starts as addresser other side is addressee")
+
+	flags.BoolVar(&plain, "plain", false,
+		"plain print, i.e., only IDK, good for piping")
 
 	flags.IntVar(
 		&protocol.IdInviteCmdData.PinCode,

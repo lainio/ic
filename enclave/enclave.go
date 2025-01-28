@@ -110,6 +110,49 @@ func BackupTicker(interval time.Duration) (done chan<- struct{}) {
 	return db.BackupTicker(interval)
 }
 
+func PutPW(isAddresser bool, pw *pw.Connection) (err error) {
+	defer err2.Handle(&err)
+
+	try.To(db.AddKeyValueToBucket(
+		buckets[x.Whom(isAddresser, pwBucketSender, pwBucketReceiver)],
+		&db.Data{
+			Data: pw.Data(),
+			Read: encrypt,
+		},
+		&db.Data{
+			Data: pw.Key(),
+			Read: hash,
+		},
+	))
+
+	return nil
+}
+
+func GetPW(
+	isAddresser bool,
+	idk key.Public,
+) (
+	conn *pw.Connection,
+	exist bool,
+	err error,
+) {
+	defer err2.Handle(&err)
+
+	value := &db.Data{
+		Write: decrypt,
+	}
+	exist = try.To1(db.GetKeyValueFromBucket(
+		buckets[x.Whom(isAddresser, pwBucketSender, pwBucketReceiver)],
+		&db.Data{
+			Data: idk,
+			Read: hash,
+		},
+		value,
+	))
+	conn = pw.NewFromData(value.Data)
+	return
+}
+
 func PutReceiversPW(pw *pw.Connection) (err error) {
 	defer err2.Handle(&err)
 
@@ -175,6 +218,25 @@ func GetSendersPW(idk key.Public) (conn *pw.Connection, exist bool, err error) {
 		value,
 	))
 	conn = pw.NewFromData(value.Data)
+	return
+}
+
+func GetAllPW(isAddresser bool) (pconns []*pw.Connection, err error) {
+	defer err2.Handle(&err)
+
+	conns := try.To1(db.GetAllValuesFromBucket(
+		buckets[x.Whom(isAddresser, pwBucketSender, pwBucketReceiver)],
+		decrypt,
+	))
+	if len(conns) == 0 {
+		return
+	}
+
+	pconns = make([]*pw.Connection, len(conns))
+	for i, v := range conns {
+		pconns[i] = pw.NewFromData(v)
+	}
+
 	return
 }
 

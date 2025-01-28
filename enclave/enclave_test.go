@@ -54,6 +54,41 @@ func TestInitSealedBox(t *testing.T) {
 	// TryClose()
 }
 
+func TestPutGetPW(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	h1 := key.NewHand()
+	h2 := key.NewHand()
+	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
+	h2Endp := pw.ConnEndpoint{Info: *h2.Info, Endpoint: "h2_endp"}
+
+	// First we are addresser (initiator)
+	isAddresser := true // Important!! We are testing addresser end here
+	conn1 := pw.New(isAddresser, h1Endp, h2Endp)
+	try.To(PutPW(isAddresser, conn1))
+	dbConn1, found := try.To2(GetPW(isAddresser, conn1.Key()))
+	assert.That(found)
+	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
+	assert.DeepEqual(dbConn1, conn1)
+
+	// Second we are addressee (joiner)
+	isAddresser = false // Important!! We are testing addressee end here
+	conn1 = pw.New(isAddresser, h1Endp, h2Endp)
+	try.To(PutPW(isAddresser, conn1))
+	dbConn1, found = try.To2(GetPW(isAddresser, conn1.Key()))
+	assert.That(found)
+	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
+	assert.DeepEqual(dbConn1, conn1)
+
+	pconnsWeAreAddresser := try.To1(GetAllPW(true))
+	assert.SNotEmpty(pconnsWeAreAddresser)
+	assert.SShorter(pconnsWeAreAddresser, 2)
+
+	pconnsWeAreNOTAddresser := try.To1(GetAllPW(false))
+	assert.SNotEmpty(pconnsWeAreNOTAddresser)
+	assert.SShorter(pconnsWeAreNOTAddresser, 2)
+}
+
 func TestPutSendersPW(t *testing.T) {
 	defer assert.PushTester(t)()
 
@@ -65,9 +100,9 @@ func TestPutSendersPW(t *testing.T) {
 
 	conn1 := pw.New(weAreAddresser, h1Endp, h2Endp)
 	try.To(PutSendersPW(conn1))
-	dbConn1, found := try.To2(GetSendersPW(conn1.Addressee.Public))
+	dbConn1, found := try.To2(GetSendersPW(conn1.Key()))
 	assert.That(found)
-	assert.That(dbConn1.Addresser.Public.Equal(conn1.Addresser.Public))
+	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
 }
 
@@ -82,10 +117,13 @@ func TestPutReceiversPW(t *testing.T) {
 
 	conn1 := pw.New(weAreAddresser, h1Endp, h2Endp)
 	try.To(PutReceiversPW(conn1))
-	dbConn1, found := try.To2(GetReceiversPW(conn1.Addresser.Public))
+	dbConn1, found := try.To2(GetReceiversPW(conn1.Key()))
 	assert.That(found)
-	assert.That(dbConn1.Addresser.Public.Equal(conn1.Addresser.Public))
+	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
+
+	dbConn1, found = try.To2(GetReceiversPW(conn1.OurIDK()))
+	assert.ThatNot(found)
 }
 
 func TestPutUserIDCount(t *testing.T) {
