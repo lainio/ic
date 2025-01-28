@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/pw"
+	"github.com/spf13/cobra"
 
 	"github.com/golang/glog"
 	"github.com/lainio/err2"
@@ -26,20 +28,20 @@ var (
 	Ec *nats.EncodedConn
 )
 
-func PairwiseHandshake(isAddresser bool) (err error) {
+func PairwiseHandshake(c *cobra.Command, isAddresser bool) (token string, err error) {
 	defer err2.Handle(&err)
 
 	if isAddresser {
-		try.To(PairwiseHandshakeInit())
+		token = try.To1(PairwiseHandshakeInit(c))
 	} else {
-		try.To(PairwiseHandshakeJoin())
+		token = try.To1(PairwiseHandshakeJoin(c))
 	}
-	savePW(isAddresser)
+	token = savePW(isAddresser)
 
-	return nil
+	return
 }
 
-func savePW(isAddresser bool) {
+func savePW(isAddresser bool) (token string) {
 	glog.V(3).Infoln("saving PW as addresser:", isAddresser)
 	senderEndp := pw.ConnEndpoint{
 		Info:     SenderUser.KeyInfo,
@@ -50,18 +52,23 @@ func savePW(isAddresser bool) {
 		Endpoint: "TODO",
 	}
 	pwConn := pw.New(isAddresser, senderEndp, rcvrEndp)
+	token = pwConn.TheirIDK().PKString()
 
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 	glog.V(3).Infoln("saving PW as isAddresser:", isAddresser)
 	try.To(enclave.PutPW(isAddresser, pwConn))
 	enclave.TryClose()
+
+	return
 }
 
-func PairwiseHandshakeInit() (err error) {
+func PairwiseHandshakeInit(c *cobra.Command) (token string, err error) {
 	glog.V(3).Infoln("\n=== PW HS INIT ===\n")
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 	defer FlushAndCloseNats()
+
+	isAddresser := true
 
 	assert.NotZero(IdInviteCmdData.RcvrUserID)
 
@@ -140,9 +147,11 @@ func PairwiseHandshakeInit() (err error) {
 	pwSendCh <- invitedMsg ////////////  SEND  ////////////////////
 	glog.V(3).Infoln("==> pw accepted msg")
 
-	fmt.Printf(
-		"All OK, pairwise connection reference: '%v'\n",
-		RcvrUser.KeyInfo.Public.String(),
+	token = RcvrUser.KeyInfo.Public.String()
+	fmt.Fprintf(
+		c.ErrOrStderr(),
+		"All OK, we are %s\n",
+		x.Whom(isAddresser, "addresser", "addressee"),
 	)
 
 	// TODO: should we wait ACK from other end that the Invitation is DONE!
@@ -152,14 +161,16 @@ func PairwiseHandshakeInit() (err error) {
 
 	// TODO: their ACK would be the place to save something in this end if..
 
-	return nil
+	return
 }
 
-func PairwiseHandshakeJoin() (err error) {
+func PairwiseHandshakeJoin(c *cobra.Command) (token string, err error) {
 	glog.V(3).Infoln("\n=== PW HS JOIN ===\n")
 	defer assert.PushAsserter(assert.Plain)() // asserts as errors
 	defer err2.Handle(&err, nil)
 	defer FlushAndCloseNats()
+
+	isAddresser := false
 
 	assert.NotZero(IdInviteCmdData.RcvrUserID)
 	assert.NotZero(IdInviteCmdData.SenderUserID)
@@ -175,7 +186,9 @@ func PairwiseHandshakeJoin() (err error) {
 
 	glog.V(3).Infoln("0. IC count:", RcvrUser.Identity().ICCount())
 	glog.V(3).Infoln("-- start to wait:", pwListenSub)
-	fmt.Printf("Ready to listen addresser. Please execute:\n"+
+	fmt.Fprintf(
+		c.OutOrStderr(),
+		"Ready to listen addresser. Please execute:\n"+
 		"\t`tdc pw connect --pin-code=%v ..`, at their end.\n",
 		IdInviteCmdData.PinCode,
 	)
@@ -231,16 +244,18 @@ func PairwiseHandshakeJoin() (err error) {
 
 	assert.Empty(reply.Status, "inviter's error: %v", reply.Status)
 
+	token = SenderUser.KeyInfo.Public.String()
 	// TODO: send ACK to other end now
 	// TODO: need 2 lvl printing, or start to use stderr, stdout:
 	//  - tokens, etc. to stdout
 	//  - information about progress etc. to stderr
-	fmt.Printf(
-		"All OK, pairwise connection reference: '%v'\n",
-		SenderUser.KeyInfo.Public.String(),
+	fmt.Fprintf(
+		c.ErrOrStderr(),
+		"All OK, we are %s\n",
+		x.Whom(isAddresser, "addresser", "addressee"),
 	)
 
-	return nil
+	return
 }
 
 func PutUser(u enclave.User) {

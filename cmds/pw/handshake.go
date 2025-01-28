@@ -36,7 +36,7 @@ var pwHandshakeCmd = &cobra.Command{
 	Long:    pwHandshakeDoc,
 	Example: pwHandshakeExample,
 	Args:    cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) (err error) {
+	RunE: func(c *cobra.Command, args []string) (err error) {
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
@@ -49,22 +49,16 @@ var pwHandshakeCmd = &cobra.Command{
 		if wot == nil || wot.Hops == hop.NotConnected {
 			return fmt.Errorf("identities don't share trust domains")
 		}
-		Println(wot)
+		fmt.Fprintln(c.OutOrStderr(), wot)
 
 		protocol.IdInviteCmdData.RcvrUserID = rcvrUser.ID
 		protocol.IdInviteCmdData.SenderUserID = senderUser.ID
 
-		try.To(protocol.PairwiseHandshake(isAddresser))
+		token := try.To1(protocol.PairwiseHandshake(c, isAddresser))
+		fmt.Fprintln(c.OutOrStdout(), token)
 
 		return nil
 	},
-}
-
-func Println(a ...any) (n int) {
-	if !plain {
-		return try.To1(fmt.Println(a...))
-	}
-	return 0
 }
 
 var (
