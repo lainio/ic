@@ -431,10 +431,12 @@ func ViewPW(IDK key.Public) (pconn *pw.Connection) {
 	var found bool
 	pconn, found = try.To2(enclave.GetSendersPW(IDK))
 	if found {
+		glog.V(3).Infoln("Sender found", pconn)
 		return
 	}
 	pconn, found = try.To2(enclave.GetReceiversPW(IDK))
 	if found {
+		glog.V(3).Infoln("Receiver found", pconn)
 		return
 	}
 	enclave.TryClose()

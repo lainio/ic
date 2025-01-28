@@ -20,10 +20,14 @@ func TestNew(t *testing.T) {
 		a1 := New(weAreAddresser, h1Endp, h2Endp)
 		assert.NotNil(a1)
 		assert.That(a1.IsAddressers)
+		assert.Equal(a1.Addresser.String(), h1.String())
+		assert.Equal(a1.Addressee.String(), h2.String())
 
 		a2 := New(!weAreAddresser, h1Endp, h2Endp)
 		assert.NotNil(a2)
 		assert.ThatNot(a2.IsAddressers)
+		assert.Equal(a2.Addresser.String(), h1.String())
+		assert.Equal(a2.Addressee.String(), h2.String())
 	}
 }
 

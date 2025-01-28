@@ -59,13 +59,13 @@ func TestPutSendersPW(t *testing.T) {
 
 	h1 := key.NewHand()
 	h2 := key.NewHand()
-	weAreAddresser := true
+	weAreAddresser := true // Important!! We are testing Senders
 	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
 	h2Endp := pw.ConnEndpoint{Info: *h2.Info, Endpoint: "h2_endp"}
 
 	conn1 := pw.New(weAreAddresser, h1Endp, h2Endp)
 	try.To(PutSendersPW(conn1))
-	dbConn1, found := try.To2(GetSendersPW(conn1.Addresser.Public))
+	dbConn1, found := try.To2(GetSendersPW(conn1.Addressee.Public))
 	assert.That(found)
 	assert.That(dbConn1.Addresser.Public.Equal(conn1.Addresser.Public))
 	assert.DeepEqual(dbConn1, conn1)
@@ -76,7 +76,7 @@ func TestPutReceiversPW(t *testing.T) {
 
 	h1 := key.NewHand()
 	h2 := key.NewHand()
-	weAreAddresser := true
+	weAreAddresser := false // Important!! We are testing Receivers
 	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
 	h2Endp := pw.ConnEndpoint{Info: *h2.Info, Endpoint: "h2_endp"}
 

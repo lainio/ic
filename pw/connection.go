@@ -3,7 +3,9 @@ package pw
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 
+	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/key"
 )
@@ -24,7 +26,7 @@ type Connection struct {
 }
 
 type ConnEndpoint struct {
-	// this are the field we know now
+	// these are the field we know now
 	//
 
 	key.Info
@@ -43,10 +45,13 @@ func (c *Connection) Key() []byte {
 }
 
 func (c *Connection) String() string {
+	start := fmt.Sprintf("Addresser: %v", x.Whom(c.IsAddressers, "Yes", "No "))
+	idk := c.Addresser.PKString()
 	if c.IsAddressers {
-		return c.Addressee.Public.String()
+		idk = c.Addressee.PKString()
 	}
-	return c.Addresser.Public.String()
+	return fmt.Sprintf("%s, Ref IDK: %v, A-er: %v, A-ee: %v",
+		start, idk, c.Addresser.PKString(), c.Addressee.PKString())
 }
 
 func (c *Connection) Data() []byte {
@@ -60,7 +65,7 @@ func New(isAddresser bool, addresser, addressee ConnEndpoint) *Connection {
 	return &Connection{
 		IsAddressers: isAddresser,
 		Addresser:    addresser,
-		Addressee:    addresser,
+		Addressee:    addressee,
 	}
 }
 

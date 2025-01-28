@@ -43,7 +43,7 @@ var pwViewCmd = &cobra.Command{
 		pconn := protocol.ViewPW(idk)
 
 		// todo: show pw info = pconn
-		fmt.Println("pairwise connection:", pconn)
+		fmt.Println("pairwise connection:", pconn.String())
 
 		return nil
 	},
