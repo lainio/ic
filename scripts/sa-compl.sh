@@ -1,5 +1,8 @@
 #!/bin/bash
 
+DEF_NAME=sac # default command name used in exec from cmd line
+CLI_NAME=tdc # cmd name inside the binary and completion script. sed'ed away.
+
 check_bash_version() {
     local major=${1:-4}
     local minor=$2
@@ -36,7 +39,7 @@ if [[ $_ == $0 ]]; then
 fi
 
 if [ "$1" = "" ]; then
-	CLI=tdc
+	CLI="$DEF_NAME"
 else
 	CLI="$1"
 fi
@@ -53,11 +56,11 @@ echo "used cli alias is:" "$CLI2"
 #  https://lists.gnu.org/archive/html/bug-bash/2006-01/msg00018.html
 
 if check_bash_version 3 3; then 
-	myCmd=". <(""$CLI"" completion bash | sed 's/tdc/$CLI2/g')"
+	myCmd=". <(""$CLI"" completion bash | sed 's/"$CLI_NAME"/$CLI2/g')"
 else
 	# fallback for e.g. OSX which have old bash
 	printf "using workaround for bash process substitution\n"
-	sedCmd="$CLI"" completion bash | sed 's/tdc/$CLI2/g'"
+	sedCmd="$CLI"" completion bash | sed 's/"$CLI_NAME"/$CLI2/g'"
 	myCmd="source /dev/stdin <<<\"\$(""$sedCmd"")\""
 	unset sedCmd
 fi
