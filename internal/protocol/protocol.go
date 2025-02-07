@@ -189,7 +189,7 @@ func PairwiseHandshakeJoin(c *cobra.Command) (token string, err error) {
 	fmt.Fprintf(
 		c.OutOrStderr(),
 		"Ready to listen addresser. Please execute:\n"+
-		"\t`tdc pw connect --pin-code=%v ..`, at their end.\n",
+			"\t'tdc pw connect --pin-code=%v ..', at their end.\n",
 		IdInviteCmdData.PinCode,
 	)
 	glog.V(3).Infoln("← listening pw invitation reply")
