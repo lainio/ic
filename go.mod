@@ -9,7 +9,7 @@ require (
 	github.com/findy-network/findy-agent-auth v0.2.85
 	github.com/fxamacker/cbor/v2 v2.6.0
 	github.com/golang/glog v1.2.3
-	github.com/lainio/err2 v1.2.0
+	github.com/lainio/err2 v1.2.1
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.19.0
