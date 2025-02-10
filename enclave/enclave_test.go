@@ -235,6 +235,13 @@ func TestGetUser(t *testing.T) {
 	users := try.To1(GetAllUsers())
 	assert.SNotEmpty(users)
 
+	prefix := u2.KeyInfo.Public.PKString()[:4]
+	allUsers := TryGetAllUsersByIDKPrefix(prefix)
+	assert.SNotEmpty(allUsers)
+	assert.SLen(allUsers, 1)
+	assert.That(allUsers[0].EqualPK(u2.KeyInfo.PKString()))
+	assert.DeepEqual(allUsers[0].KeyInfo, u2.KeyInfo)
+
 	_, found = try.To2(GetUser(emailNotCreated))
 	assert.ThatNot(found)
 	assert.NotNil(u2.identity)

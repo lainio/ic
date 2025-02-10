@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -285,6 +286,29 @@ func GetUser(id uint32) (u User, exist bool, err error) {
 	}
 
 	return NewUserFromData(value.Data), already, err
+}
+
+func TryGetAllUsersByIDKPrefix(idkPrefix string) (u []User) {
+	return try.To1(GetAllUsersByIDKPrefix(idkPrefix))
+}
+
+func GetAllUsersByIDKPrefix(
+	idkPrefix string,
+) (
+	retval []User,
+	err error,
+) {
+	defer err2.Handle(&err)
+
+	users := TryGetAllUsers()
+	retval = make([]User, 0, len(users))
+	for _, u := range users {
+		if strings.HasPrefix(u.KeyInfo.Public.PKString(), idkPrefix) {
+			user := try.To1(GetExistingUser(u.ID))
+			retval = append(retval, user)
+		}
+	}
+	return
 }
 
 func TryGetUserByIDK(idk key.Public) (u User, exist bool) {
@@ -642,6 +666,11 @@ func (u User) Identity() *identity.Identity {
 func (u *User) SetIdentity(id *identity.Identity) {
 	u.IdentityCBOR = id.Bytes()
 	u.identity = id
+}
+
+func (u *User) EqualPK(pk string) bool {
+	assert.Len(pk, key.PKLen)
+	return u.RoleInfo.KeyInfo.PKString() == pk
 }
 
 func uint32ToBytes(v uint32) []byte {
