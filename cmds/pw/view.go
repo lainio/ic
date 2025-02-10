@@ -2,7 +2,6 @@ package pw
 
 import (
 	"fmt"
-	"math/rand/v2"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -38,8 +37,9 @@ var pwViewCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		senderUser, _ := protocol.ReadParties(args...)
-		pconn := protocol.ViewPW(senderUser.KeyInfo.Public)
+		user, _ := protocol.ReadParties(args...)
+		pconn := protocol.ViewPW(user.KeyInfo.Public)
+		assert.NotNil(pconn, "pairwise doesn't exist")
 		fmt.Println("pairwise connection:", pconn.String())
 
 		return nil
@@ -49,16 +49,7 @@ var pwViewCmd = &cobra.Command{
 func init() {
 	defer err2.Catch()
 
-	flags := pwViewCmd.PersistentFlags()
-	flags.BoolVarP(&isAddresser, "addresser", "a", false,
-		"handshake starts as addresser other side is addressee")
-
-	flags.IntVar(
-		&protocol.IdInviteCmdData.PinCode,
-		"pin-code",
-		rand.Int(), //nolint:gosec // UI simulation only!
-		"secret PIN code for handshakes, etc.",
-	)
+	_ = pwViewCmd.PersistentFlags()
 
 	pwCmd.AddCommand(pwViewCmd)
 }

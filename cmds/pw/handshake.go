@@ -46,9 +46,8 @@ var pwHandshakeCmd = &cobra.Command{
 		senderIdentity := senderUser.Identity()
 		rcvrIdentity := rcvrUser.Identity()
 		wot := rcvrIdentity.WebOfTrust(*senderIdentity)
-		if wot == nil || wot.Hops == hop.NotConnected {
-			return fmt.Errorf("identities don't share trust domains")
-		}
+		assert.That(wot != nil && wot.Hops != hop.NotConnected,
+			"identities don't share trust domains")
 		fmt.Fprintln(c.OutOrStderr(), wot)
 
 		protocol.IdInviteCmdData.RcvrUserID = rcvrUser.ID

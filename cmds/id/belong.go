@@ -41,9 +41,8 @@ var idBelongCmd = &cobra.Command{
 
 		idFromDig := senderUser.Identity()
 		wot := rcvrUser.Identity().WebOfTrust(*idFromDig)
-		if wot == nil || wot.Hops == hop.NotConnected {
-			return fmt.Errorf("identities don't share trust domains")
-		}
+		assert.That(wot != nil && wot.Hops != hop.NotConnected,
+			"identities don't share trust domains")
 		fmt.Println(wot)
 
 		return nil

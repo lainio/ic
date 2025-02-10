@@ -189,7 +189,7 @@ func PairwiseHandshakeJoin(c *cobra.Command) (token string, err error) {
 	fmt.Fprintf(
 		c.OutOrStderr(),
 		"Ready to listen addresser. Please execute:\n"+
-			"\t'tdc pw connect --pin-code=%v ..', at their end.\n",
+			"\t'tdc pw handshake --addresser --pin-code=%v ..', at their end.\n",
 		IdInviteCmdData.PinCode,
 	)
 	glog.V(3).Infoln("← listening pw invitation reply")
@@ -448,17 +448,53 @@ func ListPW(role bool) (pconn []*pw.Connection) {
 	return
 }
 
+// func SendPW(parties ...string) (s, r enclave.User) {
+func SendPW(addresser bool, parties ...string) (s, r *pw.Connection) {
+	assert.SNotEmpty(parties, "arguments needed")
+
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+
+	SenderUser = enclave.TryGetExistingUserByType(
+		cmds.Flags().Type.String(),
+		parties[sender],
+	)
+	if len(parties) > 1 {
+		RcvrUser = enclave.TryGetExistingUserByType(
+			cmds.Flags().Type.String(),
+			parties[rcvr],
+		)
+	}
+	// default is that we aren't addresser in role
+	ourIDK := SenderUser.Identity().GetIDK().Public
+	theirIDK := RcvrUser.Identity().GetIDK().Public
+	if addresser { // PW are indexed from user PoW, that's why..
+		ourIDK = RcvrUser.Identity().GetIDK().Public
+		theirIDK = SenderUser.Identity().GetIDK().Public
+	}
+	sendPW, sfound := try.To2(enclave.GetSendersPW(ourIDK))
+	assert.That(sfound, "not found: %s", ourIDK.PKString())
+	rcvrPW, rfound := try.To2(enclave.GetReceiversPW(theirIDK))
+	assert.That(rfound, "not found: %s", theirIDK.PKString())
+
+	enclave.TryClose()
+	codec := cmds.Flags().Codec
+	Ec = nconn.New(codec).EncodedConn
+	return sendPW, rcvrPW
+}
+
 func ViewPW(IDK key.Public) (pconn *pw.Connection) {
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 	var found bool
 	pconn, found = try.To2(enclave.GetSendersPW(IDK))
 	if found {
-		glog.V(3).Infoln("Sender found", pconn)
+		glog.V(3).Infoln("found from Sender-bucket",
+			pconn.OurIDK().PKString())
 		return
 	}
 	pconn, found = try.To2(enclave.GetReceiversPW(IDK))
 	if found {
-		glog.V(3).Infoln("Receiver found", pconn)
+		glog.V(3).Infoln("found from Receiver-bucket",
+			pconn.OurIDK().PKString())
 		return
 	}
 	enclave.TryClose()
@@ -566,7 +602,7 @@ func InvitationHandshakeInvitee() (err error) {
 	glog.V(3).Infoln("0. IC count:", RcvrUser.Identity().ICCount())
 	glog.V(3).Infoln("-- start to wait:", subject)
 	fmt.Printf("Ready to listen inviter.\n"+
-		"Please execute: `tdc id introduce --pin-code=%v ..`, at their end.\n",
+		"Please execute: `tdc id introduce --addresser --pin-code=%v ..`, at their end.\n",
 		pinCode,
 	)
 	invitationPropose := <-listenInvitationCh //////////////////////////////
