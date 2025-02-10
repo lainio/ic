@@ -20,6 +20,10 @@ import (
 	"github.com/lainio/err2/try"
 )
 
+const (
+	PKLen = prefixLenOfCBOR
+)
+
 // TODO: from where we get the key! In the server this is ordinary secret. We
 // can still think this when we have our UI app ready.
 var Enclave enclave.Secure = enclave.New(
@@ -39,7 +43,9 @@ func (p Public) String() string {
 
 func (p Public) PKString() string {
 	pk := base58.Encode(p)
-	return pk[prefixLenOfCBOR : 2*prefixLenOfCBOR]
+	pk = pk[prefixLenOfCBOR : 2*prefixLenOfCBOR]
+	assert.Len(pk, PKLen)
+	return pk
 }
 
 type ID []byte

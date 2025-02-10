@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/lainio/ic/internal/protocol"
+	"github.com/lainio/ic/key"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -38,10 +39,15 @@ var idFindCmd = &cobra.Command{
 
 		assert.SLonger(args, 0, "user ID: argument missing")
 
-		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "", protocol.CmdData.MasterKey)
+		enclave.TryInitSealedBox(
+			protocol.CmdData.WalletFilename,
+			"",
+			protocol.CmdData.MasterKey,
+		)
 		users := enclave.TryGetAllUsers()
 		try.To(enclave.Close())
 
+		// TODO: check if we could change this to protocol.readParties
 		for _, u := range users {
 			if calcSearch(args[0], u) {
 				printInfoln(u, true)
@@ -68,7 +74,7 @@ func calcSearch(s string, u enclave.User) bool {
 		id     uint32
 		retval bool
 	)
-	if len(s) == 14 {
+	if len(s) == key.PKLen {
 		pkStr = s
 	} else {
 		id = uint32(try.To1(strconv.Atoi(s))) //nolint
@@ -81,7 +87,7 @@ func calcSearch(s string, u enclave.User) bool {
 			}
 		}
 	} else {
-		retval = u.RoleInfo.KeyInfo.PKString() == pkStr || u.ID == id
+		retval = u.EqualPK(pkStr) || u.ID == id
 	}
 	return retval
 }
