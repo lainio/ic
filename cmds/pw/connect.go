@@ -40,6 +40,7 @@ var pwConnectCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
+		// TODO: just copied from handshake!
 		senderUser, rcvrUser := protocol.ReadParties(args...)
 
 		// use full identities to get easily full picture about WoT
