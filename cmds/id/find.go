@@ -1,6 +1,7 @@
 package id
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/lainio/ic/internal/protocol"
@@ -44,10 +45,24 @@ var idFindCmd = &cobra.Command{
 			"",
 			protocol.CmdData.MasterKey,
 		)
+
+		// TODO: check if we could change this to protocol.readParties
+		// OR merge with the else branch
+		if len(args[0]) < key.PKLen {
+			users := enclave.TryGetAllUsersByIDKPrefix(args[0])
+			try.To(enclave.Close())
+			for _, u := range users {
+				if idFindCmdData.PrintIDOnly {
+					fmt.Println(u.ID)
+				} else {
+					printInfoln(u, true)
+				}
+			}
+			return nil
+		}
 		users := enclave.TryGetAllUsers()
 		try.To(enclave.Close())
 
-		// TODO: check if we could change this to protocol.readParties
 		for _, u := range users {
 			if calcSearch(args[0], u) {
 				printInfoln(u, true)
@@ -61,6 +76,8 @@ var idFindCmd = &cobra.Command{
 var idFindCmdData = struct {
 	DomainPK  bool
 	UseDigest bool
+
+	PrintIDOnly bool
 }{}
 
 func calcSearch(s string, u enclave.User) bool {
@@ -100,6 +117,8 @@ func init() {
 		"instead of IDK, use Domain Root PK for search")
 	flags.BoolVar(&idFindCmdData.UseDigest, "use-digest", false,
 		"use full digest to find all which have similar one")
+	flags.BoolVar(&idFindCmdData.PrintIDOnly, "id", false,
+		"print only db id, good for piping, TODO only prefix")
 
 	idCmd.AddCommand(idFindCmd)
 }
