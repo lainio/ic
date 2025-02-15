@@ -37,7 +37,7 @@ var pwSendCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		senderPW, rcvrPW := protocol.SendPW(addresser, args...)
+		senderPW, rcvrPW := protocol.SendPW(!addressee, args...)
 
 		fmt.Fprintln(c.OutOrStdout(),
 			"senderPW:", senderPW,
@@ -52,12 +52,12 @@ func init() {
 	defer err2.Catch()
 
 	flags := pwSendCmd.PersistentFlags()
-	flags.BoolVarP(&addresser, "addresser", "a", false,
-		"handshake starts as addresser other side is addressee")
+	flags.BoolVarP(&addressee, "addressee", "a", false,
+		"we are the addressee, receiver of the pairwise")
 
 	pwCmd.AddCommand(pwSendCmd)
 }
 
 var (
-	addresser bool
+	addressee bool
 )
