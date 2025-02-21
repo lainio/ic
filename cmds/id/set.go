@@ -13,8 +13,10 @@ var idSetDoc = `The 'set' command set identity information according to its argu
 
 List of the Identity attributes that can be updated: 'alias'.`
 
-var idSetExample = `  # Set new alias:
-    tdc id set alias 'New Alias Name Here'
+var idSetExample = `  # Set new alias for ID=12:
+    tdc id set 10 alias 'New Alias Name Here'
+  ## Set new alias for alias=Elvis
+    tdc id set -t=alias Elvis alias 'Mr. Elvis Presley'
 `
 
 var idSetCmd = &cobra.Command{
