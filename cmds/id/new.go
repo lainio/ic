@@ -46,6 +46,8 @@ var idNewCmd = &cobra.Command{
 		user = enclave.NewUserWithAlias(alias, extraArgs...)
 
 		try.To(enclave.PutUser(user))
+		try.Out(enclave.Close()).Logf("closing failure")
+
 		myID := user.Identity()
 		if idNewCmdData.IDK {
 			fmt.Println(myID.GetIDK().Public.PKString())
