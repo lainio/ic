@@ -87,8 +87,8 @@ func PairwiseHandshakeInit(c *cobra.Command) (token string, err error) {
 		pwSendSubject, pinCode)
 
 	challenge, verify := chain.NewVerifyBlock(pinCode)
-	invitationProposal := Invitation{
-		Type:      PWType,
+	invitationProposal := Handshake{
+		Type:      ProtocolTypePW,
 		Sender:    SenderUser.RoleInfo,
 		Rcvr:      RcvrUser.RoleInfo,
 		Challenge: challenge,
@@ -107,9 +107,9 @@ func PairwiseHandshakeInit(c *cobra.Command) (token string, err error) {
 	reply := <-pwListenCh ////////////  LISTEN  ///////////////////
 	glog.V(3).Infoln("<== pairwise CHALLENGE reply received", pwListenSub)
 
-	defer err2.Handle(&err, OnErrorReply(pwSendCh, PWType))
+	defer err2.Handle(&err, OnErrorReply(pwSendCh, ProtocolTypePW))
 
-	assert.Equal(reply.Type, PWType)
+	assert.Equal(reply.Type, ProtocolTypePW)
 	assert.Equal(reply.Rcvr.ID, IdInviteCmdData.RcvrUserID,
 		"join cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
 		reply.Rcvr.ID, IdInviteCmdData.RcvrUserID,
@@ -137,8 +137,8 @@ func PairwiseHandshakeInit(c *cobra.Command) (token string, err error) {
 	assert.NotNil(RcvrUser.Identity(), "cannot read & create identity")
 	try.To(RcvrUser.Identity().CheckIntegrity())
 
-	invitedMsg := Invitation{
-		Type:   PWType,
+	invitedMsg := Handshake{
+		Type:   ProtocolTypePW,
 		Sender: SenderUser.RoleInfo,
 		Rcvr:   RcvrUser.RoleInfo,
 	}
@@ -199,10 +199,10 @@ func PairwiseHandshakeJoin(c *cobra.Command) (token string, err error) {
 
 	defer err2.Handle(&err, OnErrorReply(
 		pwSendCh,
-		PWType),
+		ProtocolTypePW),
 	)
 
-	assert.Equal(connectPropose.Type, PWType)
+	assert.Equal(connectPropose.Type, ProtocolTypePW)
 	assert.Equal(connectPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
 		"pw addresser cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
 		connectPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
@@ -223,8 +223,8 @@ func PairwiseHandshakeJoin(c *cobra.Command) (token string, err error) {
 	sig := try.To1(kh.Sign(challenge.Bytes()))
 	glog.V(3).Infoln("signature ok, OUR PIN-code:\n", pinCode)
 
-	me := Invitation{
-		Type:   PWType,
+	me := Handshake{
+		Type:   ProtocolTypePW,
 		Sender: SenderUser.RoleInfo,
 		Rcvr:   RcvrUser.RoleInfo,
 
@@ -280,8 +280,8 @@ func InvitationHandshake() (err error) {
 
 	pinCode := IdInviteCmdData.PinCode
 	challenge, verify := chain.NewVerifyBlock(pinCode)
-	invitationProposal := Invitation{
-		Type:      InvitationType,
+	invitationProposal := Handshake{
+		Type:      ProtocolTypeInvitation,
 		Sender:    SenderUser.RoleInfo,
 		Rcvr:      RcvrUser.RoleInfo,
 		Challenge: challenge,
@@ -300,7 +300,7 @@ func InvitationHandshake() (err error) {
 	reply := <-listenInvitationCh ////////////  LISTEN  ///////////////////
 	glog.V(3).Infoln("=== challenge+reply received", subject2)
 
-	defer err2.Handle(&err, OnErrorReply(sendInvitationCh, InvitationType))
+	defer err2.Handle(&err, OnErrorReply(sendInvitationCh, ProtocolTypeInvitation))
 
 	assert.Equal(reply.Rcvr.ID, IdInviteCmdData.RcvrUserID,
 		"join cmd's user-rcvr-id (%v) not equal to our flag value (%v)",
@@ -340,8 +340,8 @@ func InvitationHandshake() (err error) {
 	// let's check that everything is OK before sending it forward
 	try.To(RcvrUser.Identity().CheckIntegrity())
 	secondCount := RcvrUser.Identity().ICCount() // user reporting
-	invitedMsg := Invitation{
-		Type:        InvitationType,
+	invitedMsg := Handshake{
+		Type:        ProtocolTypeInvitation,
 		Sender:      SenderUser.RoleInfo,
 		Rcvr:        RcvrUser.RoleInfo,
 		IdentityStr: RcvrUser.IdentityStr(),
@@ -364,9 +364,9 @@ func InvitationHandshake() (err error) {
 	return nil
 }
 
-func OnErrorReply(sendInvitationCh chan Invitation, Type ProtType) err2.Handler {
+func OnErrorReply(sendInvitationCh chan Handshake, Type ProtocolType) err2.Handler {
 	return func(err error) error {
-		invitedMsg := Invitation{
+		invitedMsg := Handshake{
 			Type:   Type,
 			Status: err.Error(),
 			Sender: SenderUser.RoleInfo,
@@ -399,8 +399,8 @@ func FlushAndCloseNats() {
 	Ec.Close()
 }
 
-func MakeInSubject(base string, target uint32) (chan Invitation, string) {
-	invitationCh := make(chan Invitation)
+func MakeInSubject(base string, target uint32) (chan Handshake, string) {
+	invitationCh := make(chan Handshake)
 	subject := fmt.Sprintf(
 		"%s_%d", base, target,
 	)
@@ -409,8 +409,8 @@ func MakeInSubject(base string, target uint32) (chan Invitation, string) {
 	return invitationCh, subject
 }
 
-func MakeOutSubject(base string, target uint32) (chan Invitation, string) {
-	invitationCh := make(chan Invitation)
+func MakeOutSubject(base string, target uint32) (chan Handshake, string) {
+	invitationCh := make(chan Handshake)
 	subject := fmt.Sprintf(
 		"%s_%d", base, target,
 	)
@@ -503,30 +503,28 @@ func ViewPW(IDK key.Public) (pconn *pw.Connection) {
 	return
 }
 
-func TryBindOutChannelToSubject(subject string, invitationCh chan Invitation) {
+func TryBindOutChannelToSubject(subject string, invitationCh chan Handshake) {
 	assert.NotNil(Ec)
 	assert.NotEmpty(subject)
 	assert.CNotNil(invitationCh)
 	try.To(Ec.BindSendChan(subject, invitationCh))
 }
 
-func TryBindInChannelToSubject(subject string, invitationCh chan Invitation) {
+func TryBindInChannelToSubject(subject string, invitationCh chan Handshake) {
 	assert.NotNil(Ec)
 	assert.NotEmpty(subject)
 	assert.CNotNil(invitationCh)
 	try.To1(Ec.BindRecvChan(subject, invitationCh))
 }
 
-// Invitation TODO: should we try to do already some meta modeling? E.g. we
+// Handshake TODO: should we try to do already some meta modeling? E.g. we
 // have IdentityStr field which is very specific. Maybe we should rename it at
 // least before we continue with the pw.Connection?
 //
-// TODO: we should rename this. it's alreadly used in two places. todo: courrent
-// names idea: Handshake.
 // TODO: Also we shouldhave separated header, and way to bring dynamic fields
 // when needed?
-type Invitation struct {
-	Type   ProtType
+type Handshake struct {
+	Type   ProtocolType
 	Status string
 
 	Sender enclave.RoleInfo // both parties..
@@ -541,24 +539,24 @@ type Invitation struct {
 	Endpoint string
 }
 
-type ProtType string
+type ProtocolType string
 
 const (
-	PWType         ProtType = "pairwise"
-	InvitationType ProtType = "invitation"
+	ProtocolTypePW         ProtocolType = "pairwise"
+	ProtocolTypeInvitation ProtocolType = "invitation"
 )
 
-func (t *ProtType) String() string {
+func (t *ProtocolType) String() string {
 	return string(*t)
 }
 
-func (t *ProtType) Set(value string) error {
+func (t *ProtocolType) Set(value string) error {
 	switch value {
-	case string(PWType), string(InvitationType):
-		*t = ProtType(value)
+	case string(ProtocolTypePW), string(ProtocolTypeInvitation):
+		*t = ProtocolType(value)
 		return nil
 	default:
-		return errors.New("must be one of [pw, invitation]")
+		return errors.New("must be one of [pairwise, invitation]")
 	}
 }
 
@@ -610,7 +608,7 @@ func InvitationHandshakeInvitee() (err error) {
 
 	defer err2.Handle(&err, OnErrorReply(
 		sendInvitationCh,
-		InvitationType),
+		ProtocolTypeInvitation),
 	)
 
 	assert.Equal(invitationPropose.Rcvr.ID, IdInviteCmdData.RcvrUserID,
@@ -633,7 +631,7 @@ func InvitationHandshakeInvitee() (err error) {
 	sig := try.To1(kh.Sign(challenge.Bytes()))
 	glog.V(3).Infoln("signature ok", pinCode)
 
-	me := Invitation{
+	me := Handshake{
 		Sender: SenderUser.RoleInfo,
 		Rcvr:   RcvrUser.RoleInfo,
 
