@@ -3,6 +3,8 @@ package id
 import (
 	"fmt"
 
+	"github.com/lainio/err2/assert"
+	"github.com/lainio/ic/identity"
 	"github.com/lainio/ic/internal/protocol"
 
 	"github.com/findy-network/findy-common-go/x"
@@ -24,6 +26,7 @@ var idUsersExample = `  # search all users:
 
 var idUsersCmd = &cobra.Command{
 	Use:     "users",
+	Aliases: []string{"list", "ls"},
 	Short:   "lists all users in this enclave",
 	Long:    idUsersDoc,
 	Example: idUsersExample,
@@ -68,20 +71,30 @@ func init() {
 }
 
 func printInfoln(user enclave.User, chains bool) {
+	identity := user.Identity()
+	assert.NotNil(identity)
+
 	fmt.Printf(
 		"UserID: %2d, PK: %v, ICs: %2v, Root: %-3v, '%v'\n",
 		user.ID,
-		user.Identity().GetIDK().PKString(),
-		user.Identity().ICCount(),
-		x.Whom(user.Identity().IsRoot(), "yes", "no"),
+		identity.GetIDK().PKString(),
+		identity.ICCount(),
+		x.Whom(identity.IsRoot(), "yes", "no"),
 		user.Alias,
 	)
-	if chains { // TODO: all root ones print one reduntant IC
-		if user.Identity().ICCount() > 0 {
-			for _, ic := range user.Identity().InviteeChains {
-				pkStr := ic.FirstBlock().Invitee.PKString()
-				fmt.Println("- Invitee Root PK", pkStr)
-			}
+	if chains {
+		printChains(identity)
+	}
+}
+
+func printChains(identity *identity.Identity) {
+	for _, ic := range identity.InviteeChains {
+		if identity.IsRoot() &&
+			identity.GetIDK().Public.Equal(ic.FirstBlock().Invitee.Public) {
+			continue
+		} else {
+			pkStr := ic.FirstBlock().Invitee.PKString()
+			fmt.Println("- Invitee Root PK", pkStr)
 		}
 	}
 }
