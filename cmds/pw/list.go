@@ -31,6 +31,7 @@ format used in arguments. Please see the examples for more information.`
 
 var pwListCmd = &cobra.Command{
 	Use:     "list",
+	Aliases: []string{"ls"},
 	Short:   "list command lists pairwises",
 	Long:    pwListDoc,
 	Example: pwListExample,
