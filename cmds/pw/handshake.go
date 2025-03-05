@@ -32,6 +32,7 @@ format used in arguments. Please see the examples for more information.`
 
 var pwHandshakeCmd = &cobra.Command{
 	Use:     "handshake",
+	Aliases: []string{"bond", "shake"},
 	Short:   "handshake command executes a protocol to build persistent pairwise",
 	Long:    pwHandshakeDoc,
 	Example: pwHandshakeExample,
