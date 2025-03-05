@@ -214,7 +214,6 @@ func setRequiredStringFlags(cmd *cobra.Command) {
 
 // SubCmdNeeded prints the help and error messages because the cmd is abstract.
 func SubCmdNeeded(cmd *cobra.Command) {
-	fmt.Println("Subcommand needed!")
 	_ = cmd.Help()
 	os.Exit(1)
 }
