@@ -34,8 +34,11 @@ var idViewCmd = &cobra.Command{
 
 		u := protocol.RcvrUser
 
-		if idViewCmdData.PrintDigest || idViewCmdData.DigestOnly {
+		if digestFlag() {
 			d := u.Identity().Digest()
+			if idViewCmdData.DigestV2 {
+				fmt.Println(d.Digest())
+			}
 			if idViewCmdData.PrintDigest {
 				fmt.Println(d.Base58())
 			}
@@ -56,6 +59,7 @@ var idViewCmd = &cobra.Command{
 var idViewCmdData = struct {
 	IDK         bool
 	PrintDigest bool
+	DigestV2    bool
 	DigestOnly  bool
 }{}
 
@@ -65,8 +69,10 @@ func init() {
 	flags := idViewCmd.PersistentFlags()
 	flags.BoolVarP(&idViewCmdData.IDK, "idk", "k", false,
 		"print IDK only")
-	flags.BoolVarP(&idViewCmdData.PrintDigest, "print-digest", "d", false,
+	flags.BoolVarP(&idViewCmdData.PrintDigest, "print-digest", "p", false,
 		"print Digest for transportation")
+	flags.BoolVarP(&idViewCmdData.DigestV2, "digest", "d", false,
+		"print Digest V2 for transportation")
 	flags.BoolVarP(&idViewCmdData.DigestOnly, "digest-only", "o", false,
 		"print Digest only")
 
@@ -74,4 +80,9 @@ func init() {
 	try.To(idViewCmd.MarkPersistentFlagRequired("digest-only"))
 
 	idCmd.AddCommand(idViewCmd)
+}
+
+func digestFlag() bool {
+	return idViewCmdData.PrintDigest || idViewCmdData.DigestOnly ||
+		idViewCmdData.DigestV2
 }

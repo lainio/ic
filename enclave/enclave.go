@@ -389,6 +389,11 @@ func Equal(t, d string, rhs User) (ok bool, u User) {
 		if ok {
 			u = TryGetExistingUserByIDK(rhs.KeyInfo.Public)
 		}
+	case "digestv2": // TODO: WORK IN PROGRESS!!
+		ok = rhs.Identity().Digest().Base58()[:14] == d
+		if ok {
+			u = TryGetExistingUserByDigest(d)
+		}
 	case "digest":
 		ok = rhs.Identity().Digest().Base58() == d
 		if ok {

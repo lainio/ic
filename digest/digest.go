@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/findy-network/findy-common-go/x"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/hop"
@@ -14,6 +15,10 @@ import (
 type RootInfo struct {
 	IDK  key.Public
 	Hops hop.Distance
+}
+
+func (ri RootInfo) Digest() string {
+	return fmt.Sprintf("%v.%d", ri.IDK.PKString(), ri.Hops)
 }
 
 type Digest struct {
@@ -50,6 +55,15 @@ func (d Digest) Bytes() []byte {
 func (d Digest) Base58() string {
 	data := d.Bytes()
 	s := base58.Encode(data)
+	return s
+}
+
+func (d Digest) Digest() string {
+	s := d.IDK.PKString() + ":"
+	for i, v := range d.Roots {
+		s += x.Whom(i > 0, ":", "")
+		s += v.Digest()
+	}
 	return s
 }
 

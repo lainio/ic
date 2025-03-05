@@ -4,12 +4,13 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/ic/key"
 )
 
-func TestNewFromString(t *testing.T) {
-	hand := key.NewHand()
-	d := Digest{
+var (
+	hand = key.NewHand()
+	d    = Digest{
 		IDK: hand.Public,
 		Roots: []RootInfo{
 			{
@@ -22,7 +23,9 @@ func TestNewFromString(t *testing.T) {
 			},
 		},
 	}
+)
 
+func TestNewFromString(t *testing.T) {
 	type args struct {
 		s string
 	}
@@ -40,4 +43,11 @@ func TestNewFromString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDigestDigest(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	digestStr := d.Digest()
+	assert.Len(digestStr, 14+1+14+2+1+14+2)
 }
