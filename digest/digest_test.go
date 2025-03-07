@@ -15,11 +15,11 @@ var (
 		Roots: []RootInfo{
 			{
 				IDK:  hand.Public,
-				Hops: 0,
+				Hops: 0, // value is used as testing index as well!!!
 			},
 			{
 				IDK:  hand.Public,
-				Hops: 0,
+				Hops: 1, // value is used as testing index as well!!!
 			},
 		},
 	}
@@ -48,6 +48,16 @@ func TestNewFromString(t *testing.T) {
 func TestDigestDigest(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	digestStr := d.Digest()
-	assert.Len(digestStr, 14+1+14+2+1+14+2)
+	digest := d.Digest()
+	digestStr := string(digest)
+	assert.Len(digestStr, key.PKLen+1+key.PKLen+2+1+key.PKLen+2)
+
+	s := digest.PKStringIDK()
+	assert.Len(s, key.PKLen)
+
+	for i := range 2 {
+		pkstr, hop := digest.PKDigest(i)
+		assert.Len(pkstr, key.PKLen)
+		assert.Equal(int(hop), i)
+	}
 }
