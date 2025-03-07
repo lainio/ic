@@ -3,13 +3,10 @@ package digest
 import (
 	"bytes"
 	"fmt"
-	"strconv"
-	"strings"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/findy-network/findy-common-go/x"
 	"github.com/fxamacker/cbor/v2"
-	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/hop"
 	"github.com/lainio/ic/key"
@@ -25,36 +22,8 @@ type RootInfo struct {
 	Hops hop.Distance
 }
 
-type DigestV2 string
-
-func (d DigestV2) String() string {
-	return string(d)
-}
-
 func (ri RootInfo) Digest() DigestV2 {
 	return DigestV2(fmt.Sprintf("%v.%d", ri.IDK.PKString(), ri.Hops))
-}
-
-func (d DigestV2) PKStringIDK() string {
-	s := d.String()
-	ids := strings.Split(s, KeySplit)
-	assert.SNotEmpty(ids)
-	return ids[0]
-}
-
-func (d DigestV2) PKDigest(index int) (pk string, h hop.Distance) {
-	s := d.String()
-	ids := strings.Split(s, KeySplit)
-	assert.SNotEmpty(ids)
-	assert.SLonger(ids, index+1)
-
-	subs := strings.Split(ids[index+1], HopSplit)
-	assert.SLen(subs, 2)
-
-	pk = subs[0]
-	hInt := try.To1(strconv.Atoi(subs[1]))
-	h = hop.Distance(hInt)
-	return
 }
 
 type Digest struct {

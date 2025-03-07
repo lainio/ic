@@ -5,10 +5,13 @@ import "errors"
 type ArgType string
 
 const (
-	DBType     ArgType = "db"
-	DigestType ArgType = "digest"
-	IDKType    ArgType = "idk"
-	AliasType  ArgType = "alias"
+	DBType       ArgType = "db"
+	DigestType   ArgType = "digest"
+	DigestV2Type ArgType = "digestv2"
+	IDKType      ArgType = "idk"
+	AliasType    ArgType = "alias"
+
+	NameList = "(db|digest|digestv2|idk|alias)"
 )
 
 // Validate the flag value
@@ -18,12 +21,12 @@ func (t *ArgType) String() string {
 
 func (t *ArgType) Set(value string) error {
 	switch value {
-	case string(DBType), string(DigestType),
+	case string(DBType), string(DigestType), string(DigestV2Type),
 		string(IDKType), string(AliasType):
 		*t = ArgType(value)
 		return nil
 	default:
-		return errors.New("must be one of [db, digest, idk, alias]")
+		return errors.New("must be one of" + NameList)
 	}
 }
 

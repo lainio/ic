@@ -26,6 +26,7 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/identity"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/pw"
@@ -378,6 +379,8 @@ func GetUserByType(t, d string) (u User, exist bool, err error) {
 }
 
 func Equal(t, d string, rhs User) (ok bool, u User) {
+	// TODO: how to use these types "db", "idk", etc. as same const ArgType?
+	glog.V(3).Infoln("t:", t, "d:", d, "rhs-user ID:", rhs.ID)
 	switch t {
 	case "db":
 		ok = try.To1(strconv.Atoi(d)) == int(rhs.ID)
@@ -389,10 +392,15 @@ func Equal(t, d string, rhs User) (ok bool, u User) {
 		if ok {
 			u = TryGetExistingUserByIDK(rhs.KeyInfo.Public)
 		}
-	case "digestv2": // TODO: WORK IN PROGRESS!!
-		ok = rhs.Identity().Digest().Base58()[:14] == d
+	case "digestv2":
+		//		idkPrefix := rhs.Identity().Digest().Digest().PKStringIDK()
+		//		glog.V(3).Infoln("idkPrefix:", idkPrefix)
+		//		founded := TryGetAllUsersByIDKPrefix(idkPrefix)
+		//		assert.SLen(founded, 1)
+		//		u = founded[0]
+		ok = rhs.Identity().Digest().Digest() == digest.DigestV2(d)
 		if ok {
-			u = TryGetExistingUserByDigest(d)
+			u = TryGetExistingUserByDigestV2(d)
 		}
 	case "digest":
 		ok = rhs.Identity().Digest().Base58() == d
@@ -438,6 +446,39 @@ func GetUserByAlias(d string) (u User, exist bool, err error) {
 	users := TryGetAllUsers()
 	for _, u := range users {
 		if u.Alias == d {
+			return GetUser(u.ID)
+		}
+	}
+
+	return
+}
+
+func TryGetExistingUserByDigestV2(d string) (u User) {
+	return try.To1(GetExistingUserByDigestV2(d))
+}
+
+func GetExistingUserByDigestV2(d string) (u User, err error) {
+	defer err2.Handle(&err)
+
+	u, already := try.To2(GetUserByDigestV2(d))
+
+	if !already {
+		return u, fmt.Errorf("user (%v) not exist", d)
+	}
+
+	return
+}
+
+func TryGetUserByDigestV2(d string) (u User, exist bool) {
+	return try.To2(GetUserByDigestV2(d))
+}
+
+func GetUserByDigestV2(d string) (u User, exist bool, err error) {
+	defer err2.Handle(&err)
+
+	users := TryGetAllUsers()
+	for _, u := range users {
+		if u.Identity().Digest().Digest() == digest.DigestV2(d) {
 			return GetUser(u.ID)
 		}
 	}

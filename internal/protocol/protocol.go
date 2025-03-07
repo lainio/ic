@@ -7,6 +7,7 @@ import (
 
 	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/ic/cmds"
+	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/pw"
 	"github.com/spf13/cobra"
 
@@ -419,6 +420,35 @@ func MakeOutSubject(base string, target uint32) (chan Handshake, string) {
 	return invitationCh, subject
 }
 
+func ReadPartiesV2(parties ...string) (s, r enclave.User) {
+	assert.SNotEmpty(parties)
+
+	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
+	SenderUser = enclave.TryGetExistingUserByType(
+		cmds.Flags().Type.String(),
+		parties[sender],
+	)
+	if len(parties) > 1 {
+		if cmds.Flags().Type2 == cmds.DigestV2Type {
+			dv2 := digest.DigestV2(parties[rcvr])
+			idkPrefix := dv2.PKStringIDK()
+			glog.V(3).Infoln("idkPrefix:", idkPrefix)
+			rus := enclave.TryGetAllUsersByIDKPrefix(idkPrefix)
+			assert.SLen(rus, 1, "finding %v", idkPrefix)
+			RcvrUser = rus[0]
+		} else {
+			RcvrUser = enclave.TryGetExistingUserByType(
+				cmds.Flags().Type2.String(),
+				parties[rcvr],
+			)
+		}
+	}
+	enclave.TryClose()
+	codec := cmds.Flags().Codec
+	Ec = nconn.New(codec).EncodedConn
+	return SenderUser, RcvrUser
+}
+
 func ReadParties(parties ...string) (s, r enclave.User) { // TODO: return slice
 	assert.SNotEmpty(parties)
 
@@ -429,7 +459,7 @@ func ReadParties(parties ...string) (s, r enclave.User) { // TODO: return slice
 	)
 	if len(parties) > 1 {
 		RcvrUser = enclave.TryGetExistingUserByType(
-			cmds.Flags().Type.String(),
+			cmds.Flags().Type2.String(),
 			parties[rcvr],
 		)
 	}

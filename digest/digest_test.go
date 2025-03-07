@@ -55,9 +55,32 @@ func TestDigestDigest(t *testing.T) {
 	s := digest.PKStringIDK()
 	assert.Len(s, key.PKLen)
 
+	raw := digest.Build()
 	for i := range 2 {
-		pkstr, hop := digest.PKDigest(i)
+		root := raw.PKDigest(i)
+		pkstr, hop := root.PKStringIDK, root.Hop
 		assert.Len(pkstr, key.PKLen)
 		assert.Equal(int(hop), i)
 	}
+}
+
+func TestDigestV2(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	dig1 := "Y8BuDe2owZEoJL:TJtNVsFBQBynnV.1:TtAH5vqJCt92CQ.1:UvgVsZVianpbQP.1"
+	dig2 := "XxQiDfBTbtHCWe:UvgVsZVianpbQP.1:VcbUYNGZYvBPn5.1:XtfNVtLjehn5cu.1"
+	dig3 := "Ywxfen9vBSycH3:UMbgKVuafnPZoj.1"
+
+	digest1 := DigestV2(dig1).Build()
+	digest2 := DigestV2(dig2).Build()
+	digest3 := DigestV2(dig3).Build()
+
+	isWot := digest1.WoT(digest3)
+	assert.ThatNot(isWot, "not common root")
+
+	isWot = digest1.WoT(digest2)
+	assert.That(isWot)
+
+	isWot = digest1.WoT(digest1)
+	assert.That(isWot)
 }

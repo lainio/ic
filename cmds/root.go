@@ -76,6 +76,7 @@ type RootFlags struct {
 	dryRun  bool
 	Codec   string
 	Type    ArgType
+	Type2   ArgType
 }
 
 // ClientFlags agent flags
@@ -92,6 +93,7 @@ var rootEnvs = map[string]string{
 	"dry-run": "DRY_RUN",
 	"codec":   "CODEC",
 	"type":    "TYPE",
+	"type2":   "TYPE2",
 }
 
 func init() {
@@ -100,13 +102,18 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	flags := rootCmd.PersistentFlags()
-	flags.StringVar(&rootFlags.cfgFile, "config", "", FlagInfo("configuration file", "", rootEnvs["config"]))
-	flags.BoolVarP(&rootFlags.dryRun, "dry-run", "n", false, FlagInfo("perform a trial run with no changes made", "", rootEnvs["dry-run"]))
+	flags.StringVar(&rootFlags.cfgFile, "config", "",
+		FlagInfo("configuration file", "", rootEnvs["config"]))
+	flags.BoolVarP(&rootFlags.dryRun, "dry-run", "n", false,
+		FlagInfo("perform a trial run with no changes made", "", rootEnvs["dry-run"]))
 	flags.StringVar(&rootFlags.Codec, "codec", "json",
 		FlagInfo("currently used codec with nats.io", "", rootEnvs["codec"]))
 	try.To(rootFlags.Type.Set("db"))
 	flags.VarP(&rootFlags.Type, "type", "t",
-		FlagInfo("Type of arguments (db|digest|idk|alias)", "", rootEnvs["type"]))
+		FlagInfo("Type of arguments "+NameList, "", rootEnvs["type"]))
+	try.To(rootFlags.Type2.Set("db"))
+	flags.Var(&rootFlags.Type2, "type2",
+		FlagInfo("Type of 2nd argument "+NameList, "", rootEnvs["type2"]))
 
 	try.To(viper.BindPFlag("dry-run", flags.Lookup("dry-run")))
 
