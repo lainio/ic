@@ -420,7 +420,7 @@ func MakeOutSubject(base string, target uint32) (chan Handshake, string) {
 	return invitationCh, subject
 }
 
-func ReadPartiesV2(parties ...string) (s, r enclave.User) {
+func ReadParties(parties ...string) (s, r enclave.User) {
 	assert.SNotEmpty(parties)
 
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
@@ -449,7 +449,7 @@ func ReadPartiesV2(parties ...string) (s, r enclave.User) {
 	return SenderUser, RcvrUser
 }
 
-func ReadParties(parties ...string) (s, r enclave.User) { // TODO: return slice
+func ReadPartiesOld(parties ...string) (s, r enclave.User) { // TODO: return slice
 	assert.SNotEmpty(parties)
 
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)

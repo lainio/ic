@@ -38,21 +38,6 @@ func (d DigestV2) Build() (r RefDigestV2) {
 	return
 }
 
-func (d DigestV2) PKDigestOld(index int) (pk string, h hop.Distance) {
-	s := d.String()
-	ids := strings.Split(s, KeySplit)
-	assert.SNotEmpty(ids)
-	assert.SLonger(ids, index+1)
-
-	subs := strings.Split(ids[index+1], HopSplit)
-	assert.SLen(subs, 2)
-
-	pk = subs[0]
-	hInt := try.To1(strconv.Atoi(subs[1]))
-	h = hop.Distance(hInt)
-	return
-}
-
 type DigestV2 string
 
 type RefRootInfo struct {

@@ -108,11 +108,13 @@ func init() {
 		FlagInfo("perform a trial run with no changes made", "", rootEnvs["dry-run"]))
 	flags.StringVar(&rootFlags.Codec, "codec", "json",
 		FlagInfo("currently used codec with nats.io", "", rootEnvs["codec"]))
-	try.To(rootFlags.Type.Set("db"))
+
+	rootFlags.Type = DBType
 	flags.VarP(&rootFlags.Type, "type", "t",
 		FlagInfo("Type of arguments "+NameList, "", rootEnvs["type"]))
-	try.To(rootFlags.Type2.Set("db"))
-	flags.Var(&rootFlags.Type2, "type2",
+	try.To(rootFlags.Type2.Set(string(DigestV2Type)))
+	rootFlags.Type2 = DigestV2Type
+	flags.VarP(&rootFlags.Type2, "type2", "T",
 		FlagInfo("Type of 2nd argument "+NameList, "", rootEnvs["type2"]))
 
 	try.To(viper.BindPFlag("dry-run", flags.Lookup("dry-run")))

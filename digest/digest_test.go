@@ -55,9 +55,9 @@ func TestDigestDigest(t *testing.T) {
 	s := digest.PKStringIDK()
 	assert.Len(s, key.PKLen)
 
-	raw := digest.Build()
+	ref := digest.Build()
 	for i := range 2 {
-		root := raw.PKDigest(i)
+		root := ref.PKDigest(i)
 		pkstr, hop := root.PKStringIDK, root.Hop
 		assert.Len(pkstr, key.PKLen)
 		assert.Equal(int(hop), i)
