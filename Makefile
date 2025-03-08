@@ -16,6 +16,7 @@ TEST_ARGS ?= -benchmem
 
 check: lint test cli
 
+.PHONY: build cli install deps test
 cli:
 	$(eval VERSION = $(shell printf "Build v.%s on %s" "$(shell cat ./VERSION)" "$(shell date)"))
 	@echo "Installing version '$(VERSION)' of 'tdc'"
