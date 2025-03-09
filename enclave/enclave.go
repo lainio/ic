@@ -393,13 +393,10 @@ func Equal(t, d string, rhs User) (ok bool, u User) {
 			u = TryGetExistingUserByIDK(rhs.KeyInfo.Public)
 		}
 	case "digestv2":
-		//		idkPrefix := rhs.Identity().Digest().Digest().PKStringIDK()
-		//		glog.V(3).Infoln("idkPrefix:", idkPrefix)
-		//		founded := TryGetAllUsersByIDKPrefix(idkPrefix)
-		//		assert.SLen(founded, 1)
-		//		u = founded[0]
-		ok = rhs.Identity().Digest().Digest() == digest.DigestV2(d)
-		if ok {
+		rhDigest := rhs.Identity().Digest().Digest().Build()
+		lhDigest := digest.DigestV2(d)
+		isWot := lhDigest.Build().WoT(rhDigest)
+		if isWot {
 			u = TryGetExistingUserByDigestV2(d)
 		}
 	case "digest":
@@ -478,7 +475,9 @@ func GetUserByDigestV2(d string) (u User, exist bool, err error) {
 
 	users := TryGetAllUsers()
 	for _, u := range users {
-		if u.Identity().Digest().Digest() == digest.DigestV2(d) {
+		userDigest := u.Identity().Digest().Digest().Build()
+		dataDigest := digest.DigestV2(d).Build()
+		if userDigest.WoT(dataDigest) {
 			return GetUser(u.ID)
 		}
 	}

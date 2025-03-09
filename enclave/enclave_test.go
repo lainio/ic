@@ -10,14 +10,21 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/chain"
+	"github.com/lainio/ic/digest"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/pw"
 )
 
-const dbFilename = "MEMORY_fido-enclave.bolt"
+const (
+	dbFilename = "MEMORY_fido-enclave.bolt"
 
-const emailAddress = 1
-const emailNotCreated = 0
+	emailAddress    = 1
+	emailNotCreated = 0
+)
+
+var (
+	uDigestV2Ref [2]digest.RefDigestV2
+)
 
 func TestMain(m *testing.M) {
 	try.To(flag.Set("logtostderr", "true"))
@@ -153,6 +160,7 @@ func TestNewUser(t *testing.T) {
 		try.To(PutUser(newU))
 		u = newU
 		root = newU
+		uDigestV2Ref[i] = newU.Identity().Digest().Digest().Build()
 	}
 	var lastAlias string
 	for i := range 10 {
@@ -265,6 +273,16 @@ func TestGetExistingUser(t *testing.T) {
 
 	_, err := GetExistingUser(emailNotCreated)
 	assert.Error(err)
+}
+
+func TestGetExistingUserByDigestV2(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	for i := range 2 {
+		dig := uDigestV2Ref[i].DigestV2().String()
+		u := TryGetExistingUserByDigestV2(dig)
+		assert.NotZero(u.ID)
+	}
 }
 
 func TestRemoveUser(t *testing.T) {

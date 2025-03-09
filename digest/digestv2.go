@@ -1,9 +1,11 @@
 package digest
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/hop"
@@ -45,9 +47,22 @@ type RefRootInfo struct {
 	Hop         hop.Distance
 }
 
+func (ri RefRootInfo) Digest() DigestV2 {
+	return DigestV2(fmt.Sprintf("%v.%d", ri.PKStringIDK, ri.Hop))
+}
+
 type RefDigestV2 struct {
 	PKStringIDK string
 	Roots       []RefRootInfo
+}
+
+func (rd RefDigestV2) DigestV2() DigestV2 {
+	s := rd.PKStringIDK + KeySplit
+	for i, v := range rd.Roots {
+		s += x.Whom(i > 0, KeySplit, "")
+		s += v.Digest().String()
+	}
+	return DigestV2(s)
 }
 
 func (rd RefDigestV2) PKDigest(index int) RefRootInfo {
