@@ -449,26 +449,6 @@ func ReadParties(parties ...string) (s, r enclave.User) {
 	return SenderUser, RcvrUser
 }
 
-func ReadPartiesOld(parties ...string) (s, r enclave.User) { // TODO: return slice
-	assert.SNotEmpty(parties)
-
-	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-	SenderUser = enclave.TryGetExistingUserByType(
-		cmds.Flags().Type.String(),
-		parties[sender],
-	)
-	if len(parties) > 1 {
-		RcvrUser = enclave.TryGetExistingUserByType(
-			cmds.Flags().Type2.String(),
-			parties[rcvr],
-		)
-	}
-	enclave.TryClose()
-	codec := cmds.Flags().Codec
-	Ec = nconn.New(codec).EncodedConn
-	return SenderUser, RcvrUser
-}
-
 func ListPW(role bool) (pconn []*pw.Connection) {
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 	pconn = try.To1(enclave.GetAllPW(role))
