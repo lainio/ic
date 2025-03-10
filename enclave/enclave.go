@@ -394,12 +394,15 @@ func Equal(t, d string, rhs User) (ok bool, u User) {
 			u = TryGetExistingUserByIDK(rhs.KeyInfo.Public)
 		}
 	case "digestv2":
+		glog.V(1).Infoln("warning: WoT search")
 		if rhs.Identity().Initialized() {
 			rhDigest := rhs.Identity().Digest().Digest().Build()
 			lhDigest := digest.DigestV2(d)
 			isWot := lhDigest.Build().WoT(rhDigest)
 			if isWot {
-				u = TryGetExistingUserByDigestV2(d)
+				glog.V(5).Infoln("WoT..")
+				u, ok = TryGetUserByDigestV2(d)
+				glog.V(5).Infoln(".. found: ok")
 			}
 		}
 	case "digest":
@@ -481,7 +484,7 @@ func GetUserByDigestV2(d string) (u User, exist bool, err error) {
 		if u.Identity().Initialized() {
 			userDigest := u.Identity().Digest().Digest().Build()
 			dataDigest := digest.DigestV2(d).Build()
-			if userDigest.WoT(dataDigest) {
+			if userDigest.EqualOwner(dataDigest) {
 				return GetUser(u.ID)
 			}
 		}
