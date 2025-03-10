@@ -94,7 +94,7 @@ func printChains(identity *identity.Identity) {
 			continue
 		} else {
 			pkStr := ic.FirstBlock().Invitee.PKString()
-			fmt.Println("- Invitee Root PK", pkStr)
+			fmt.Println("- Invitee Root PK", pkStr, ic.Len()-1)
 		}
 	}
 }
