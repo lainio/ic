@@ -77,3 +77,7 @@ func (d Digest) Equal(rhs Digest) bool {
 	dataRhs := rhs.Bytes()
 	return bytes.Equal(data, dataRhs)
 }
+
+func (d Digest) EmptyRoot() bool {
+	return len(d.Roots) == 1 && d.IDK.Equal(d.Roots[0].IDK)
+}

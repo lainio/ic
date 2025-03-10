@@ -1,7 +1,6 @@
 package digest
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/lainio/err2/assert"
@@ -10,7 +9,8 @@ import (
 
 var (
 	hand = key.NewHand()
-	d    = Digest{
+
+	testDigest = Digest{
 		IDK: hand.Public,
 		Roots: []RootInfo{
 			{
@@ -34,13 +34,15 @@ func TestNewFromString(t *testing.T) {
 		args   args
 		wantDi Digest
 	}{
-		{"simple", args{d.Base58()}, d},
+		{"simple", args{testDigest.Base58()}, testDigest},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if gotDi := NewFromString(tt.args.s); !reflect.DeepEqual(gotDi, tt.wantDi) {
-				t.Errorf("NewFromString() = %v, want %v", gotDi, tt.wantDi)
-			}
+			defer assert.PushTester(t)()
+
+			gotDi := NewFromString(tt.args.s)
+			assert.DeepEqual(gotDi, testDigest)
+			assert.ThatNot(gotDi.EmptyRoot())
 		})
 	}
 }
@@ -48,7 +50,7 @@ func TestNewFromString(t *testing.T) {
 func TestDigestDigest(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	digest := d.Digest()
+	digest := testDigest.Digest()
 	digestStr := string(digest)
 	assert.Len(digestStr, key.PKLen+1+key.PKLen+2+1+key.PKLen+2)
 
@@ -70,10 +72,19 @@ func TestDigestV2(t *testing.T) {
 	dig1 := "Y8BuDe2owZEoJL:TJtNVsFBQBynnV.1:TtAH5vqJCt92CQ.1:UvgVsZVianpbQP.1"
 	dig2 := "XxQiDfBTbtHCWe:UvgVsZVianpbQP.1:VcbUYNGZYvBPn5.1:XtfNVtLjehn5cu.1"
 	dig3 := "Ywxfen9vBSycH3:UMbgKVuafnPZoj.1"
+	dig4 := "UZBViGmKMehipP:UZBViGmKMehipP.0"
 
 	digest1 := DigestV2(dig1).Build()
 	digest2 := DigestV2(dig2).Build()
 	digest3 := DigestV2(dig3).Build()
+	digest4 := DigestV2(dig4).Build()
+
+	isEmptyRoot := digest4.EmptyRoot()
+	assert.That(isEmptyRoot)
+	isEmptyRoot = digest1.EmptyRoot()
+	assert.ThatNot(isEmptyRoot)
+	isEmptyRoot = digest3.EmptyRoot()
+	assert.ThatNot(isEmptyRoot)
 
 	isWot := digest1.WoT(digest3)
 	assert.ThatNot(isWot, "not common root")

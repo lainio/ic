@@ -85,3 +85,7 @@ func (rd RefDigestV2) WoT(rhs RefDigestV2) (yes bool) {
 
 	return
 }
+
+func (rd RefDigestV2) EmptyRoot() bool {
+	return len(rd.Roots) == 1 && rd.PKStringIDK == rd.Roots[0].PKStringIDK
+}
