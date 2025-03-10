@@ -9,6 +9,7 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	cmd "github.com/lainio/ic/cmds"
+	"github.com/lainio/ic/enclave"
 	"github.com/lainio/ic/hop"
 	"github.com/spf13/cobra"
 )
@@ -43,7 +44,11 @@ var idBelongCmd = &cobra.Command{
 		wot := rcvrUser.Identity().WebOfTrust(*idFromDig)
 		assert.That(wot != nil && wot.Hops != hop.NotConnected,
 			"identities don't share trust domains")
+		enclave.TryInitSealedBox(protocol.CmdData.WalletFilename, "",
+			protocol.CmdData.MasterKey)
+		inviter := enclave.TryGetExistingUserByIDK(wot.CommonInviterPubKey)
 		fmt.Println(wot)
+		printInfoln(inviter, false)
 
 		return nil
 	},
