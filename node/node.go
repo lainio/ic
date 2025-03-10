@@ -314,7 +314,9 @@ func (n Node) WebOfTrustInfo(their Node) *WoTInfo {
 }
 
 func (n Node) Digest() *digest.Digest {
-	assert.SNotEmpty(n.InviteeChains, "cannot count Digest without ICs")
+	//	assert.SNotEmpty(n.InviteeChains, "cannot count Digest without ICs")
+	//	assert.ThatNot(n.IsRoot() && n.ICCount() == 1,
+	//		"empty root cannot have digest")
 
 	roots := make([]digest.RootInfo, 0, n.ICCount())
 	for _, c := range n.InviteeChains {
@@ -416,7 +418,7 @@ var (
 //
 // NOTE that you cannot trust the Node who's integrity is violated!
 func (n Node) CheckIntegrity() error {
-	if n.ICCount() == 0 { // empty non Root Node is fine.
+	if !n.Initialized() { // empty non Root Node is fine.
 		return nil
 	}
 
@@ -433,6 +435,10 @@ func (n Node) CheckIntegrity() error {
 		}
 	}
 	return nil
+}
+
+func (n Node) Initialized() bool {
+	return n.ICCount() > 0
 }
 
 // ICCount tells how many ICs we belong.
@@ -485,8 +491,8 @@ func (n Node) getBackupKeyHandle(keyIndex int) key.Handle {
 
 // GetIDK return Node's current IDK as [key.Info].
 func (n Node) GetIDK() key.Info {
-	assert.SNotEmpty(n.InviteeChains)
-	assert.SNotEmpty(n.InviteeChains[0].Blocks)
+	assert.SNotEmpty(n.InviteeChains, "IC cannot be empty")
+	assert.SNotEmpty(n.InviteeChains[0].Blocks, "First Block cannot be empty")
 
 	return n.InviteeChains[0].LastBlock().Invitee
 }

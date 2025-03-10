@@ -24,6 +24,7 @@ const (
 
 var (
 	uDigestV2Ref [2]digest.RefDigestV2
+	lastAlias    string
 )
 
 func TestMain(m *testing.M) {
@@ -160,9 +161,7 @@ func TestNewUser(t *testing.T) {
 		try.To(PutUser(newU))
 		u = newU
 		root = newU
-		uDigestV2Ref[i] = newU.Identity().Digest().Digest().Build()
 	}
-	var lastAlias string
 	for i := range 10 {
 		alias := fmt.Sprintf("alias_%v", i)
 		lastAlias = alias
@@ -182,6 +181,8 @@ func TestNewUser(t *testing.T) {
 	try.To(PutUser(u))
 	assert.Equal(u.Identity().ICCount(), 1)
 	assert.Equal(u.Alias, lastAlias)
+	uDigestV2Ref[0] = invit.Digest().Digest().Build()
+	uDigestV2Ref[1] = invit.Digest().Digest().Build()
 
 	u2, found := try.To2(GetUser(u.ID))
 	assert.Equal(u.ID, u2.ID)
@@ -224,13 +225,6 @@ func TestGetUser(t *testing.T) {
 	assert.Equal(u3.ID, u2.ID)
 	assert.DeepEqual(u3.KeyInfo, u2.KeyInfo)
 
-	digest := u2.Identity().Digest().Base58()
-	u4, found4 := try.To2(GetUserByDigest(digest))
-	assert.That(found4)
-	assert.NotNil(u4.identity)
-	assert.Equal(u4.ID, u2.ID)
-	assert.DeepEqual(u4.KeyInfo, u2.KeyInfo)
-
 	alias := u2.Alias
 	assert.NotEmpty(alias)
 	assert.Equal(alias, "root_alias_1") // see the alias name in TestNewUser
@@ -253,6 +247,14 @@ func TestGetUser(t *testing.T) {
 	_, found = try.To2(GetUser(emailNotCreated))
 	assert.ThatNot(found)
 	assert.NotNil(u2.identity)
+
+	uAlias := TryGetExistingUserByAlias(lastAlias)
+	digest := uAlias.Identity().Digest().Base58()
+	u4, found4 := try.To2(GetUserByDigest(digest))
+	assert.That(found4)
+	assert.NotNil(u4.identity)
+	assert.Equal(u4.ID, uAlias.ID)
+	assert.DeepEqual(u4.KeyInfo, uAlias.KeyInfo)
 }
 
 func TestGetExistingUser(t *testing.T) {

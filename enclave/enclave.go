@@ -380,6 +380,7 @@ func GetUserByType(t, d string) (u User, exist bool, err error) {
 
 func Equal(t, d string, rhs User) (ok bool, u User) {
 	// TODO: how to use these types "db", "idk", etc. as same const ArgType?
+	// mv ArgType to its own pkg
 	glog.V(3).Infoln("t:", t, "d:", d, "rhs-user ID:", rhs.ID)
 	switch t {
 	case "db":
@@ -393,11 +394,13 @@ func Equal(t, d string, rhs User) (ok bool, u User) {
 			u = TryGetExistingUserByIDK(rhs.KeyInfo.Public)
 		}
 	case "digestv2":
-		rhDigest := rhs.Identity().Digest().Digest().Build()
-		lhDigest := digest.DigestV2(d)
-		isWot := lhDigest.Build().WoT(rhDigest)
-		if isWot {
-			u = TryGetExistingUserByDigestV2(d)
+		if rhs.Identity().Initialized() {
+			rhDigest := rhs.Identity().Digest().Digest().Build()
+			lhDigest := digest.DigestV2(d)
+			isWot := lhDigest.Build().WoT(rhDigest)
+			if isWot {
+				u = TryGetExistingUserByDigestV2(d)
+			}
 		}
 	case "digest":
 		ok = rhs.Identity().Digest().Base58() == d
@@ -475,10 +478,12 @@ func GetUserByDigestV2(d string) (u User, exist bool, err error) {
 
 	users := TryGetAllUsers()
 	for _, u := range users {
-		userDigest := u.Identity().Digest().Digest().Build()
-		dataDigest := digest.DigestV2(d).Build()
-		if userDigest.WoT(dataDigest) {
-			return GetUser(u.ID)
+		if u.Identity().Initialized() {
+			userDigest := u.Identity().Digest().Digest().Build()
+			dataDigest := digest.DigestV2(d).Build()
+			if userDigest.WoT(dataDigest) {
+				return GetUser(u.ID)
+			}
 		}
 	}
 
@@ -510,7 +515,7 @@ func GetUserByDigest(d string) (u User, exist bool, err error) {
 
 	users := TryGetAllUsers()
 	for _, u := range users {
-		if u.Identity().Digest().Base58() == d {
+		if u.Identity().Initialized() && u.Identity().Digest().Base58() == d {
 			return GetUser(u.ID)
 		}
 	}
