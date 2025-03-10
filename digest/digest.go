@@ -81,3 +81,7 @@ func (d Digest) Equal(rhs Digest) bool {
 func (d Digest) EmptyRoot() bool {
 	return len(d.Roots) == 1 && d.IDK.Equal(d.Roots[0].IDK)
 }
+
+func (d Digest) EqualOwner(rhs Digest) bool {
+	return d.IDK.Equal(rhs.IDK)
+}

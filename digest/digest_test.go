@@ -43,6 +43,8 @@ func TestNewFromString(t *testing.T) {
 			gotDi := NewFromString(tt.args.s)
 			assert.DeepEqual(gotDi, testDigest)
 			assert.ThatNot(gotDi.EmptyRoot())
+
+			assert.That(gotDi.EqualOwner(testDigest))
 		})
 	}
 }
@@ -94,4 +96,7 @@ func TestDigestV2(t *testing.T) {
 
 	isWot = digest1.WoT(digest1)
 	assert.That(isWot)
+
+	assert.That(digest1.EqualOwner(digest1))
+	assert.ThatNot(digest1.EqualOwner(digest2))
 }

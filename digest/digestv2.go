@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/findy-network/findy-common-go/x"
+	"github.com/golang/glog"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/hop"
@@ -72,12 +73,14 @@ func (rd RefDigestV2) PKDigest(index int) RefRootInfo {
 
 func (rd RefDigestV2) WoT(rhs RefDigestV2) (yes bool) {
 	if rd.PKStringIDK == rhs.PKStringIDK { // we are the same one
+		glog.V(10).Infoln("wot: same IDK")
 		return true
 	}
 
 	for _, v := range rd.Roots {
 		for _, vrhs := range rhs.Roots {
 			if v.PKStringIDK == vrhs.PKStringIDK {
+				glog.V(10).Infoln("wot match root:", v.PKStringIDK)
 				return true
 			}
 		}
@@ -88,4 +91,8 @@ func (rd RefDigestV2) WoT(rhs RefDigestV2) (yes bool) {
 
 func (rd RefDigestV2) EmptyRoot() bool {
 	return len(rd.Roots) == 1 && rd.PKStringIDK == rd.Roots[0].PKStringIDK
+}
+
+func (rd RefDigestV2) EqualOwner(rhs RefDigestV2) bool {
+	return rd.PKStringIDK == rhs.PKStringIDK
 }
