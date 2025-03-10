@@ -433,9 +433,9 @@ func ReadParties(parties ...string) (s, r enclave.User) {
 			dv2 := digest.DigestV2(parties[rcvr])
 			idkPrefix := dv2.PKStringIDK()
 			glog.V(3).Infoln("idkPrefix:", idkPrefix)
-			rus := enclave.TryGetAllUsersByIDKPrefix(idkPrefix)
-			assert.SLen(rus, 1, "finding %v", idkPrefix)
-			RcvrUser = rus[0]
+			rhUser := enclave.TryGetAllUsersByIDKPrefix(idkPrefix)
+			assert.SLen(rhUser, 1, "finding %v", idkPrefix)
+			RcvrUser = rhUser[0]
 		} else {
 			RcvrUser = enclave.TryGetExistingUserByType(
 				cmds.Flags().Type2.String(),
