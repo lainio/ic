@@ -10,6 +10,7 @@ import (
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	cmd "github.com/lainio/ic/cmds"
 	"github.com/lainio/ic/enclave"
 	"github.com/spf13/cobra"
 )
@@ -38,6 +39,9 @@ var idFindCmd = &cobra.Command{
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer err2.Handle(&err, nil)
 
+		if cmd.DryRun() {
+			return cmd.PrintDefaultDryRun()
+		}
 		assert.SLonger(args, 0, "user ID: argument missing")
 
 		enclave.TryInitSealedBox(

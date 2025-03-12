@@ -19,7 +19,7 @@ var idUsersDoc = `The users command lists all users from our enclave.`
 var idUsersExample = `  # search all users:
     tdc id users
   # search trust domains only:
-    tdc id users --only-domains
+    tdc id users --domains
   # search NON trust domains only:
     tdc id users --non-domains
 `
@@ -60,7 +60,7 @@ func init() {
 	defer err2.Catch()
 
 	flags := idUsersCmd.PersistentFlags()
-	flags.BoolVar(&idUsersCmdData.DomainsOnly, "only-domains", false,
+	flags.BoolVar(&idUsersCmdData.DomainsOnly, "domains", false,
 		"lists only users that are trust domains")
 	flags.BoolVar(&idUsersCmdData.NonDomainsOnly, "non-domains", false,
 		"lists only users that are NOT trust domains")

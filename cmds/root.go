@@ -132,6 +132,12 @@ func init() {
 	_ = myHelp
 }
 
+func PrintDefaultDryRun() error {
+	fmt.Printf("--type=%v --type2=%v\n",
+		Flags().Type, Flags().Type2)
+	return nil
+}
+
 func myHelp(cmd *cobra.Command, args []string) {
 	// Check if a specific help flag was provided
 	showGlobalFlags := len(args) > 0 && args[0] == "global-flags"

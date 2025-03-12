@@ -38,6 +38,11 @@ var idBelongCmd = &cobra.Command{
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
+		cmd.Flags().Type2 = protocol.IdInviteCmdData.Type2 // override!
+		if cmd.DryRun() {
+			fmt.Println("type2:", protocol.IdInviteCmdData.Type2)
+			return cmd.PrintDefaultDryRun()
+		}
 		senderUser, rcvrUser := protocol.ReadParties(args...)
 
 		idFromDig := senderUser.Identity()
@@ -59,11 +64,15 @@ func init() {
 
 	flags := idBelongCmd.PersistentFlags()
 	flags.Uint32Var(&protocol.IdInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
-		cmd.FlagInfo("current user ID", "", envs["rcvr-user-id"]))
+		cmd.FlagInfo("TODO: rm! current user ID", "", envs["rcvr-user-id"]))
 	try.To(idBelongCmd.MarkPersistentFlagRequired("rcvr-user-id"))
 
+	try.To(protocol.IdInviteCmdData.Type2.Set(string(cmd.DigestV2Type)))
+	flags.VarP(&protocol.IdInviteCmdData.Type2, "type2", "T",
+		"TODO")
+
 	flags.Uint32Var(&protocol.IdInviteCmdData.SenderUserID, "sender-user-id", 0,
-		cmd.FlagInfo("current user ID", "", envs["sender-user-id"]))
+		cmd.FlagInfo("TODO: rm! current user ID", "", envs["sender-user-id"]))
 	try.To(idBelongCmd.MarkPersistentFlagRequired("sender-user-id"))
 
 	idCmd.AddCommand(idBelongCmd)

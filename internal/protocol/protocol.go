@@ -591,6 +591,7 @@ var IdInviteCmdData = struct {
 	SenderUserID uint32
 	RcvrUserID   uint32
 	PinCode      int
+	Type2        cmds.ArgType
 }{}
 
 var CmdData = struct {
