@@ -2,7 +2,6 @@ package pw
 
 import (
 	"fmt"
-	"math/rand/v2"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -57,13 +56,6 @@ func init() {
 	flags := pwListCmd.PersistentFlags()
 	flags.BoolVarP(&isAddresser, "addresser", "a", false,
 		"handshake starts as addresser other side is addressee")
-
-	flags.IntVar(
-		&protocol.IdInviteCmdData.PinCode,
-		"pin-code",
-		rand.Int(), //nolint:gosec // UI simulation only!
-		"secret PIN code for handshakes, etc.",
-	)
 
 	pwCmd.AddCommand(pwListCmd)
 }
