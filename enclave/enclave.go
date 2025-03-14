@@ -132,6 +132,7 @@ func PutPW(isAddresser bool, pw *pw.Connection) (err error) {
 
 func GetPW(
 	isAddresser bool,
+	dbid uint32,
 	idk key.Public,
 ) (
 	conn *pw.Connection,
@@ -140,13 +141,14 @@ func GetPW(
 ) {
 	defer err2.Handle(&err)
 
+	d := pw.Concat(dbid, idk)
 	value := &db.Data{
 		Write: decrypt,
 	}
 	exist = try.To1(db.GetKeyValueFromBucket(
 		buckets[x.Whom(isAddresser, pwBucketSender, pwBucketReceiver)],
 		&db.Data{
-			Data: idk,
+			Data: d,
 			Read: hash,
 		},
 		value,
@@ -189,15 +191,23 @@ func PutSendersPW(pw *pw.Connection) (err error) {
 	return nil
 }
 
-func GetReceiversPW(idk key.Public) (conn *pw.Connection, exist bool, err error) {
+func GetReceiversPW(
+	dbid uint32,
+	idk key.Public,
+) (
+	conn *pw.Connection,
+	exist bool,
+	err error,
+) {
 	defer err2.Handle(&err)
 
+	d := pw.Concat(dbid, idk)
 	value := &db.Data{
 		Write: decrypt,
 	}
 	exist = try.To1(db.GetKeyValueFromBucket(buckets[pwBucketReceiver],
 		&db.Data{
-			Data: idk,
+			Data: d,
 			Read: hash,
 		},
 		value,
@@ -206,15 +216,23 @@ func GetReceiversPW(idk key.Public) (conn *pw.Connection, exist bool, err error)
 	return
 }
 
-func GetSendersPW(idk key.Public) (conn *pw.Connection, exist bool, err error) {
+func GetSendersPW(
+	dbid uint32,
+	idk key.Public,
+) (
+	conn *pw.Connection,
+	exist bool,
+	err error,
+) {
 	defer err2.Handle(&err)
 
+	d := pw.Concat(dbid, idk)
 	value := &db.Data{
 		Write: decrypt,
 	}
 	exist = try.To1(db.GetKeyValueFromBucket(buckets[pwBucketSender],
 		&db.Data{
-			Data: idk,
+			Data: d,
 			Read: hash,
 		},
 		value,

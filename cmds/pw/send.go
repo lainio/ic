@@ -29,6 +29,7 @@ format used in arguments. Please see the examples for more information.`
 
 var pwSendCmd = &cobra.Command{
 	Use:     "send",
+	Aliases: []string{"find"},
 	Short:   "todo: sends pw messages if pw exists",
 	Long:    pwSendDoc,
 	Example: pwSendExample,

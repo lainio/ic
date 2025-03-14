@@ -59,3 +59,14 @@ func TestNewFromData(t *testing.T) {
 		assert.DeepEqual(clone, a1)
 	}
 }
+
+func TestConcat(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	h1 := key.NewHand()
+	idk := h1.Public
+	var idbd uint32 = 2
+	con := Concat(idbd, idk)
+	assert.SLonger(con, len(idk))
+	assert.SLen(con, len(idk)+4)
+}

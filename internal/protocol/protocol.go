@@ -481,14 +481,18 @@ func SendPW(addresser bool, parties ...string) (s, r *pw.Connection) {
 	}
 	// default is that we aren't addresser in role
 	ourIDK := SenderUser.Identity().GetIDK().Public
+	ourID := SenderUser.ID
 	theirIDK := RcvrUser.Identity().GetIDK().Public
-	if addresser { // PW are indexed from user PoW, that's why..
+	theirID := RcvrUser.ID
+	if addresser { // PW are indexed from user PoV, that's why..
 		ourIDK = RcvrUser.Identity().GetIDK().Public
+		ourID = RcvrUser.ID
 		theirIDK = SenderUser.Identity().GetIDK().Public
+		theirID = SenderUser.ID
 	}
-	sendPW, sfound := try.To2(enclave.GetSendersPW(ourIDK))
+	sendPW, sfound := try.To2(enclave.GetSendersPW(ourID, ourIDK))
 	assert.That(sfound, "not found: %s", ourIDK.PKString())
-	rcvrPW, rfound := try.To2(enclave.GetReceiversPW(theirIDK))
+	rcvrPW, rfound := try.To2(enclave.GetReceiversPW(theirID, theirIDK))
 	assert.That(rfound, "not found: %s", theirIDK.PKString())
 
 	enclave.TryClose()
@@ -497,16 +501,16 @@ func SendPW(addresser bool, parties ...string) (s, r *pw.Connection) {
 	return sendPW, rcvrPW
 }
 
-func ViewPW(IDK key.Public) (pconn *pw.Connection) {
+func ViewPW(DBID uint32, IDK key.Public) (pconn *pw.Connection) {
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
 	var found bool
-	pconn, found = try.To2(enclave.GetSendersPW(IDK))
+	pconn, found = try.To2(enclave.GetSendersPW(DBID, IDK))
 	if found {
 		glog.V(3).Infoln("found from Sender-bucket",
 			pconn.OurIDK().PKString())
 		return
 	}
-	pconn, found = try.To2(enclave.GetReceiversPW(IDK))
+	pconn, found = try.To2(enclave.GetReceiversPW(DBID, IDK))
 	if found {
 		glog.V(3).Infoln("found from Receiver-bucket",
 			pconn.OurIDK().PKString())

@@ -65,6 +65,8 @@ func TestInitSealedBox(t *testing.T) {
 func TestPutGetPW(t *testing.T) {
 	defer assert.PushTester(t)()
 
+	var idbd uint32 = 2
+
 	h1 := key.NewHand()
 	h2 := key.NewHand()
 	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
@@ -72,18 +74,19 @@ func TestPutGetPW(t *testing.T) {
 
 	// First we are addresser (initiator)
 	isAddresser := true // Important!! We are testing addresser end here
-	conn1 := pw.New(1, isAddresser, h1Endp, h2Endp)
+	conn1 := pw.New(idbd, isAddresser, h1Endp, h2Endp)
 	try.To(PutPW(isAddresser, conn1))
-	dbConn1, found := try.To2(GetPW(isAddresser, conn1.Key()))
+	dbConn1, found := try.To2(GetPW(isAddresser, idbd, conn1.TheirIDK()))
 	assert.That(found)
 	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
 
 	// Second we are addressee (joiner)
+	idbd--
 	isAddresser = false // Important!! We are testing addressee end here
-	conn1 = pw.New(1, isAddresser, h1Endp, h2Endp)
+	conn1 = pw.New(idbd, isAddresser, h1Endp, h2Endp)
 	try.To(PutPW(isAddresser, conn1))
-	dbConn1, found = try.To2(GetPW(isAddresser, conn1.Key()))
+	dbConn1, found = try.To2(GetPW(isAddresser, idbd, conn1.TheirIDK()))
 	assert.That(found)
 	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
@@ -108,7 +111,7 @@ func TestPutSendersPW(t *testing.T) {
 
 	conn1 := pw.New(1, weAreAddresser, h1Endp, h2Endp)
 	try.To(PutSendersPW(conn1))
-	dbConn1, found := try.To2(GetSendersPW(conn1.Key()))
+	dbConn1, found := try.To2(GetSendersPW(1, conn1.TheirIDK()))
 	assert.That(found)
 	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
@@ -125,12 +128,12 @@ func TestPutReceiversPW(t *testing.T) {
 
 	conn1 := pw.New(1, weAreAddresser, h1Endp, h2Endp)
 	try.To(PutReceiversPW(conn1))
-	dbConn1, found := try.To2(GetReceiversPW(conn1.Key()))
+	dbConn1, found := try.To2(GetReceiversPW(1, conn1.TheirIDK()))
 	assert.That(found)
 	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
 
-	dbConn1, found = try.To2(GetReceiversPW(conn1.OurIDK()))
+	dbConn1, found = try.To2(GetReceiversPW(1, conn1.OurIDK()))
 	assert.ThatNot(found)
 }
 

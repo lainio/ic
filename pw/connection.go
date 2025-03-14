@@ -48,7 +48,11 @@ type ConnEndpoint struct {
 // a DB ID like with the Nodes.
 // TODO: work in progress
 func (c *Connection) Key() []byte {
-	return slices.Concat(uint32ToBytes(c.DBID), c.TheirIDK())
+	return Concat(c.DBID, c.TheirIDK())
+}
+
+func Concat(DBID uint32, IDK key.Public) []byte {
+	return slices.Concat(uint32ToBytes(DBID), IDK)
 }
 
 func uint32ToBytes(v uint32) []byte {

@@ -38,7 +38,7 @@ var pwViewCmd = &cobra.Command{
 		defer err2.Handle(&err, nil)
 
 		user, _ := protocol.ReadParties(args...)
-		pconn := protocol.ViewPW(user.KeyInfo.Public)
+		pconn := protocol.ViewPW(user.ID, user.KeyInfo.Public)
 		assert.NotNil(pconn, "pairwise doesn't exist")
 		fmt.Println("pairwise connection:", pconn.String())
 
