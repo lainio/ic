@@ -52,7 +52,12 @@ func savePW(isAddresser bool) (token string) {
 		Info:     RcvrUser.KeyInfo,
 		Endpoint: "TODO",
 	}
-	pwConn := pw.New(isAddresser, senderEndp, rcvrEndp)
+
+	DBID := x.Whom(isAddresser,
+		IdInviteCmdData.RcvrUserID,
+		IdInviteCmdData.SenderUserID,
+	)
+	pwConn := pw.New(DBID, isAddresser, senderEndp, rcvrEndp)
 	token = pwConn.TheirIDK().PKString()
 
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)

@@ -17,7 +17,7 @@ func TestNew(t *testing.T) {
 		h1Endp := ConnEndpoint{*h1.Info, "h1_endp"}
 		h2Endp := ConnEndpoint{*h2.Info, "h2_endp"}
 
-		a1 := New(weAreAddresser, h1Endp, h2Endp)
+		a1 := New(1, weAreAddresser, h1Endp, h2Endp)
 		assert.NotNil(a1)
 		assert.That(a1.IsAddresser)
 		assert.Equal(a1.Addresser.String(), h1.String())
@@ -27,7 +27,7 @@ func TestNew(t *testing.T) {
 		assert.That(a1.OurIDK().Equal(a1.Addresser.Public))
 
 		// As can be seen we are NOT addresser
-		a2 := New(!weAreAddresser, h1Endp, h2Endp)
+		a2 := New(1, !weAreAddresser, h1Endp, h2Endp)
 		assert.NotNil(a2)
 		assert.ThatNot(a2.IsAddresser)
 
@@ -50,7 +50,7 @@ func TestNewFromData(t *testing.T) {
 		weAreAddresser := true
 		h1Endp := ConnEndpoint{*h1.Info, "h1_endp"}
 		h2Endp := ConnEndpoint{*h2.Info, "h2_endp"}
-		a1 := New(weAreAddresser, h1Endp, h2Endp)
+		a1 := New(1, weAreAddresser, h1Endp, h2Endp)
 		assert.NotNil(a1)
 
 		d := a1.Data()

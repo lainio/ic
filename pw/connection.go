@@ -2,8 +2,10 @@ package pw
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"slices"
 
 	"github.com/findy-network/findy-common-go/x"
 	"github.com/lainio/err2/try"
@@ -11,10 +13,12 @@ import (
 )
 
 // Connection is compact data structure to save pw information. It's more
-// compact that [chain.Block], which is one of the reasons we are using it
+// compact than [chain.Block], which is one of the reasons we are using it
 // instead of the Block. It's probably true that Identities and Nodes have vast
 // amount of Connections to others. So, it's important that we keep them small.
 type Connection struct {
+	DBID uint32 // ref id to User in DB
+
 	// when we are using this, we have stateless, and now we are *different*
 	// than Block structure. We are almost symmetric. How about Endpoint? By
 	// using PW specific endpoints we could have more dynamic, and the solution
@@ -37,8 +41,20 @@ type ConnEndpoint struct {
 // Key is interface method for key/value DB. Our db indexing use cases are 99%
 // that we need to find out if the other end is already in our db, and that's
 // why we use [IsAddressers] field to select the correct IDK.
+//
+// TODO: HUGE Bug we can have only very very limited amount of pairwises with
+// this key.
+// TODO: How to solve this? Maybe this can be a sub-key of something? Or we need
+// a DB ID like with the Nodes.
+// TODO: work in progress
 func (c *Connection) Key() []byte {
-	return c.TheirIDK()
+	return slices.Concat(uint32ToBytes(c.DBID), c.TheirIDK())
+}
+
+func uint32ToBytes(v uint32) []byte {
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, v)
+	return b
 }
 
 func (c *Connection) TheirIDK() key.Public {
@@ -61,8 +77,8 @@ func (c *Connection) String() string {
 	if c.IsAddresser {
 		idk = c.Addressee.PKString()
 	}
-	return fmt.Sprintf("%s, Ref IDK: %v, A-er: %v, A-ee: %v",
-		start, idk, c.Addresser.PKString(), c.Addressee.PKString())
+	return fmt.Sprintf("%s, Ref IDK: %v, A-er: %v, A-ee: %v, DBID: %d",
+		start, idk, c.Addresser.PKString(), c.Addressee.PKString(), c.DBID)
 }
 
 func (c *Connection) Data() []byte {
@@ -72,8 +88,10 @@ func (c *Connection) Data() []byte {
 	return buf.Bytes()
 }
 
-func New(isAddresser bool, addresser, addressee ConnEndpoint) *Connection {
+func New(DBID uint32, isAddresser bool, addresser, addressee ConnEndpoint) *Connection {
 	return &Connection{
+		DBID: DBID,
+
 		IsAddresser: isAddresser,
 		Addresser:   addresser,
 		Addressee:   addressee,

@@ -72,7 +72,7 @@ func TestPutGetPW(t *testing.T) {
 
 	// First we are addresser (initiator)
 	isAddresser := true // Important!! We are testing addresser end here
-	conn1 := pw.New(isAddresser, h1Endp, h2Endp)
+	conn1 := pw.New(1, isAddresser, h1Endp, h2Endp)
 	try.To(PutPW(isAddresser, conn1))
 	dbConn1, found := try.To2(GetPW(isAddresser, conn1.Key()))
 	assert.That(found)
@@ -81,7 +81,7 @@ func TestPutGetPW(t *testing.T) {
 
 	// Second we are addressee (joiner)
 	isAddresser = false // Important!! We are testing addressee end here
-	conn1 = pw.New(isAddresser, h1Endp, h2Endp)
+	conn1 = pw.New(1, isAddresser, h1Endp, h2Endp)
 	try.To(PutPW(isAddresser, conn1))
 	dbConn1, found = try.To2(GetPW(isAddresser, conn1.Key()))
 	assert.That(found)
@@ -106,7 +106,7 @@ func TestPutSendersPW(t *testing.T) {
 	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
 	h2Endp := pw.ConnEndpoint{Info: *h2.Info, Endpoint: "h2_endp"}
 
-	conn1 := pw.New(weAreAddresser, h1Endp, h2Endp)
+	conn1 := pw.New(1, weAreAddresser, h1Endp, h2Endp)
 	try.To(PutSendersPW(conn1))
 	dbConn1, found := try.To2(GetSendersPW(conn1.Key()))
 	assert.That(found)
@@ -123,7 +123,7 @@ func TestPutReceiversPW(t *testing.T) {
 	h1Endp := pw.ConnEndpoint{Info: *h1.Info, Endpoint: "h1_endp"}
 	h2Endp := pw.ConnEndpoint{Info: *h2.Info, Endpoint: "h2_endp"}
 
-	conn1 := pw.New(weAreAddresser, h1Endp, h2Endp)
+	conn1 := pw.New(1, weAreAddresser, h1Endp, h2Endp)
 	try.To(PutReceiversPW(conn1))
 	dbConn1, found := try.To2(GetReceiversPW(conn1.Key()))
 	assert.That(found)
