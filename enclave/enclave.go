@@ -241,7 +241,7 @@ func GetSendersPW(
 	return
 }
 
-func GetAllPW(isAddresser bool) (pconns []*pw.Connection, err error) {
+func GetAllPW(dbid uint32, isAddresser bool) (pconns []*pw.Connection, err error) {
 	defer err2.Handle(&err)
 
 	conns := try.To1(db.GetAllValuesFromBucket(
@@ -252,9 +252,12 @@ func GetAllPW(isAddresser bool) (pconns []*pw.Connection, err error) {
 		return
 	}
 
-	pconns = make([]*pw.Connection, len(conns))
-	for i, v := range conns {
-		pconns[i] = pw.NewFromData(v)
+	pconns = make([]*pw.Connection, 0, len(conns))
+	for _, v := range conns {
+		u := pw.NewFromData(v)
+		if dbid == 0 || u.DBID == dbid {
+			pconns = append(pconns, u)
+		}
 	}
 
 	return

@@ -2,9 +2,11 @@ package pw
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/protocol"
 	"github.com/spf13/cobra"
 )
@@ -34,12 +36,13 @@ var pwListCmd = &cobra.Command{
 	Short:   "list command lists pairwises",
 	Long:    pwListDoc,
 	Example: pwListExample,
-	// Args:    cobra.ExactArgs(1),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 
-		pconn := protocol.ListPW(isAddresser)
+		id := try.To1(strconv.Atoi(args[0]))
+		pconn := protocol.ListPW(uint32(id), isAddresser)
 
 		fmt.Println("pairwise connection count:", len(pconn))
 		for i, pw := range pconn {

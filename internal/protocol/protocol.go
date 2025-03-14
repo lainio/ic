@@ -454,9 +454,9 @@ func ReadParties(parties ...string) (s, r enclave.User) {
 	return SenderUser, RcvrUser
 }
 
-func ListPW(role bool) (pconn []*pw.Connection) {
+func ListPW(dbid uint32, role bool) (pconn []*pw.Connection) {
 	enclave.TryInitSealedBox(CmdData.WalletFilename, "", CmdData.MasterKey)
-	pconn = try.To1(enclave.GetAllPW(role))
+	pconn = try.To1(enclave.GetAllPW(dbid, role))
 	enclave.TryClose()
 	//	codec := cmds.Flags().Codec
 	//	Ec = nconn.New(codec).EncodedConn

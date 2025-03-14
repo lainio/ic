@@ -65,7 +65,7 @@ func TestInitSealedBox(t *testing.T) {
 func TestPutGetPW(t *testing.T) {
 	defer assert.PushTester(t)()
 
-	var idbd uint32 = 2
+	var dbidFirst uint32 = 2
 
 	h1 := key.NewHand()
 	h2 := key.NewHand()
@@ -74,28 +74,28 @@ func TestPutGetPW(t *testing.T) {
 
 	// First we are addresser (initiator)
 	isAddresser := true // Important!! We are testing addresser end here
-	conn1 := pw.New(idbd, isAddresser, h1Endp, h2Endp)
+	conn1 := pw.New(dbidFirst, isAddresser, h1Endp, h2Endp)
 	try.To(PutPW(isAddresser, conn1))
-	dbConn1, found := try.To2(GetPW(isAddresser, idbd, conn1.TheirIDK()))
+	dbConn1, found := try.To2(GetPW(isAddresser, dbidFirst, conn1.TheirIDK()))
 	assert.That(found)
 	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
 
 	// Second we are addressee (joiner)
-	idbd--
+	var dbidSecond uint32 = 1
 	isAddresser = false // Important!! We are testing addressee end here
-	conn1 = pw.New(idbd, isAddresser, h1Endp, h2Endp)
+	conn1 = pw.New(dbidSecond, isAddresser, h1Endp, h2Endp)
 	try.To(PutPW(isAddresser, conn1))
-	dbConn1, found = try.To2(GetPW(isAddresser, idbd, conn1.TheirIDK()))
+	dbConn1, found = try.To2(GetPW(isAddresser, dbidSecond, conn1.TheirIDK()))
 	assert.That(found)
 	assert.That(dbConn1.TheirIDK().Equal(conn1.TheirIDK()))
 	assert.DeepEqual(dbConn1, conn1)
 
-	pconnsWeAreAddresser := try.To1(GetAllPW(true))
+	pconnsWeAreAddresser := try.To1(GetAllPW(dbidFirst, true))
 	assert.SNotEmpty(pconnsWeAreAddresser)
 	assert.SShorter(pconnsWeAreAddresser, 2)
 
-	pconnsWeAreNOTAddresser := try.To1(GetAllPW(false))
+	pconnsWeAreNOTAddresser := try.To1(GetAllPW(dbidSecond, false))
 	assert.SNotEmpty(pconnsWeAreNOTAddresser)
 	assert.SShorter(pconnsWeAreNOTAddresser, 2)
 }
