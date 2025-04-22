@@ -442,6 +442,7 @@ func ReadParties(parties ...string) (s, r enclave.User) {
 			assert.SLen(rhUser, 1, "finding %v", idkPrefix)
 			RcvrUser = rhUser[0]
 		} else {
+			glog.V(3).Infoln("get by type2")
 			RcvrUser = enclave.TryGetExistingUserByType(
 				cmds.Flags().Type2.String(),
 				parties[rcvr],
