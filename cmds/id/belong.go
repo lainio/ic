@@ -63,17 +63,9 @@ func init() {
 	defer err2.Catch()
 
 	flags := idBelongCmd.PersistentFlags()
-	flags.Uint32Var(&protocol.IdInviteCmdData.RcvrUserID, "rcvr-user-id", 0,
-		cmd.FlagInfo("TODO: rm! current user ID", "", envs["rcvr-user-id"]))
-	try.To(idBelongCmd.MarkPersistentFlagRequired("rcvr-user-id"))
-
 	try.To(protocol.IdInviteCmdData.Type2.Set(string(cmd.DigestV2Type)))
 	flags.VarP(&protocol.IdInviteCmdData.Type2, "type2", "T",
-		"TODO")
-
-	flags.Uint32Var(&protocol.IdInviteCmdData.SenderUserID, "sender-user-id", 0,
-		cmd.FlagInfo("TODO: rm! current user ID", "", envs["sender-user-id"]))
-	try.To(idBelongCmd.MarkPersistentFlagRequired("sender-user-id"))
+		"Can be overridden at the belong cmd level")
 
 	idCmd.AddCommand(idBelongCmd)
 }
