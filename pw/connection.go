@@ -62,17 +62,11 @@ func uint32ToBytes(v uint32) []byte {
 }
 
 func (c *Connection) TheirIDK() key.Public {
-	if c.IsAddresser {
-		return c.Addressee.Public
-	}
-	return c.Addresser.Public
+	return x.Whom(c.IsAddresser, c.Addressee.Public, c.Addresser.Public)
 }
 
 func (c *Connection) OurIDK() key.Public {
-	if !c.IsAddresser {
-		return c.Addressee.Public
-	}
-	return c.Addresser.Public
+	return x.Whom(!c.IsAddresser, c.Addressee.Public, c.Addresser.Public)
 }
 
 func (c *Connection) String() string {
