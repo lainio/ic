@@ -71,10 +71,7 @@ func (c *Connection) OurIDK() key.Public {
 
 func (c *Connection) String() string {
 	start := fmt.Sprintf("Addresser: %v", x.Whom(c.IsAddresser, "Yes", "No "))
-	idk := c.Addresser.PKString()
-	if c.IsAddresser {
-		idk = c.Addressee.PKString()
-	}
+	idk := x.Whom(c.IsAddresser, c.Addressee.PKString(), c.Addresser.PKString())
 	return fmt.Sprintf("%s, Ref IDK: %v, A-er: %v, A-ee: %v, DBID: %d",
 		start, idk, c.Addresser.PKString(), c.Addressee.PKString(), c.DBID)
 }
