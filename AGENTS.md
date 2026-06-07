@@ -4,14 +4,28 @@
 
 This repository contains the Go implementation candidate for the IntroTree system.
 
-The semantic source of truth is the TLA+ specification repository
-(`/home/parallels/go/src/github.com/optechlab/intro-tree`), especially (with
-full paths):
+## Semantic source of truth
 
-- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/IntroTree_Model_Index.md`
-- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/contracts/IntroTree_StateSemantics_Contract.md`
-- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/contracts/IntroTree_Implementation_Action_Map.md`
-- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/contracts/IntroTree_Conformance_Test_Map.md`
+The semantic source of truth is the TLA+ specification repository.
+
+In Codex runs, the prompt must provide the absolute path to the TLA+ repository
+as `SPEC_REPO`.
+
+Do not assume that these files exist under the Go repository's `docs/`
+directory unless the prompt explicitly says a spec-context bundle has been
+copied there.
+
+Required semantic reference files:
+
+```text
+<SPEC_REPO>/docs/IntroTree_Model_Index.md
+<SPEC_REPO>/docs/contracts/IntroTree_StateSemantics_Contract.md
+<SPEC_REPO>/docs/contracts/IntroTree_Implementation_Action_Map.md
+<SPEC_REPO>/docs/contracts/IntroTree_Conformance_Test_Map.md
+```
+
+If `SPEC_REPO` is not provided, stop and report that the TLA+ specification
+repository path is missing.
 
 ## Current task class
 
