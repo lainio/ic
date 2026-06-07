@@ -94,7 +94,49 @@ authority or recovery ceremonies.
 Do not equate FIDO2 presence with completed V19 device/recovery semantics.
 Map it carefully.
 
+The FIDO2 implementation is based on Go interface implementation.
+The package is `findy-agent-auth/acator/enclave`. These are its main components:
 
+```go
+type KeyHandle interface {
+	ID() []byte
+	CBORPublicKey() ([]byte, error)
+	Sign(d []byte) ([]byte, error)
+
+	Verify(data, sig []byte) (ok bool) // Mainly testing
+}
+
+type Secure interface {
+	NewKeyHandle() (kh KeyHandle, err error)
+	IsKeyHandle(id []byte) (yes bool, kh KeyHandle)
+}
+```
+
+In this project we are using default implementation for `enclave.Secure`
+interface, i.e., it's a encrypted LMDB (Bolt). There exists other
+implementations like gRPC based version where gRPC protocol works as a bridge to
+WebAuthn client implementation. 
+
+We use the following type alias for `key.Handle` and its implementation comes
+from `enclave.Secure`.
+
+```go
+type Handle = enclave.KeyHandle
+```
+
+When we instantiate our `key.Enclave` here we got all its goodies. And the key
+handles are stateless. And we can switch the `Enclave` implementation easily
+later.
+
+```go
+var Enclave enclave.Secure = enclave.New(
+	"bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1bad0bad1",
+)
+```
+
+All the key pairs are behind one master key. This technique is presented in the
+WebAuthn and FIDO documentation. Safest version of it is when enclave is
+isolated hardware.
 
 ## Concept Mappings
 
