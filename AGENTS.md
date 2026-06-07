@@ -4,12 +4,14 @@
 
 This repository contains the Go implementation candidate for the IntroTree system.
 
-The semantic source of truth is the TLA+ specification repository, especially:
+The semantic source of truth is the TLA+ specification repository
+(`/home/parallels/go/src/github.com/optechlab/intro-tree`), especially (with
+full paths):
 
-- `docs/IntroTree_Model_Index.md`
-- `docs/contracts/IntroTree_StateSemantics_Contract.md`
-- `docs/contracts/IntroTree_Implementation_Action_Map.md`
-- `docs/contracts/IntroTree_Conformance_Test_Map.md`
+- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/IntroTree_Model_Index.md`
+- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/contracts/IntroTree_StateSemantics_Contract.md`
+- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/contracts/IntroTree_Implementation_Action_Map.md`
+- `/home/parallels/go/src/github.com/optechlab/intro-tree/docs/contracts/IntroTree_Conformance_Test_Map.md`
 
 ## Current task class
 
