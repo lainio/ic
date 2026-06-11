@@ -62,7 +62,7 @@ The implementation must preserve these boundaries:
 
 **The implementation has these semantic errors:** 
 
-- implementation spokes lots about web-of-trust (WoT), which must be check case by case;
+- implementation spokes lots about web-of-trust (WoT), which must be checked case by case;
 - the current implementation allows creation of new roots, and it speaks about
   trust domains, all of that must be checked case by case;
 - current implementation's trust model isn't correct any more, TLA introduction
@@ -151,3 +151,9 @@ Use these mappings:
 | `Introduce` | `identity.Invite` | implementation was WoT where trust was part of the implementation, it's not any more! |
 | `CreatePW` | `protocol.PairwiseHandshake` | This is in CLI implementation where we have tried that underlying structures work and WoT calculations can filter untrusted PW creations |
 | `Pipe` | `pw.Connection` | this is more a preparation for upcoming Onion service endpoint implementation, but it should present the idea |
+
+## Persistence
+
+Byte mappings are currently done thru CBOR and GOB. We will move towards
+deterministic CBOR in everything. The GOB is used currently for LMDB (BoltDB)
+storing where we are saving Go objects only. That will be changed as well.
