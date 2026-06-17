@@ -9,12 +9,6 @@ type Options struct {
 	AllowRouting   bool
 	Resolver       bool
 	Endpoint       string
-
-	// TODO: future ones, endpoint or does this belong to key.Info? It might be
-	// good if we could share same key with the Tor service and our ID?
-
-	// TODO: we can use this same block type for Tx Merits, see Block and think
-	// about then name Invitee
 }
 
 func NewOptions(options ...Opts) *Options {
@@ -31,16 +25,11 @@ func WithPosition(p int) Opts {
 	}
 }
 
-// TODO: rename -> WithRotationDoneWithBackupKeyIndex
-
 func WithBackupKeyIndex(i int) Opts {
 	return func(o *Options) {
 		o.BackupKeyIndex = i
 	}
 }
-
-// TODO: rename -> WithRotationTxDone
-//  - just extra path edge, no need for new backup key!
 
 func WithRotation() Opts {
 	return func(o *Options) {
@@ -53,8 +42,6 @@ func WithAllowRouting(allow bool) Opts {
 		o.AllowRouting = allow
 	}
 }
-
-// TODO: rename -> WithEndpointIsResolver
 
 func WithEndpoint(endpoint string, isResolver bool) Opts {
 	return func(o *Options) {
