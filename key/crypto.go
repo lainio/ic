@@ -48,6 +48,12 @@ func (p Public) PKString() string {
 	return pk
 }
 
+func (p Public) Hash() Hash {
+	hash := crypto.SHA256.New()
+	try.To1(hash.Write(p))
+	return Hash(hash.Sum(nil))
+}
+
 type ID []byte
 
 func (id ID) Equal(rhs ID) bool {
@@ -131,16 +137,19 @@ func (h Hand) PubKey() Public {
 //   - we should wrap with the new struct!
 type Handle = enclave.KeyHandle
 
-// Info is key.Info that binds and transport both key's ID and its public key
-// together. Info is like a public version of key pair.
+// Info is key info that binds and transport both key's ID and its public key
+// together. Info is like a statefull version of key pair and that's why easy to
+// transport. [Hash] is precalculated for optimization purposes, and it can be
+// used for maps.
 type Info struct {
-	ID     // The key ID
-	Public // The Public Key
+	ID     // A statefull data store for a key pair
+	Public // Public Key
+
+	//	Hash   // Public key hash // TODO: we remove this now, to keep version
 }
 
 const (
 	byteCount       = 8
-	publicByteCount = 77
 	prefixLenOfCBOR = 14
 )
 
@@ -156,7 +165,8 @@ func (i Info) PKString() string {
 }
 
 func InfoFromHandle(h Handle) Info {
-	pubK := try.To1(h.CBORPublicKey())
+	pubK := Public(try.To1(h.CBORPublicKey()))
+	//return Info{ID: h.ID(), Public: pubK, Hash: pubK.Hash()}
 	return Info{ID: h.ID(), Public: pubK}
 }
 
@@ -201,6 +211,19 @@ func (sig Signature) Verify(pubKey Public, msg []byte) bool {
 	}
 
 	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)
+}
+
+func HashTagged(tag string, payload []byte) (out Hash) {
+	h := crypto.SHA256.New()
+
+	h.Write([]byte("IntroTree"))
+	h.Write([]byte{0})
+	h.Write([]byte(tag))
+	h.Write([]byte{0})
+	h.Write(payload)
+
+	copy(out[:], h.Sum(nil))
+	return out
 }
 
 const HashSize = 32
