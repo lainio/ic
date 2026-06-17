@@ -1,0 +1,64 @@
+package intro
+
+type Opts func(*Options)
+
+type Options struct {
+	Position       int
+	BackupKeyIndex int
+	Rotation       bool
+	AllowRouting   bool
+	Resolver       bool
+	Endpoint       string
+
+	// TODO: future ones, endpoint or does this belong to key.Info? It might be
+	// good if we could share same key with the Tor service and our ID?
+
+	// TODO: we can use this same block type for Tx Merits, see Block and think
+	// about then name Invitee
+}
+
+func NewOptions(options ...Opts) *Options {
+	opts := new(Options)
+	for _, o := range options {
+		o(opts)
+	}
+	return opts
+}
+
+func WithPosition(p int) Opts {
+	return func(o *Options) {
+		o.Position = p
+	}
+}
+
+// TODO: rename -> WithRotationDoneWithBackupKeyIndex
+
+func WithBackupKeyIndex(i int) Opts {
+	return func(o *Options) {
+		o.BackupKeyIndex = i
+	}
+}
+
+// TODO: rename -> WithRotationTxDone
+//  - just extra path edge, no need for new backup key!
+
+func WithRotation() Opts {
+	return func(o *Options) {
+		o.Rotation = true
+	}
+}
+
+func WithAllowRouting(allow bool) Opts {
+	return func(o *Options) {
+		o.AllowRouting = allow
+	}
+}
+
+// TODO: rename -> WithEndpointIsResolver
+
+func WithEndpoint(endpoint string, isResolver bool) Opts {
+	return func(o *Options) {
+		o.Endpoint = endpoint
+		o.Resolver = isResolver
+	}
+}
