@@ -31,12 +31,14 @@ type Edge struct {
 // and out-of-band.
 func NewVerifyEdge(pinCode int) (theirs Edge, ours Edge) {
 	challengeEdge := Edge{EdgeBody: EdgeBody{
-		Prev:  key.Hash(key.RandSlice(32)),
-		Child: key.RandInfo(32),
+		Version: EdgeVersion,
+		Prev:    key.Hash(key.RandSlice(32)),
+		Child:   key.RandInfo(32),
 	}}
 	return challengeEdge, Edge{EdgeBody: EdgeBody{
-		Prev:  challengeEdge.Prev,
-		Child: challengeEdge.Child,
+		Version: EdgeVersion,
+		Prev:    challengeEdge.Prev,
+		Child:   challengeEdge.Child,
 		Options: Options{
 			Position: pinCode,
 		},
@@ -65,8 +67,9 @@ func (b Edge) ExcludeBytes() []byte {
 
 func (b Edge) excludeSign() Edge {
 	newEdge := Edge{EdgeBody: EdgeBody{
-		Prev:  b.Prev,
-		Child: b.Child,
+		Version: EdgeVersion,
+		Prev:    b.Prev,
+		Child:   b.Child,
 		Options: Options{
 			Position: b.Position,
 			Rotation: b.Rotation,
@@ -81,7 +84,15 @@ func EqualEdges(b1, b2 Edge) bool {
 		bytes.Equal(b1.Public(), b2.Public()) &&
 		bytes.Equal(b1.ParentSig, b2.ParentSig) &&
 		b1.Position == b2.Position &&
-		b1.Rotation == b2.Rotation
+		b1.Rotation == b2.Rotation &&
+		b1.Version == b2.Version
+}
+
+func (b Edge) VerifySignature2(invitersPubKey key.Public) bool {
+	return b.ParentSig.Verify(
+		invitersPubKey,
+		b.Bytes(),
+	)
 }
 
 func (b Edge) VerifySignature(invitersPubKey key.Public) bool {

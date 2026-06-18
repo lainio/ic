@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -33,17 +34,21 @@ func (a Anchor) Digest() key.Hash {
 	return key.HashTagged("v1/anchor", wire.TryMarshal(a))
 }
 
-var anchor = Anchor{
-	Version: AnchorVersion,
-	Profile: ProfileVersion,
+var (
+	anchorKey key.Public = base58.Decode(
+		"2DLtZ9GymDo1ptTVMjXQCfjvLCzDd65eZAu9JDa3tqYLeHaCuQRY4ph4AhCz4UeEXgFQGtcJ8J6PvUodSwta45Grp7r9KHgAQeiSqt6fzf",
+	)
 
-	// TODO: how to get this? Create once, and write somewhere, be able to
-	// reload here, maybe we need a ENV reader? for this. or outside setter?
-	Root: key.Public{},
-}
+	anchor = Anchor{
+		Version: AnchorVersion,
+		Profile: ProfileVersion,
 
-func GetAnchor() *Anchor {
-	return &anchor
+		Root: anchorKey,
+	}
+)
+
+func AnchorDigest() key.Hash {
+	return anchor.Digest()
 }
 
 type Path []Edge
@@ -99,17 +104,13 @@ func Hops(lhs, rhs Path) (hop.Distance, hop.Distance) {
 	return lhs.Hops(rhs)
 }
 
-// New constructs a new path. It's a genesis block. We can start our identity
-// path with this. If it's a rotation block, the first one, we are creating
-// backup path for several keys.
-//
-// NOTE: New is important part of key rotation and everything where we are
-// constructing key concepts from a key pair.
+// New constructs a new path.
 func New(keyInfo key.Info, flags ...Opts) Path {
 	path := Path(make([]Edge, 1, 12))
 	path[0] = Edge{EdgeBody: EdgeBody{
-		Prev:  key.Hash{},
-		Child: keyInfo,
+		Version: EdgeVersion,
+		Prev:    AnchorDigest(),
+		Child:   keyInfo,
 	},
 		ParentSig: nil,
 	}
@@ -152,11 +153,15 @@ func (c Path) Invite(
 	//	assert.That(c.isLeaf(inviter), "only leaf can invite")
 
 	newEdge := Edge{EdgeBody: EdgeBody{
-		Prev:  c.leafHash(),
-		Child: invitee,
+		Version: EdgeVersion,
+		Prev:    c.leafHash(),
+		Child:   invitee,
 	}}
 	newEdge.Options = *NewOptions(opts...)
-	newEdge.ParentSig = try.To1(inviter.Sign(newEdge.ExcludeBytes()))
+	newEdge.ParentSig = try.To1(inviter.Sign(newEdge.Bytes()))
+
+	//pubK := try.To1(inviter.CBORPublicKey())
+	//assert.That(newEdge.VerifySignature2(pubK))
 
 	nc = c.Clone()
 	nc = append(nc, newEdge)
