@@ -21,8 +21,8 @@ var (
 	edvin entity
 
 	//  first path for generic path tests
-	testPath            Path
-	rootKey, inviteeKey key.Handle
+	testPath          Path
+	rootKey, childKey key.Handle
 )
 
 type entity struct {
@@ -43,11 +43,11 @@ func setup() {
 	// general path for tests
 	rootKey = key.New()
 	testPath = New(key.InfoFromHandle(rootKey))
-	inviteeKey = key.New()
+	childKey = key.New()
 	level := 1
-	testPath = testPath.Invite(
+	testPath = testPath.Introduce(
 		rootKey,
-		key.InfoFromHandle(inviteeKey),
+		key.InfoFromHandle(childKey),
 		WithPosition(level),
 	)
 
@@ -60,19 +60,19 @@ func setup() {
 	rootMaster.Path = New(
 		key.InfoFromHandle(rootMaster),
 	)
-	root.Path = rootMaster.Invite(
+	root.Path = rootMaster.Introduce(
 		rootMaster.Handle,
 		key.InfoFromHandle(root),
 		WithRotation(),
 		WithPosition(1),
 	)
 	// root invites alice and bod but they have no invitation between
-	alice.Path = root.Invite(
+	alice.Path = root.Introduce(
 		root.Handle,
 		key.InfoFromHandle(alice),
 		WithPosition(1),
 	)
-	bob.Path = root.Invite(
+	bob.Path = root.Introduce(
 		root.Handle,
 		key.InfoFromHandle(bob),
 		WithPosition(1),
@@ -86,12 +86,12 @@ func setup() {
 	root2.Path = New(key.InfoFromHandle(root2))
 
 	// root2 invites alice2 and bod2 but they have no invitation between
-	alice2.Path = root2.Invite(
+	alice2.Path = root2.Introduce(
 		root2.Handle,
 		key.InfoFromHandle(alice2),
 		WithPosition(1),
 	)
-	bob2.Path = root2.Invite(
+	bob2.Path = root2.Introduce(
 		root2.Handle,
 		key.InfoFromHandle(bob2),
 		WithPosition(1),
@@ -111,14 +111,14 @@ func Test_all(t *testing.T) {
 	t.Run("invitation", testInvitation)
 	t.Run(
 		"common parent level",
-		testCommonInviterLevel,
+		testCommonParentLevel,
 	)
-	t.Run("same parent", testSameInviter)
+	t.Run("same parent", testSameParent)
 	t.Run("hops", testHops)
 	t.Run("find", testFind)
 	t.Run(
-		"challenge invitee",
-		testChallengeInvitee,
+		"challenge child",
+		testChallengeChild,
 	)
 }
 
@@ -137,7 +137,7 @@ func testNewPath(t *testing.T) {
 	//assert.Equal(c.AbsLen(), 1)
 
 	k2 := key.New()
-	c = c.Invite(
+	c = c.Introduce(
 		k,
 		key.InfoFromHandle(k2),
 		WithRotation(),
@@ -152,7 +152,7 @@ func testNewPath(t *testing.T) {
 	//assert.Equal(c.AbsLen(), 1)
 
 	k3 := key.New()
-	c = c.Invite(
+	c = c.Introduce(
 		k2,
 		key.InfoFromHandle(k3),
 		WithRotation(),
@@ -194,11 +194,11 @@ func testVerifyPath(t *testing.T) {
 	assert.SLen(testPath, 2)
 	assert.That(testPath.VerifySignatures())
 
-	newInvitee := key.New()
+	newChild := key.New()
 	level := 3
-	testPath = testPath.Invite(
-		inviteeKey,
-		key.InfoFromHandle(newInvitee),
+	testPath = testPath.Introduce(
+		childKey,
+		key.InfoFromHandle(newChild),
 		WithPosition(level),
 	)
 
@@ -217,7 +217,7 @@ func testInvitation(t *testing.T) {
 	cecilia := entity{
 		Handle: key.New(),
 	}
-	cecilia.Path = bob.Invite(
+	cecilia.Path = bob.Introduce(
 		bob.Handle,
 		key.InfoFromHandle(cecilia),
 		WithPosition(1),
@@ -235,8 +235,8 @@ func testInvitation(t *testing.T) {
 
 // common root : my distance, her distance
 
-// TestCommonInviterLevel tests that Path owners have one common parent
-func testCommonInviterLevel(t *testing.T) {
+// TestCommonParentLevel tests that Path owners have one common parent
+func testCommonParentLevel(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// alice and bod have common root:
@@ -250,7 +250,7 @@ func testCommonInviterLevel(t *testing.T) {
 	}
 
 	// bob intives cecilia
-	cecilia.Path = bob.Invite(
+	cecilia.Path = bob.Introduce(
 		bob.Handle,
 		key.InfoFromHandle(cecilia),
 		WithPosition(1),
@@ -269,7 +269,7 @@ func testCommonInviterLevel(t *testing.T) {
 		Handle: key.New(),
 	}
 	// alice invites david
-	david.Path = alice.Invite(
+	david.Path = alice.Introduce(
 		alice.Handle,
 		key.InfoFromHandle(david),
 		WithPosition(1),
@@ -281,7 +281,7 @@ func testCommonInviterLevel(t *testing.T) {
 	//     alice     bob
 	//       ↓        ↓
 	//     david   cecilia
-	cparent, sameIC := CommonInviterLevel(
+	cparent, sameIC := CommonParentLevel(
 		cecilia.Path,
 		david.Path,
 	)
@@ -295,7 +295,7 @@ func testCommonInviterLevel(t *testing.T) {
 	edvin := entity{
 		Handle: key.New(),
 	}
-	edvin.Path = alice.Invite(
+	edvin.Path = alice.Introduce(
 		alice.Handle,
 		key.InfoFromHandle(edvin),
 		WithPosition(1),
@@ -307,7 +307,7 @@ func testCommonInviterLevel(t *testing.T) {
 	//   ┌──── alice     bob
 	//   ↓       ↓        ↓
 	// edvin   david   cecilia
-	cparent, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonParentLevel(
 		edvin.Path,
 		david.Path,
 	)
@@ -318,7 +318,7 @@ func testCommonInviterLevel(t *testing.T) {
 	)
 	assert.ThatNot(sameIC)
 
-	edvin2Path := alice.Path.Invite(
+	edvin2Path := alice.Path.Introduce(
 		alice.Handle,
 		key.InfoFromHandle(key.New()),
 		WithPosition(1),
@@ -330,7 +330,7 @@ func testCommonInviterLevel(t *testing.T) {
 	//   ┌──── alice ─────┐        bob
 	//   ↓       ↓        ↓         ↓
 	// edvin2  edvin    david    cecilia
-	cparent, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonParentLevel(
 		edvin2Path,
 		david.Path,
 	)
@@ -341,12 +341,12 @@ func testCommonInviterLevel(t *testing.T) {
 	)
 	assert.ThatNot(sameIC)
 
-	fred1Path := edvin.Invite(
+	fred1Path := edvin.Introduce(
 		edvin.Handle,
 		key.InfoFromHandle(key.New()),
 		WithPosition(1),
 	)
-	fred2Path := edvin.Invite(
+	fred2Path := edvin.Introduce(
 		edvin.Handle,
 		key.InfoFromHandle(key.New()),
 		WithPosition(1),
@@ -360,7 +360,7 @@ func testCommonInviterLevel(t *testing.T) {
 	// edvin2  edvin ┐  david    cecilia             lvl 3
 	//         ↓     ↓
 	//      fred1   fred2                            lvl 4
-	cparent, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonParentLevel(
 		fred2Path,
 		fred1Path,
 	)
@@ -371,7 +371,7 @@ func testCommonInviterLevel(t *testing.T) {
 	)
 	assert.ThatNot(sameIC)
 
-	cparent, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonParentLevel(
 		alice.Path,
 		fred1Path,
 	)
@@ -385,7 +385,7 @@ func testCommonInviterLevel(t *testing.T) {
 		"alice is fred's path's 'root'",
 	)
 
-	cparent, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonParentLevel(
 		bob.Path,
 		cecilia.Path,
 	)
@@ -399,7 +399,7 @@ func testCommonInviterLevel(t *testing.T) {
 		"bob is cecilia's path's 'root'",
 	)
 
-	cparent, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonParentLevel(
 		root.Path,
 		cecilia.Path,
 	)
@@ -414,30 +414,30 @@ func testCommonInviterLevel(t *testing.T) {
 	)
 }
 
-// TestSameInviter test that two path holders have same parent.
-func testSameInviter(t *testing.T) {
+// TestSameParent test that two path holders have same parent.
+func testSameParent(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.That(
-		SameInviter(alice.Path, bob.Path),
+		SameParent(alice.Path, bob.Path),
 	)
 	assert.That(
-		!SameInviter(testPath, bob.Path),
+		!SameParent(testPath, bob.Path),
 	)
 
 	cecilia := entity{
 		Handle: key.New(),
 	}
-	cecilia.Path = bob.Invite(
+	cecilia.Path = bob.Introduce(
 		bob.Handle,
 		key.InfoFromHandle(cecilia),
 		WithPosition(1),
 	)
 	assert.That(cecilia.Len() == 4)
 	assert.That(cecilia.Path.VerifySignatures())
-	assert.That(bob.IsInviterFor(cecilia.Path))
+	assert.That(bob.IsParentFor(cecilia.Path))
 	assert.That(
-		!alice.IsInviterFor(cecilia.Path),
+		!alice.IsParentFor(cecilia.Path),
 	)
 }
 
@@ -480,7 +480,7 @@ func testHops(t *testing.T) {
 	cecilia := entity{
 		Handle: key.New(),
 	}
-	cecilia.Path = bob.Invite(
+	cecilia.Path = bob.Introduce(
 		bob.Handle,
 		key.InfoFromHandle(cecilia),
 		WithPosition(1),
@@ -507,7 +507,7 @@ func testHops(t *testing.T) {
 	david := entity{
 		Handle: key.New(),
 	}
-	david.Path = bob.Invite(
+	david.Path = bob.Introduce(
 		bob.Handle,
 		key.InfoFromHandle(david),
 		WithPosition(1),
@@ -534,7 +534,7 @@ func testHops(t *testing.T) {
 	edvin = entity{
 		Handle: key.New(),
 	}
-	edvin.Path = david.Invite(
+	edvin.Path = david.Introduce(
 		david.Handle,
 		key.InfoFromHandle(edvin),
 		WithPosition(1),
@@ -608,12 +608,12 @@ func testFind(t *testing.T) {
 	}
 }
 
-// TestChallengeInvitee test shows how we can challenge the party who presents
+// TestChallengeChild test shows how we can challenge the party who presents
 // us a path. Paths are presentad as full! At least for now. They don't
 // include any personal data, and we try to make sure that they won't include
 // any data which could be used to correlate the use of the path. Path is only
 // for the proofing the position in the Invitation Path.
-func testChallengeInvitee(t *testing.T) {
+func testChallengeChild(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	// path leaf is the only part who has the private key for the leaf, so

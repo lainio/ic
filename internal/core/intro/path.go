@@ -61,17 +61,18 @@ func SameRoot(c1, c2 Path) bool {
 	return EqualEdges(b1, b2)
 }
 
-func SameInviter(c1, c2 Path) bool {
+func SameParent(c1, c2 Path) bool {
 	return EqualEdges(
 		c1.secondLastEdge(),
 		c2.secondLastEdge(),
 	)
 }
 
-// CommonInviterLevel returns parent's distance (current level) from path's
-// root if parent exists, and same if Inviter is in the same IC. If the Common
-// Inviter doesn't exist, it returns [hop.NotConnected] and false.
-func CommonInviterLevel(c1, c2 Path) (level hop.Distance, same bool) {
+// CommonParentLevel returns parent's distance (current level) from path's root
+// if parent exists, and [same] is true if Parent is in the same IC. If the
+// Common Parent doesn't exist, it returns [hop.NotConnected] and false.
+// TODO: remove [same] it's not needed.
+func CommonParentLevel(c1, c2 Path) (level hop.Distance, same bool) {
 	if !SameRoot(c1, c2) {
 		return hop.NotConnected, false
 	}
@@ -141,12 +142,12 @@ func (c Path) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// Invite is called for the parent's path. Inviter's key is needed for signing
-// the new link/block which includes inviteesPubKey and position in the path.
-// A new path is returned. The path will be given for the invitee.
-func (c Path) Invite(
+// Introduce is called for the parent's path. Parent's key is needed for signing
+// the new link/block which includes childsPubKey and position in the path.
+// A new path is returned. The path will be given for the child.
+func (c Path) Introduce(
 	parent key.Handle,
-	invitee key.Info,
+	child key.Info,
 	opts ...Opts,
 ) (nc Path) {
 	// We have *now* backup keys which cannot handle this assert!
@@ -155,7 +156,7 @@ func (c Path) Invite(
 	newEdge := Edge{EdgeBody: EdgeBody{
 		Version: EdgeVersion,
 		Prev:    c.leafHash(),
-		Child:   invitee,
+		Child:   child,
 	}}
 	newEdge.Options = *NewOptions(opts...)
 	newEdge.ParentSig = try.To1(parent.Sign(newEdge.Bytes()))
@@ -171,7 +172,7 @@ func (c Path) Invite(
 // Hops returns hops and common parent's level if that exists. If not both
 // return values are NotConnected.
 func (c Path) Hops(their Path) (hops hop.Distance, rootLvl hop.Distance) {
-	common, _ := CommonInviterLevel(c, their)
+	common, _ := CommonParentLevel(c, their)
 	if common == hop.NotConnected {
 		return hop.NotConnected, hop.NotConnected
 	}
@@ -187,8 +188,8 @@ func (c Path) Hops(their Path) (hops hop.Distance, rootLvl hop.Distance) {
 }
 
 func (c Path) OneHop(their Path) bool {
-	return c.IsInviterFor(their) ||
-		their.IsInviterFor(c)
+	return c.IsParentFor(their) ||
+		their.IsParentFor(c)
 }
 
 func (c Path) AbsLen() hop.Distance {
@@ -265,15 +266,15 @@ func (c Path) Clone() Path {
 	return NewPathFromData(c.Bytes())
 }
 
-func (c Path) IsInviterFor(invitee Path) bool {
+func (c Path) IsParentFor(child Path) bool {
 	// if we are a root or too near of a root we cannot be parent
-	if c.Len() < 1 || invitee.Len() < 2 {
+	if c.Len() < 1 || child.Len() < 2 {
 		return false
 	}
 
 	return EqualEdges(
 		c.LastEdge(),
-		invitee.secondLastEdge(),
+		child.secondLastEdge(),
 	)
 }
 
