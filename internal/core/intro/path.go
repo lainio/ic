@@ -105,7 +105,11 @@ func Hops(lhs, rhs Path) (hop.Distance, hop.Distance) {
 	return lhs.Hops(rhs)
 }
 
-// New constructs a new path.
+// New constructs a new path ROOT.
+// This happens only once for whole introduction tree.
+// The rest of the paths are created through [Path.Intoduce] function.
+// TODO: refactoring idea or questions who owns the root key and is able to
+// onboard level 2 enties to the tree.
 func New(keyInfo key.Info, flags ...Opts) Path {
 	path := Path(make([]Edge, 1, 12))
 	path[0] = Edge{EdgeBody: EdgeBody{
