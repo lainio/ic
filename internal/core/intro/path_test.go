@@ -11,10 +11,10 @@ import (
 )
 
 var (
-	// root -> alice, root -> bob: alice and bob share same root inviter
+	// root -> alice, root -> bob: alice and bob share same root parent
 	rootMaster, root, alice, bob entity
 
-	// root2 -> alice2, root2 -> bob2: alice2 and bob2 share same root inviter
+	// root2 -> alice2, root2 -> bob2: alice2 and bob2 share same root parent
 	root2, alice2, bob2 entity
 
 	// for TestFind & fred who has long path
@@ -110,10 +110,10 @@ func Test_all(t *testing.T) {
 	t.Run("verify path", testVerifyPath)
 	t.Run("invitation", testInvitation)
 	t.Run(
-		"common inviter level",
+		"common parent level",
 		testCommonInviterLevel,
 	)
-	t.Run("same inviter", testSameInviter)
+	t.Run("same parent", testSameInviter)
 	t.Run("hops", testHops)
 	t.Run("find", testFind)
 	t.Run(
@@ -235,7 +235,7 @@ func testInvitation(t *testing.T) {
 
 // common root : my distance, her distance
 
-// TestCommonInviterLevel tests that Path owners have one common inviter
+// TestCommonInviterLevel tests that Path owners have one common parent
 func testCommonInviterLevel(t *testing.T) {
 	defer assert.PushTester(t)()
 
@@ -281,14 +281,14 @@ func testCommonInviterLevel(t *testing.T) {
 	//     alice     bob
 	//       ↓        ↓
 	//     david   cecilia
-	cinviter, sameIC := CommonInviterLevel(
+	cparent, sameIC := CommonInviterLevel(
 		cecilia.Path,
 		david.Path,
 	)
 	assert.Equal(
-		cinviter,
+		cparent,
 		1,
-		"common inviter is root whos lvl is 1",
+		"common parent is root whos lvl is 1",
 	)
 	assert.ThatNot(sameIC)
 
@@ -307,14 +307,14 @@ func testCommonInviterLevel(t *testing.T) {
 	//   ┌──── alice     bob
 	//   ↓       ↓        ↓
 	// edvin   david   cecilia
-	cinviter, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonInviterLevel(
 		edvin.Path,
 		david.Path,
 	)
 	assert.Equal(
-		cinviter,
+		cparent,
 		2,
-		"alice is at level 2 from path's root and inviter of both",
+		"alice is at level 2 from path's root and parent of both",
 	)
 	assert.ThatNot(sameIC)
 
@@ -330,14 +330,14 @@ func testCommonInviterLevel(t *testing.T) {
 	//   ┌──── alice ─────┐        bob
 	//   ↓       ↓        ↓         ↓
 	// edvin2  edvin    david    cecilia
-	cinviter, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonInviterLevel(
 		edvin2Path,
 		david.Path,
 	)
 	assert.Equal(
-		cinviter,
+		cparent,
 		2,
-		"alice is at level 2 from path's root and inviter of both",
+		"alice is at level 2 from path's root and parent of both",
 	)
 	assert.ThatNot(sameIC)
 
@@ -360,23 +360,23 @@ func testCommonInviterLevel(t *testing.T) {
 	// edvin2  edvin ┐  david    cecilia             lvl 3
 	//         ↓     ↓
 	//      fred1   fred2                            lvl 4
-	cinviter, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonInviterLevel(
 		fred2Path,
 		fred1Path,
 	)
 	assert.Equal(
-		cinviter,
+		cparent,
 		3,
 		"edvin is at level 3 from path's root",
 	)
 	assert.ThatNot(sameIC)
 
-	cinviter, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonInviterLevel(
 		alice.Path,
 		fred1Path,
 	)
 	assert.Equal(
-		cinviter,
+		cparent,
 		2,
 		"alice is at level 2 from path's root",
 	)
@@ -385,12 +385,12 @@ func testCommonInviterLevel(t *testing.T) {
 		"alice is fred's path's 'root'",
 	)
 
-	cinviter, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonInviterLevel(
 		bob.Path,
 		cecilia.Path,
 	)
 	assert.Equal(
-		cinviter,
+		cparent,
 		2,
 		"bob is at level 2 from path's root",
 	)
@@ -399,12 +399,12 @@ func testCommonInviterLevel(t *testing.T) {
 		"bob is cecilia's path's 'root'",
 	)
 
-	cinviter, sameIC = CommonInviterLevel(
+	cparent, sameIC = CommonInviterLevel(
 		root.Path,
 		cecilia.Path,
 	)
 	assert.Equal(
-		cinviter,
+		cparent,
 		1,
 		"root is at level 2 from path's root",
 	)
@@ -414,7 +414,7 @@ func testCommonInviterLevel(t *testing.T) {
 	)
 }
 
-// TestSameInviter test that two path holders have same inviter.
+// TestSameInviter test that two path holders have same parent.
 func testSameInviter(t *testing.T) {
 	defer assert.PushTester(t)()
 
@@ -457,7 +457,7 @@ func testHops(t *testing.T) {
 	assert.Equal(
 		cLevel,
 		0,
-		"alice's and bob's inviter is path root!",
+		"alice's and bob's parent is path root!",
 	)
 
 	//       rootMaster
@@ -474,7 +474,7 @@ func testHops(t *testing.T) {
 	assert.Equal(
 		cLevel,
 		1,
-		"alice's and bob's inviter is ROTATED path root",
+		"alice's and bob's parent is ROTATED path root",
 	)
 
 	cecilia := entity{
@@ -501,7 +501,7 @@ func testHops(t *testing.T) {
 	assert.Equal(
 		cLevel,
 		1,
-		"the share inviter is path root",
+		"the share parent is path root",
 	)
 
 	david := entity{
@@ -523,12 +523,12 @@ func testHops(t *testing.T) {
 	assert.Equal(
 		hop,
 		2,
-		"david and cecilia share bod as inviter",
+		"david and cecilia share bod as parent",
 	)
 	assert.Equal(
 		cLevel,
 		2,
-		"david's and cecilia's inviter bob is 1 hop from root",
+		"david's and cecilia's parent bob is 1 hop from root",
 	)
 
 	edvin = entity{
@@ -552,24 +552,24 @@ func testHops(t *testing.T) {
 	assert.Equal(
 		hop,
 		3,
-		"cecilia has 1 hop to common inviter bob and edvin has 2 hops == 3",
+		"cecilia has 1 hop to common parent bob and edvin has 2 hops == 3",
 	)
 	assert.Equal(
 		cLevel,
 		2,
-		"common inviter of cecilia and edvin is bod that's 1 hop from path root",
+		"common parent of cecilia and edvin is bod that's 1 hop from path root",
 	)
 
 	hop, cLevel = Hops(alice.Path, edvin.Path)
 	assert.Equal(
 		hop,
 		4,
-		"alice and edvin share root as a common inviter => 1 + 3",
+		"alice and edvin share root as a common parent => 1 + 3",
 	)
 	assert.Equal(
 		cLevel,
 		1,
-		"alice's and edvin's common inviter root is path root",
+		"alice's and edvin's common parent root is path root",
 	)
 }
 

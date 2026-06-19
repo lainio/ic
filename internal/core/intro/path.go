@@ -68,8 +68,8 @@ func SameInviter(c1, c2 Path) bool {
 	)
 }
 
-// CommonInviterLevel returns inviter's distance (current level) from path's
-// root if inviter exists, and same if Inviter is in the same IC. If the Common
+// CommonInviterLevel returns parent's distance (current level) from path's
+// root if parent exists, and same if Inviter is in the same IC. If the Common
 // Inviter doesn't exist, it returns [hop.NotConnected] and false.
 func CommonInviterLevel(c1, c2 Path) (level hop.Distance, same bool) {
 	if !SameRoot(c1, c2) {
@@ -98,7 +98,7 @@ func CommonInviterLevel(c1, c2 Path) (level hop.Distance, same bool) {
 	return level, same
 }
 
-// Hops returns hops and common inviter's level if that exists. If not both
+// Hops returns hops and common parent's level if that exists. If not both
 // return values are NotConnected.
 func Hops(lhs, rhs Path) (hop.Distance, hop.Distance) {
 	return lhs.Hops(rhs)
@@ -141,16 +141,16 @@ func (c Path) Bytes() []byte {
 	return buf.Bytes()
 }
 
-// Invite is called for the inviter's path. Inviter's key is needed for signing
+// Invite is called for the parent's path. Inviter's key is needed for signing
 // the new link/block which includes inviteesPubKey and position in the path.
 // A new path is returned. The path will be given for the invitee.
 func (c Path) Invite(
-	inviter key.Handle,
+	parent key.Handle,
 	invitee key.Info,
 	opts ...Opts,
 ) (nc Path) {
 	// We have *now* backup keys which cannot handle this assert!
-	//	assert.That(c.isLeaf(inviter), "only leaf can invite")
+	//	assert.That(c.isLeaf(parent), "only leaf can invite")
 
 	newEdge := Edge{EdgeBody: EdgeBody{
 		Version: EdgeVersion,
@@ -158,9 +158,9 @@ func (c Path) Invite(
 		Child:   invitee,
 	}}
 	newEdge.Options = *NewOptions(opts...)
-	newEdge.ParentSig = try.To1(inviter.Sign(newEdge.Bytes()))
+	newEdge.ParentSig = try.To1(parent.Sign(newEdge.Bytes()))
 
-	//pubK := try.To1(inviter.CBORPublicKey())
+	//pubK := try.To1(parent.CBORPublicKey())
 	//assert.That(newEdge.VerifySignature2(pubK))
 
 	nc = c.Clone()
@@ -168,7 +168,7 @@ func (c Path) Invite(
 	return nc
 }
 
-// Hops returns hops and common inviter's level if that exists. If not both
+// Hops returns hops and common parent's level if that exists. If not both
 // return values are NotConnected.
 func (c Path) Hops(their Path) (hops hop.Distance, rootLvl hop.Distance) {
 	common, _ := CommonInviterLevel(c, their)
@@ -180,7 +180,7 @@ func (c Path) Hops(their Path) (hops hop.Distance, rootLvl hop.Distance) {
 		return 1, common
 	}
 
-	// both path lengths without self, minus "tail" to common inviter
+	// both path lengths without self, minus "tail" to common parent
 	hops = c.AbsLen() - 1 + their.AbsLen() - 1 - 2*common
 
 	return hops, common
@@ -210,8 +210,8 @@ func (c Path) KeyRotationsLen() (count hop.Distance) {
 }
 
 // isLeaf
-func (c Path) _(invitersKey key.Handle) bool {
-	return bytes.Equal(c.LeafPubKey(), try.To1(invitersKey.CBORPublicKey()))
+func (c Path) _(parentsKey key.Handle) bool {
+	return bytes.Equal(c.LeafPubKey(), try.To1(parentsKey.CBORPublicKey()))
 }
 
 func (c Path) LeafPubKey() key.Public {
@@ -236,17 +236,17 @@ func (c Path) VerifySignaturesWithGetBKID(getBKID getBackupKey) bool {
 	}
 
 	// start with the root key
-	invitersPubKey := c.FirstEdge().Public()
+	parentsPubKey := c.FirstEdge().Public()
 
 	for _, b := range c[1:] {
 		if b.BackupKeyIndex != 0 {
-			invitersPubKey = getBKID(b.BackupKeyIndex)
+			parentsPubKey = getBKID(b.BackupKeyIndex)
 		}
-		if !b.VerifySignature(invitersPubKey) {
+		if !b.VerifySignature(parentsPubKey) {
 			return false
 		}
 		// the next block is signed with this block's pub key
-		invitersPubKey = b.Public()
+		parentsPubKey = b.Public()
 	}
 	return true
 }
@@ -266,7 +266,7 @@ func (c Path) Clone() Path {
 }
 
 func (c Path) IsInviterFor(invitee Path) bool {
-	// if we are a root or too near of a root we cannot be inviter
+	// if we are a root or too near of a root we cannot be parent
 	if c.Len() < 1 || invitee.Len() < 2 {
 		return false
 	}
