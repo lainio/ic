@@ -3,8 +3,8 @@ package intro
 import (
 	"bytes"
 
-	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/key"
 )
 
@@ -48,6 +48,7 @@ func NewVerifyEdge(pinCode int) (theirs Edge, ours Edge) {
 // NewEdgeFromData constructor from raw CBOR data block.
 func NewEdgeFromData(d []byte) (b Edge) {
 	r := bytes.NewReader(d)
+	cbor := wire.DecMode
 	dec := cbor.NewDecoder(r)
 	try.To(dec.Decode(&b))
 	return b
@@ -56,6 +57,7 @@ func NewEdgeFromData(d []byte) (b Edge) {
 // Bytes return marshallel bytes of the Edge.
 func (b Edge) Bytes() []byte {
 	var buf bytes.Buffer
+	cbor := wire.EncMode
 	enc := cbor.NewEncoder(&buf)
 	try.To(enc.Encode(b))
 	return buf.Bytes()

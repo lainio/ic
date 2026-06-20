@@ -8,7 +8,6 @@ import (
 	"crypto/sha256"
 
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/fxamacker/cbor/v2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/hop"
@@ -129,6 +128,7 @@ func New(keyInfo key.Info, flags ...Opts) Path {
 // NOTE that [NewEdgeFromData] creates a new Edge.
 func NewPathFromData(d []byte) (c Path) {
 	r := bytes.NewReader(d)
+	cbor := wire.DecMode
 	dec := cbor.NewDecoder(r)
 	try.To(dec.Decode(&c))
 	return c
@@ -141,6 +141,7 @@ func (c Path) IsNil() bool {
 // Bytes return Path's public data for persistency.
 func (c Path) Bytes() []byte {
 	var buf bytes.Buffer
+	cbor := wire.EncMode
 	enc := cbor.NewEncoder(&buf)
 	try.To(enc.Encode(c))
 	return buf.Bytes()
