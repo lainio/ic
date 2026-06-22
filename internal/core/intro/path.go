@@ -5,7 +5,6 @@ package intro
 
 import (
 	"bytes"
-	"crypto/sha256"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/lainio/err2/assert"
@@ -70,7 +69,7 @@ func SameParent(c1, c2 Path) bool {
 // CommonParentLevel returns parent's distance (current level) from path's root
 // if parent exists, and [same] is true if Parent is in the same IC. If the
 // Common Parent doesn't exist, it returns [hop.NotConnected] and false.
-// TODO: remove [same] it's not needed.
+// TODO: remove [same] it's not needed when we have only one chain.
 func CommonParentLevel(c1, c2 Path) (level hop.Distance, same bool) {
 	if !SameRoot(c1, c2) {
 		return hop.NotConnected, false
@@ -138,7 +137,7 @@ func (c Path) IsNil() bool {
 	return c == nil
 }
 
-// Bytes return Path's public data for persistency.
+// Bytes return Path's public data for persistence.
 func (c Path) Bytes() []byte {
 	var buf bytes.Buffer
 	cbor := wire.EncMode
@@ -230,29 +229,32 @@ func (c Path) leafHash() key.Hash {
 	if c == nil {
 		return key.Hash{}
 	}
-	ha := sha256.Sum256(c.LastEdge().Bytes())
+	ha := key.HashTagged("v1/signed-hash", c.LastEdge().Bytes())
 	return ha
 }
 
 type getBackupKey func(int) key.Public
 
-func (c Path) VerifySignaturesWithGetBKID(getBKID getBackupKey) bool {
-	if c.Len() == 1 {
+func (p Path) VerifySignaturesWithGetBKID(getBKID getBackupKey) bool {
+	if p.Len() == 1 {
 		return true // root block is valid always
 	}
 
-	// start with the root key
-	parentsPubKey := c.FirstEdge().Public()
+	assert.Equal(p.FirstEdge().Version, PathVersion, "Unsupported path version")
+	assert.Equal(p.FirstEdge().Prev, AnchorDigest(), "Wrong anchor")
 
-	for _, b := range c[1:] {
-		if b.BackupKeyIndex != 0 {
-			parentsPubKey = getBKID(b.BackupKeyIndex)
+	// start with the root key
+	parentsPubKey := p.FirstEdge().Public()
+
+	for _, edge := range p[1:] {
+		if edge.BackupKeyIndex != 0 {
+			parentsPubKey = getBKID(edge.BackupKeyIndex)
 		}
-		if !b.VerifySignature(parentsPubKey) {
+		if !edge.VerifySignature(parentsPubKey) {
 			return false
 		}
 		// the next block is signed with this block's pub key
-		parentsPubKey = b.Public()
+		parentsPubKey = edge.Public()
 	}
 	return true
 }
