@@ -66,7 +66,7 @@ func setup() {
 		WithRotation(),
 		WithPosition(1),
 	)
-	// root invites alice and bod but they have no invitation between
+	// root invites alice and bod but they have no introduction between
 	alice.Path = root.Introduce(
 		root.Handle,
 		key.InfoFromHandle(alice),
@@ -85,7 +85,7 @@ func setup() {
 	// start second root without rotation key
 	root2.Path = New(key.InfoFromHandle(root2))
 
-	// root2 invites alice2 and bod2 but they have no invitation between
+	// root2 invites alice2 and bod2 but they have no introduction between
 	alice2.Path = root2.Introduce(
 		root2.Handle,
 		key.InfoFromHandle(alice2),
@@ -108,7 +108,7 @@ func Test_all(t *testing.T) {
 		testVerifyPathFail,
 	)
 	t.Run("verify path", testVerifyPath)
-	t.Run("invitation", testInvitation)
+	t.Run("introduction", testIntroduction)
 	t.Run(
 		"common parent level",
 		testCommonParentLevel,
@@ -206,7 +206,7 @@ func testVerifyPath(t *testing.T) {
 	assert.That(testPath.VerifySignatures())
 }
 
-func testInvitation(t *testing.T) {
+func testIntroduction(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(alice.Path, 3)
@@ -612,7 +612,7 @@ func testFind(t *testing.T) {
 // us a path. Paths are presentad as full! At least for now. They don't
 // include any personal data, and we try to make sure that they won't include
 // any data which could be used to correlate the use of the path. Path is only
-// for the proofing the position in the Invitation Path.
+// for the proofing the position in the Introduction Path.
 func testChallengeChild(t *testing.T) {
 	defer assert.PushTester(t)()
 
