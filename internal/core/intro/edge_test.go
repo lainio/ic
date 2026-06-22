@@ -25,7 +25,6 @@ func testNewVerifyEdge(t *testing.T) {
 	assert.Equal(cb.Position, 0)
 	assert.Equal(ours.Position, pincode)
 	assert.SLen(cb.Bytes(), size)
-
 }
 
 func testSigning(t *testing.T) {
@@ -38,7 +37,8 @@ func testSigning(t *testing.T) {
 		Prev:    AnchorDigest(),
 		Child:   key.InfoFromHandle(child),
 	}}
-	// TODO: these options are only ones that work now! Fix with the 
+
+	// TODO: these options are only ones that work now! Fix with the
 	newEdge.Options = *NewOptions(WithRotation(), WithPosition(1))
 	newEdge.ParentSig = try.To1(parent.Sign(newEdge.Bytes()))
 
