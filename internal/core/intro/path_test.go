@@ -185,7 +185,7 @@ func testVerifyPathFail(t *testing.T) {
 	b2 := c2[1]
 	b2.ParentSig[len(b2.ParentSig)-1] += 0x01
 
-	assert.That(!c2.VerifySignatures())
+	assert.ThatNot(c2.VerifySignatures())
 }
 
 func testVerifyPath(t *testing.T) {
@@ -224,8 +224,8 @@ func testInvitation(t *testing.T) {
 	)
 	assert.SLen(cecilia.Path, 4)
 	assert.That(cecilia.Path.VerifySignatures())
-	assert.That(
-		!SameRoot(testPath, cecilia.Path),
+	assert.ThatNot(
+		SameRoot(testPath, cecilia.Path),
 		"we have two different roots",
 	)
 	assert.That(
@@ -421,8 +421,8 @@ func testSameParent(t *testing.T) {
 	assert.That(
 		SameParent(alice.Path, bob.Path),
 	)
-	assert.That(
-		!SameParent(testPath, bob.Path),
+	assert.ThatNot(
+		SameParent(testPath, bob.Path),
 	)
 
 	cecilia := entity{
@@ -436,8 +436,8 @@ func testSameParent(t *testing.T) {
 	assert.That(cecilia.Len() == 4)
 	assert.That(cecilia.Path.VerifySignatures())
 	assert.That(bob.IsParentFor(cecilia.Path))
-	assert.That(
-		!alice.IsParentFor(cecilia.Path),
+	assert.ThatNot(
+		alice.IsParentFor(cecilia.Path),
 	)
 }
 
