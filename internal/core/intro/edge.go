@@ -50,22 +50,22 @@ func NewEdgeFromData(d []byte) (b Edge) {
 }
 
 // Bytes return marshallel bytes of the Edge.
-func (b Edge) Bytes() []byte {
-	return wire.TryMarshal(b)
+func (e Edge) Bytes() []byte {
+	return wire.TryMarshal(e)
 }
 
-func (b Edge) ExcludeBytes() []byte {
-	return b.excludeSign().Bytes()
+func (e Edge) ExcludeBytes() []byte {
+	return e.excludeSign().Bytes()
 }
 
-func (b Edge) excludeSign() Edge {
+func (e Edge) excludeSign() Edge {
 	newEdge := Edge{Body: EdgeBody{
 		Version: EdgeVersion,
-		Prev:    b.Body.Prev,
-		Child:   b.Body.Child,
+		Prev:    e.Body.Prev,
+		Child:   e.Body.Child,
 		Options: Options{
-			Position: b.Body.Options.Position,
-			Rotation: b.Body.Options.Rotation,
+			Position: e.Body.Options.Position,
+			Rotation: e.Body.Options.Rotation,
 		},
 	}}
 	return newEdge
@@ -81,24 +81,24 @@ func EqualEdges(b1, b2 Edge) bool {
 		b1.Body.Version == b2.Body.Version
 }
 
-func (b Edge) VerifySignature2(invitersPubKey key.Public) bool {
-	return b.ParentSig.Verify(
+func (e Edge) VerifySignature2(invitersPubKey key.Public) bool {
+	return e.ParentSig.Verify(
 		invitersPubKey,
-		b.Bytes(),
+		e.Bytes(),
 	)
 }
 
-func (b Edge) VerifySignature(invitersPubKey key.Public) bool {
-	return b.ParentSig.Verify(
+func (e Edge) VerifySignature(invitersPubKey key.Public) bool {
+	return e.ParentSig.Verify(
 		invitersPubKey,
-		b.ExcludeBytes(),
+		e.ExcludeBytes(),
 	)
 }
 
-func (b Edge) ID() key.ID {
-	return b.Body.Child.ID
+func (e Edge) ID() key.ID {
+	return e.Body.Child.ID
 }
 
-func (b Edge) Public() key.Public {
-	return b.Body.Child.Public
+func (e Edge) Public() key.Public {
+	return e.Body.Child.Public
 }
