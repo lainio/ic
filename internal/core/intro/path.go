@@ -110,7 +110,7 @@ func Hops(lhs, rhs Path) (hop.Distance, hop.Distance) {
 // onboard level 2 enties to the tree.
 func New(keyInfo key.Info, flags ...Opts) Path {
 	path := Path(make([]Edge, 1, 12))
-	path[0] = Edge{EdgeBody: EdgeBody{
+	path[0] = Edge{Body: EdgeBody{
 		Version: EdgeVersion,
 		Prev:    AnchorDigest(),
 		Child:   keyInfo,
@@ -118,7 +118,7 @@ func New(keyInfo key.Info, flags ...Opts) Path {
 		ParentSig: nil,
 	}
 	opts := NewOptions(flags...)
-	path[0].Options = *opts
+	path[0].Body.Options = *opts
 	return path
 }
 
@@ -144,12 +144,12 @@ func (c Path) Introduce(
 	// We have *now* backup keys which cannot handle this assert!
 	//	assert.That(c.isLeaf(parent), "only leaf can invite")
 
-	newEdge := Edge{EdgeBody: EdgeBody{
+	newEdge := Edge{Body: EdgeBody{
 		Version: EdgeVersion,
 		Prev:    c.leafHash(),
 		Child:   child,
 	}}
-	newEdge.Options = *NewOptions(opts...)
+	newEdge.Body.Options = *NewOptions(opts...)
 	newEdge.ParentSig = try.To1(parent.Sign(newEdge.Bytes()))
 
 	//pubK := try.To1(parent.CBORPublicKey())
@@ -194,7 +194,7 @@ func (c Path) Len() hop.Distance {
 
 func (c Path) KeyRotationsLen() (count hop.Distance) {
 	for _, b := range c {
-		if b.Options.Rotation {
+		if b.Body.Options.Rotation {
 			count += 1
 		}
 	}
@@ -227,15 +227,15 @@ func (p Path) VerifySignaturesWithGetBKID(getBKID getBackupKey) bool {
 		return true // root block is valid always
 	}
 
-	assert.Equal(p.FirstEdge().Version, PathVersion, "Unsupported path version")
-	assert.Equal(p.FirstEdge().Prev, AnchorDigest(), "Wrong anchor")
+	assert.Equal(p.FirstEdge().Body.Version, PathVersion, "Unsupported path version")
+	assert.Equal(p.FirstEdge().Body.Prev, AnchorDigest(), "Wrong anchor")
 
 	// start with the root key
 	parentsPubKey := p.FirstEdge().Public()
 
 	for _, edge := range p[1:] {
-		if edge.Options.BackupKeyIndex != 0 {
-			parentsPubKey = getBKID(edge.Options.BackupKeyIndex)
+		if edge.Body.Options.BackupKeyIndex != 0 {
+			parentsPubKey = getBKID(edge.Body.Options.BackupKeyIndex)
 		}
 		if !edge.VerifySignature(parentsPubKey) {
 			return false
@@ -287,8 +287,8 @@ func (c Path) Find(IDK key.Public) (b Edge, found hop.Distance) {
 // Resolver returns first found Resolver or empty string.
 func (c Path) Resolver() (endpoint string) {
 	for _, block := range c {
-		if block.Options.Resolver {
-			return block.Options.Endpoint
+		if block.Body.Options.Resolver {
+			return block.Body.Options.Endpoint
 		}
 	}
 	return

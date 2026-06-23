@@ -19,7 +19,7 @@ type EdgeBody struct {
 }
 
 type Edge struct {
-	EdgeBody  `cbor:"0,keyasint"`
+	Body      EdgeBody      `cbor:"0,keyasint"`
 	ParentSig key.Signature `cbor:"1,keyasint"`
 }
 
@@ -29,15 +29,15 @@ type Edge struct {
 // to Position field. By this we can send pincode by other, thru safe channel
 // and out-of-band.
 func NewVerifyEdge(pinCode int) (theirs Edge, ours Edge) {
-	challengeEdge := Edge{EdgeBody: EdgeBody{
+	challengeEdge := Edge{Body: EdgeBody{
 		Version: EdgeVersion,
 		Prev:    key.Hash(key.RandSlice(32)),
 		Child:   key.RandInfo(32),
 	}}
-	return challengeEdge, Edge{EdgeBody: EdgeBody{
+	return challengeEdge, Edge{Body: EdgeBody{
 		Version: EdgeVersion,
-		Prev:    challengeEdge.Prev,
-		Child:   challengeEdge.Child,
+		Prev:    challengeEdge.Body.Prev,
+		Child:   challengeEdge.Body.Child,
 		Options: Options{
 			Position: pinCode,
 		},
@@ -59,26 +59,26 @@ func (b Edge) ExcludeBytes() []byte {
 }
 
 func (b Edge) excludeSign() Edge {
-	newEdge := Edge{EdgeBody: EdgeBody{
+	newEdge := Edge{Body: EdgeBody{
 		Version: EdgeVersion,
-		Prev:    b.Prev,
-		Child:   b.Child,
+		Prev:    b.Body.Prev,
+		Child:   b.Body.Child,
 		Options: Options{
-			Position: b.Options.Position,
-			Rotation: b.Options.Rotation,
+			Position: b.Body.Options.Position,
+			Rotation: b.Body.Options.Rotation,
 		},
 	}}
 	return newEdge
 }
 
 func EqualEdges(b1, b2 Edge) bool {
-	return b1.Prev == b2.Prev &&
+	return b1.Body.Prev == b2.Body.Prev &&
 		bytes.Equal(b1.ID(), b2.ID()) &&
 		bytes.Equal(b1.Public(), b2.Public()) &&
 		bytes.Equal(b1.ParentSig, b2.ParentSig) &&
-		b1.Options.Position == b2.Options.Position &&
-		b1.Options.Rotation == b2.Options.Rotation &&
-		b1.Version == b2.Version
+		b1.Body.Options.Position == b2.Body.Options.Position &&
+		b1.Body.Options.Rotation == b2.Body.Options.Rotation &&
+		b1.Body.Version == b2.Body.Version
 }
 
 func (b Edge) VerifySignature2(invitersPubKey key.Public) bool {
@@ -96,9 +96,9 @@ func (b Edge) VerifySignature(invitersPubKey key.Public) bool {
 }
 
 func (b Edge) ID() key.ID {
-	return b.Child.ID
+	return b.Body.Child.ID
 }
 
 func (b Edge) Public() key.Public {
-	return b.Child.Public
+	return b.Body.Child.Public
 }

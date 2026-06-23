@@ -630,18 +630,18 @@ func testChallengeChild(t *testing.T) {
 		func(d []byte) key.Signature {
 			// In real world usage here we would send the d for Alice's signing
 			// over the network.
-			b := NewEdgeFromData(d)
+			edge := NewEdgeFromData(d)
 			// pinCode is transported out-of-band and entered *before* signing
-			b.Options.Position = pinCode
-			d = b.Bytes()
+			edge.Body.Options.Position = pinCode
+			d = edge.Bytes()
 			return try.To1(alice.Sign(d))
 		},
 	))
 	assert.That(bob.Challenge(pinCode,
 		func(d []byte) key.Signature {
-			b := NewEdgeFromData(d)
-			b.Options.Position = pinCode
-			d = b.Bytes()
+			edge := NewEdgeFromData(d)
+			edge.Body.Options.Position = pinCode
+			d = edge.Bytes()
 			return try.To1(bob.Sign(d))
 		},
 	))
@@ -650,9 +650,9 @@ func testChallengeChild(t *testing.T) {
 	// Test that if alice tries to sign bob's challenge it won't work.
 	assert.ThatNot(bob.Challenge(pinCode,
 		func(d []byte) key.Signature {
-			b := NewEdgeFromData(d)
-			b.Options.Position = pinCode
-			d = b.Bytes()
+			edge := NewEdgeFromData(d)
+			edge.Body.Options.Position = pinCode
+			d = edge.Bytes()
 			// NOTE Alice canot sign bob's challenge
 			return try.To1(alice.Sign(d))
 		},
@@ -660,9 +660,9 @@ func testChallengeChild(t *testing.T) {
 	// Wrong pinCode
 	assert.ThatNot(bob.Challenge(pinCode+1,
 		func(d []byte) key.Signature {
-			b := NewEdgeFromData(d)
-			b.Options.Position = pinCode
-			d = b.Bytes()
+			edge := NewEdgeFromData(d)
+			edge.Body.Options.Position = pinCode
+			d = edge.Bytes()
 			return try.To1(bob.Sign(d))
 		},
 	))
