@@ -22,8 +22,8 @@ func testNewVerifyEdge(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	cb, ours := NewVerifyEdge(pincode)
-	assert.Equal(cb.Position, 0)
-	assert.Equal(ours.Position, pincode)
+	assert.Equal(cb.Options.Position, 0)
+	assert.Equal(ours.Options.Position, pincode)
 	assert.SLen(cb.Bytes(), size)
 }
 

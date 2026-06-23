@@ -15,7 +15,7 @@ type EdgeBody struct {
 	Prev    key.Hash `cbor:"1,keyasint"`
 	Child   key.Info `cbor:"2,keyasint"`
 
-	Options `cbor:"3,keyasint,omitempty"`
+	Options Options `cbor:"3,keyasint,omitempty"`
 }
 
 type Edge struct {
@@ -64,8 +64,8 @@ func (b Edge) excludeSign() Edge {
 		Prev:    b.Prev,
 		Child:   b.Child,
 		Options: Options{
-			Position: b.Position,
-			Rotation: b.Rotation,
+			Position: b.Options.Position,
+			Rotation: b.Options.Rotation,
 		},
 	}}
 	return newEdge
@@ -76,8 +76,8 @@ func EqualEdges(b1, b2 Edge) bool {
 		bytes.Equal(b1.ID(), b2.ID()) &&
 		bytes.Equal(b1.Public(), b2.Public()) &&
 		bytes.Equal(b1.ParentSig, b2.ParentSig) &&
-		b1.Position == b2.Position &&
-		b1.Rotation == b2.Rotation &&
+		b1.Options.Position == b2.Options.Position &&
+		b1.Options.Rotation == b2.Options.Rotation &&
 		b1.Version == b2.Version
 }
 

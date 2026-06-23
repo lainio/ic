@@ -194,7 +194,7 @@ func (c Path) Len() hop.Distance {
 
 func (c Path) KeyRotationsLen() (count hop.Distance) {
 	for _, b := range c {
-		if b.Rotation {
+		if b.Options.Rotation {
 			count += 1
 		}
 	}
@@ -234,8 +234,8 @@ func (p Path) VerifySignaturesWithGetBKID(getBKID getBackupKey) bool {
 	parentsPubKey := p.FirstEdge().Public()
 
 	for _, edge := range p[1:] {
-		if edge.BackupKeyIndex != 0 {
-			parentsPubKey = getBKID(edge.BackupKeyIndex)
+		if edge.Options.BackupKeyIndex != 0 {
+			parentsPubKey = getBKID(edge.Options.BackupKeyIndex)
 		}
 		if !edge.VerifySignature(parentsPubKey) {
 			return false
@@ -287,8 +287,8 @@ func (c Path) Find(IDK key.Public) (b Edge, found hop.Distance) {
 // Resolver returns first found Resolver or empty string.
 func (c Path) Resolver() (endpoint string) {
 	for _, block := range c {
-		if block.Resolver {
-			return block.Endpoint
+		if block.Options.Resolver {
+			return block.Options.Endpoint
 		}
 	}
 	return
