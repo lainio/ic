@@ -136,17 +136,17 @@ func (p Path) Bytes() []byte {
 // Introduce is called for the parent's path. Parent's key is needed for signing
 // the new link/block which includes childsPubKey and position in the path.
 // A new path is returned. The path will be given for the child.
-func (c Path) Introduce(
+func (p Path) Introduce(
 	parent key.Handle,
 	child key.Info,
 	opts ...Opts,
-) (nc Path) {
+) (newP Path) {
 	// We have *now* backup keys which cannot handle this assert!
 	//	assert.That(c.isLeaf(parent), "only leaf can invite")
 
 	newEdge := Edge{Body: EdgeBody{
 		Version: EdgeVersion,
-		Prev:    c.leafHash(),
+		Prev:    p.leafHash(),
 		Child:   child,
 	}}
 	newEdge.Body.Options = *NewOptions(opts...)
@@ -155,45 +155,45 @@ func (c Path) Introduce(
 	//pubK := try.To1(parent.CBORPublicKey())
 	//assert.That(newEdge.VerifySignature2(pubK))
 
-	nc = c.Clone()
-	nc = append(nc, newEdge)
-	return nc
+	newP = p.Clone()
+	newP = append(newP, newEdge)
+	return newP
 }
 
 // Hops returns hops and common parent's level if that exists. If not both
 // return values are NotConnected.
-func (c Path) Hops(their Path) (hops hop.Distance, rootLvl hop.Distance) {
-	common, _ := CommonParentLevel(c, their)
+func (p Path) Hops(their Path) (hops hop.Distance, rootLvl hop.Distance) {
+	common, _ := CommonParentLevel(p, their)
 	if common == hop.NotConnected {
 		return hop.NotConnected, hop.NotConnected
 	}
 
-	if c.OneHop(their) {
+	if p.OneHop(their) {
 		return 1, common
 	}
 
 	// both path lengths without self, minus "tail" to common parent
-	hops = c.AbsLen() - 1 + their.AbsLen() - 1 - 2*common
+	hops = p.AbsLen() - 1 + their.AbsLen() - 1 - 2*common
 
 	return hops, common
 }
 
-func (c Path) OneHop(their Path) bool {
-	return c.IsParentFor(their) ||
-		their.IsParentFor(c)
+func (p Path) OneHop(their Path) bool {
+	return p.IsParentFor(their) ||
+		their.IsParentFor(p)
 }
 
-func (c Path) AbsLen() hop.Distance {
-	return c.Len()
+func (p Path) AbsLen() hop.Distance {
+	return p.Len()
 	//return c.Len() - c.KeyRotationsLen()
 }
 
-func (c Path) Len() hop.Distance {
-	return hop.Distance(len(c))
+func (p Path) Len() hop.Distance {
+	return hop.Distance(len(p))
 }
 
-func (c Path) KeyRotationsLen() (count hop.Distance) {
-	for _, b := range c {
+func (p Path) KeyRotationsLen() (count hop.Distance) {
+	for _, b := range p {
 		if b.Body.Options.Rotation {
 			count += 1
 		}
@@ -206,17 +206,17 @@ func (c Path) _(parentsKey key.Handle) bool {
 	return bytes.Equal(c.LeafPubKey(), try.To1(parentsKey.CBORPublicKey()))
 }
 
-func (c Path) LeafPubKey() key.Public {
-	assert.That(c.Len() > 0, "path cannot be empty")
+func (p Path) LeafPubKey() key.Public {
+	assert.That(p.Len() > 0, "path cannot be empty")
 
-	return c.LastEdge().Public()
+	return p.LastEdge().Public()
 }
 
-func (c Path) leafHash() key.Hash {
-	if c == nil {
+func (p Path) leafHash() key.Hash {
+	if p == nil {
 		return key.Hash{}
 	}
-	ha := key.HashTagged("v1/signed-hash", c.LastEdge().Bytes())
+	ha := key.HashTagged("v1/signed-hash", p.LastEdge().Bytes())
 	return ha
 }
 
@@ -252,31 +252,31 @@ func emptyBKImpl(int) key.Public {
 }
 
 // VerifySignatures verifies paths signatures, from root to the leaf.
-func (c Path) VerifySignatures() bool {
-	return c.VerifySignaturesWithGetBKID(emptyBKImpl)
+func (p Path) VerifySignatures() bool {
+	return p.VerifySignaturesWithGetBKID(emptyBKImpl)
 }
 
-func (c Path) Clone() Path {
-	return NewPathFromData(c.Bytes())
+func (p Path) Clone() Path {
+	return NewPathFromData(p.Bytes())
 }
 
-func (c Path) IsParentFor(child Path) bool {
+func (p Path) IsParentFor(child Path) bool {
 	// if we are a root or too near of a root we cannot be parent
-	if c.Len() < 1 || child.Len() < 2 {
+	if p.Len() < 1 || child.Len() < 2 {
 		return false
 	}
 
 	return EqualEdges(
-		c.LastEdge(),
+		p.LastEdge(),
 		child.secondLastEdge(),
 	)
 }
 
 // Find finds Edge from Path if it exists. If block not found the returned
 // 'found' is [hop.NotConnected].
-func (c Path) Find(IDK key.Public) (b Edge, found hop.Distance) {
+func (p Path) Find(IDK key.Public) (b Edge, found hop.Distance) {
 	found = hop.NewNotConnected()
-	for i, block := range c {
+	for i, block := range p {
 		if block.Public().Equal(IDK) {
 			return block, hop.Distance(i)
 		}
@@ -285,8 +285,8 @@ func (c Path) Find(IDK key.Public) (b Edge, found hop.Distance) {
 }
 
 // Resolver returns first found Resolver or empty string.
-func (c Path) Resolver() (endpoint string) {
-	for _, block := range c {
+func (p Path) Resolver() (endpoint string) {
+	for _, block := range p {
 		if block.Body.Options.Resolver {
 			return block.Body.Options.Endpoint
 		}
@@ -294,8 +294,8 @@ func (c Path) Resolver() (endpoint string) {
 	return
 }
 
-func (c Path) FindLevel(IDK key.Public) (lvl hop.Distance) {
-	for i, block := range c {
+func (p Path) FindLevel(IDK key.Public) (lvl hop.Distance) {
+	for i, block := range p {
 		if bytes.Equal(block.Public(), IDK) {
 			return hop.Distance(i)
 		}
@@ -307,25 +307,25 @@ func (c Path) FindLevel(IDK key.Public) (lvl hop.Distance) {
 // Most common cases is that caller of the function implements the closure where
 // it calls other party over the network to sign the challenge which is readily
 // build and randomized.
-func (c Path) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
-	pubKey := c.LastEdge().Public()
+func (p Path) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
+	pubKey := p.LastEdge().Public()
 	challengeEdge, sigEdge := NewVerifyEdge(pinCode)
 	signature := f(challengeEdge.Bytes())
 	return signature.Verify(pubKey, sigEdge.Bytes())
 }
 
-func (c Path) FirstEdge() Edge {
-	return c[0]
+func (p Path) FirstEdge() Edge {
+	return p[0]
 }
 
-func (c Path) LastEdge() Edge {
-	l := len(c)
+func (p Path) LastEdge() Edge {
+	l := len(p)
 	assert.That(l > 0, "Edges is too short")
-	return c[l-1]
+	return p[l-1]
 }
 
-func (c Path) secondLastEdge() Edge {
-	l := len(c)
+func (p Path) secondLastEdge() Edge {
+	l := len(p)
 	assert.That(l > 1, "Edges is too short")
-	return c[l-2]
+	return p[l-2]
 }
