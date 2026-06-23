@@ -46,6 +46,11 @@ func TryUnmarshal(v any, data []byte) {
 	try.To(Unmarshal(v, data))
 }
 
+func FromData[T any](d []byte) (v T) {
+	try.To(DecMode.Unmarshal(d, &v))
+	return v
+}
+
 func Unmarshal(v any, data []byte) error {
 	return DecMode.Unmarshal(data, v)
 }

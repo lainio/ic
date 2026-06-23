@@ -3,7 +3,6 @@ package intro
 import (
 	"bytes"
 
-	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/key"
 )
@@ -47,20 +46,12 @@ func NewVerifyEdge(pinCode int) (theirs Edge, ours Edge) {
 
 // NewEdgeFromData constructor from raw CBOR data block.
 func NewEdgeFromData(d []byte) (b Edge) {
-	r := bytes.NewReader(d)
-	cbor := wire.DecMode
-	dec := cbor.NewDecoder(r)
-	try.To(dec.Decode(&b))
-	return b
+	return wire.FromData[Edge](d)
 }
 
 // Bytes return marshallel bytes of the Edge.
 func (b Edge) Bytes() []byte {
-	var buf bytes.Buffer
-	cbor := wire.EncMode
-	enc := cbor.NewEncoder(&buf)
-	try.To(enc.Encode(b))
-	return buf.Bytes()
+	return wire.TryMarshal(b)
 }
 
 func (b Edge) ExcludeBytes() []byte {

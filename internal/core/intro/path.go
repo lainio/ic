@@ -125,25 +125,12 @@ func New(keyInfo key.Info, flags ...Opts) Path {
 // NewPathFromData creates a new Path from byte data.
 //
 // NOTE that [NewEdgeFromData] creates a new Edge.
-func NewPathFromData(d []byte) (c Path) {
-	r := bytes.NewReader(d)
-	cbor := wire.DecMode
-	dec := cbor.NewDecoder(r)
-	try.To(dec.Decode(&c))
-	return c
+func NewPathFromData(d []byte) Path {
+	return wire.FromData[Path](d)
 }
 
-func (c Path) IsNil() bool {
-	return c == nil
-}
-
-// Bytes return Path's public data for persistence.
-func (c Path) Bytes() []byte {
-	var buf bytes.Buffer
-	cbor := wire.EncMode
-	enc := cbor.NewEncoder(&buf)
-	try.To(enc.Encode(c))
-	return buf.Bytes()
+func (p Path) Bytes() []byte {
+	return wire.TryMarshal(p)
 }
 
 // Introduce is called for the parent's path. Parent's key is needed for signing
