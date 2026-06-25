@@ -176,7 +176,6 @@ func testRead(t *testing.T) {
 }
 
 func testVerifyPathFail(t *testing.T) {
-
 	t.Run("bad signature", func(t *testing.T) {
 		defer assert.PushTester(t)()
 
@@ -189,39 +188,6 @@ func testVerifyPathFail(t *testing.T) {
 
 		assert.Equal(c2.Prove(), ErrBadSignature)
 	})
-
-}
-
-func aTestVerifyPathFail(t *testing.T) {
-	assert.PushTester(t, assert.Plain)
-
-	newChild := key.New()
-	level := 3
-	testPath := testPath.Introduce(
-		childKey,
-		key.InfoFromHandle(newChild),
-		WithPosition(level),
-	)
-
-	level = 4
-	testPath2 := testPath.Introduce(
-		childKey,
-		key.InfoFromHandle(newChild),
-		WithPosition(level),
-	)
-
-	assert.SLen(testPath2, 4)
-	assert.PopTester()
-
-	assert.PushTester(t, assert.Plain)
-	errStr := testPath2.Prove().Error()
-	assert.PopTester()
-
-	defer assert.PushTester(t)()
-
-	println("-----------------")
-	println("err str:", errStr)
-	//assert.Equal(errStr, BrokenPath)
 }
 
 func testVerifyPath(t *testing.T) {
@@ -702,4 +668,81 @@ func testChallengeChild(t *testing.T) {
 			return try.To1(bob.Sign(d))
 		},
 	))
+}
+
+func newEntity() entity {
+	eKey := key.New()
+	e := entity{eKey, New(key.InfoFromHandle(eKey))}
+	return e
+}
+
+func TestVerifyPathFail(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	// root -> alice
+	root := newEntity()
+	assert.SLen(root.Path, 1, "the Anchor is ONE (1) in the path")
+	alice := newEntity()
+	level := 2
+	alice.Path = root.Path.Introduce(
+		root.Handle,
+		key.InfoFromHandle(alice),
+		WithPosition(level),
+	)
+	assert.SLen(alice.Path, 1+1, "the Anchor is ONE (1) in the path")
+	assert.Equal(int(alice.Len()), level, "the Anchor is ONE (1) in the path")
+
+	// root -> alice -> bob
+	bob := newEntity()
+	level = 3
+	bob.Path = alice.Introduce(
+		alice,
+		key.InfoFromHandle(bob),
+		WithPosition(level),
+	)
+	assert.SLen(bob.Path, 1+2, "the Anchor is ONE (1) in the path")
+
+	{
+		// root -> alice -> bob -> alice
+		level = 4
+		testPath2 := bob.Introduce(
+			bob,
+			key.InfoFromHandle(alice),
+			WithPosition(level),
+		)
+
+		assert.SLen(testPath2, 4)
+
+		err := testPath2.Prove()
+		assert.Equal(err, ErrCycleOrDuplicate)
+		assert.NotEqual(err, ErrBrokenPath)
+		errStr := testPath2.Prove().Error()
+
+		println("-----------------")
+		println("err str:", errStr)
+		println("-----------------")
+		assert.Equal(errStr, CycleOrDuplicate)
+	}
+
+	{
+		// root -> alice -> bob -> bob
+		level = 4
+		testPath2 := bob.Introduce(
+			bob,
+			key.InfoFromHandle(bob),
+			WithPosition(level),
+		)
+
+		assert.SLen(testPath2, 4)
+
+		err := testPath2.Prove()
+		assert.NotEqual(err, ErrCycleOrDuplicate)
+		assert.Equal(err, ErrBrokenPath)
+		errStr := testPath2.Prove().Error()
+
+		println("-----------------")
+		println("err str:", errStr)
+		println("-----------------")
+		assert.Equal(errStr, BrokenPath)
+	}
 }
