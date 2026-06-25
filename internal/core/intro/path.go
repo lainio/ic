@@ -5,8 +5,10 @@ package intro
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/hop"
@@ -19,7 +21,6 @@ const (
 
 	AnchorVersion uint64 = 1
 	EdgeVersion   uint64 = 1
-	PathVersion   uint64 = 1
 )
 
 type Anchor struct {
@@ -69,7 +70,7 @@ func SameParent(c1, c2 Path) bool {
 // CommonParentLevel returns parent's distance (current level) from path's root
 // if parent exists, and [same] is true if Parent is in the same IC. If the
 // Common Parent doesn't exist, it returns [hop.NotConnected] and false.
-// TODO: remove [same] it's not needed when we have only one chain.
+// TODO: remove [same] it's not needed when we have only one intro tree.
 func CommonParentLevel(c1, c2 Path) (level hop.Distance, same bool) {
 	if !SameRoot(c1, c2) {
 		return hop.NotConnected, false
@@ -134,7 +135,7 @@ func (p Path) Bytes() []byte {
 }
 
 // Introduce is called for the parent's path. Parent's key is needed for signing
-// the new link/block which includes childsPubKey and position in the path.
+// the new link/edge which includes childsPubKey and position in the path.
 // A new path is returned. The path will be given for the child.
 func (p Path) Introduce(
 	parent key.Handle,
@@ -222,28 +223,60 @@ func (p Path) leafHash() key.Hash {
 
 type getBackupKey func(int) key.Public
 
-func (p Path) VerifySignaturesWithGetBKID(getBKID getBackupKey) bool {
-	if p.Len() == 1 {
-		return true // root block is valid always
-	}
+var (
+	UnsupportedVersion = "Unsupported edge version"
+	WrongAnchor        = "Wrong anchor"
+	BrokenPath         = "Broken path"
+	CycleOrDuplicate   = "Cycle or dublicate"
+	BadSignature       = "Bad signature"
 
-	assert.Equal(p.FirstEdge().Body.Version, PathVersion, "Unsupported path version")
-	assert.Equal(p.FirstEdge().Body.Prev, AnchorDigest(), "Wrong anchor")
+	// TODO: use above below!
+	ErrUnsupportedVersion = errors.New("Unsupported edge version")
+	ErrWrongAnchor        = errors.New("Wrong anchor")
+	ErrBrokenPath         = errors.New("Broken path")
+	ErrCycleOrDuplicate   = errors.New("Cycle or dublicate")
+	ErrBadSignature       = errors.New("Bad signature")
+)
+
+func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+
+	assert.Equal(p.FirstEdge().Body.Version, EdgeVersion, ErrUnsupportedVersion)
+	assert.Equal(p.FirstEdge().Body.Prev, AnchorDigest(), ErrWrongAnchor)
+
+	if p.Len() == 1 {
+		return nil // root edge is valid, see the previous asserts
+	}
 
 	// start with the root key
 	parentsPubKey := p.FirstEdge().Public()
+	prev := parentsPubKey.Hash()
+	seen := map[key.Hash]bool{}
 
 	for _, edge := range p[1:] {
+		assert.Equal(edge.Body.Version, EdgeVersion, ErrUnsupportedVersion)
+		eIDK := edge.Public()
+		eDigest := eIDK.Hash()
+
+		assert.NotEqual(eDigest, prev, ErrBrokenPath)
+//		if eDigest == prev {
+//			return ErrBrokenPath
+//		}
+		assert.ThatNot(seen[eDigest], ErrCycleOrDuplicate)
+
 		if edge.Body.Options.BackupKeyIndex != 0 {
 			parentsPubKey = getBKID(edge.Body.Options.BackupKeyIndex)
 		}
 		if !edge.VerifySignature(parentsPubKey) {
-			return false
+			return ErrBadSignature
 		}
-		// the next block is signed with this block's pub key
-		parentsPubKey = edge.Public()
+		// the next edge is signed with this edge's pub key
+		parentsPubKey = eIDK
+		prev = parentsPubKey.Hash()
+		seen[prev] = true
 	}
-	return true
+	return nil
 }
 
 func emptyBKImpl(int) key.Public {
@@ -251,9 +284,11 @@ func emptyBKImpl(int) key.Public {
 	return nil
 }
 
-// VerifySignatures verifies paths signatures, from root to the leaf.
-func (p Path) VerifySignatures() bool {
-	return p.VerifySignaturesWithGetBKID(emptyBKImpl)
+// Prove verifies the whole path, from root to the leaf.
+func (p Path) Prove() (err error) {
+	defer err2.Handle(&err, nil)
+	
+	return p.ProveWithGetBKID(emptyBKImpl)
 }
 
 func (p Path) Clone() Path {
@@ -272,13 +307,13 @@ func (p Path) IsParentFor(child Path) bool {
 	)
 }
 
-// Find finds Edge from Path if it exists. If block not found the returned
+// Find finds Edge from Path if it exists. If edge not found the returned
 // 'found' is [hop.NotConnected].
-func (p Path) Find(IDK key.Public) (b Edge, found hop.Distance) {
+func (p Path) Find(IDK key.Public) (e Edge, found hop.Distance) {
 	found = hop.NewNotConnected()
-	for i, block := range p {
-		if block.Public().Equal(IDK) {
-			return block, hop.Distance(i)
+	for i, edge := range p {
+		if edge.Public().Equal(IDK) {
+			return edge, hop.Distance(i)
 		}
 	}
 	return
@@ -286,17 +321,17 @@ func (p Path) Find(IDK key.Public) (b Edge, found hop.Distance) {
 
 // Resolver returns first found Resolver or empty string.
 func (p Path) Resolver() (endpoint string) {
-	for _, block := range p {
-		if block.Body.Options.Resolver {
-			return block.Body.Options.Endpoint
+	for _, edge := range p {
+		if edge.Body.Options.Resolver {
+			return edge.Body.Options.Endpoint
 		}
 	}
 	return
 }
 
 func (p Path) FindLevel(IDK key.Public) (lvl hop.Distance) {
-	for i, block := range p {
-		if bytes.Equal(block.Public(), IDK) {
+	for i, edge := range p {
+		if bytes.Equal(edge.Public(), IDK) {
 			return hop.Distance(i)
 		}
 	}

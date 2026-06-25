@@ -99,7 +99,7 @@ func setup() {
 }
 
 func Test_all(t *testing.T) {
-	defer assert.PushTester(t)()
+	defer assert.PushTester(t, assert.Plain)()
 
 	t.Run("new path", testNewPath)
 	t.Run("read", testRead)
@@ -172,27 +172,63 @@ func testRead(t *testing.T) {
 
 	c2 := testPath.Clone()
 	assert.SLen(c2, 2)
-	assert.That(c2.VerifySignatures())
+	assert.NoError(c2.Prove())
 }
 
 func testVerifyPathFail(t *testing.T) {
+
+	t.Run("bad signature", func(t *testing.T) {
+		defer assert.PushTester(t)()
+
+		c2 := testPath.Clone()
+		assert.SLen(c2, 2)
+		assert.NoError(c2.Prove())
+
+		b2 := c2[1]
+		b2.ParentSig[len(b2.ParentSig)-1] += 0x01
+
+		assert.Equal(c2.Prove(), ErrBadSignature)
+	})
+
+}
+
+func aTestVerifyPathFail(t *testing.T) {
+	assert.PushTester(t, assert.Plain)
+
+	newChild := key.New()
+	level := 3
+	testPath := testPath.Introduce(
+		childKey,
+		key.InfoFromHandle(newChild),
+		WithPosition(level),
+	)
+
+	level = 4
+	testPath2 := testPath.Introduce(
+		childKey,
+		key.InfoFromHandle(newChild),
+		WithPosition(level),
+	)
+
+	assert.SLen(testPath2, 4)
+	assert.PopTester()
+
+	assert.PushTester(t, assert.Plain)
+	errStr := testPath2.Prove().Error()
+	assert.PopTester()
+
 	defer assert.PushTester(t)()
 
-	c2 := testPath.Clone()
-	assert.SLen(c2, 2)
-	assert.That(c2.VerifySignatures())
-
-	b2 := c2[1]
-	b2.ParentSig[len(b2.ParentSig)-1] += 0x01
-
-	assert.ThatNot(c2.VerifySignatures())
+	println("-----------------")
+	println("err str:", errStr)
+	//assert.Equal(errStr, BrokenPath)
 }
 
 func testVerifyPath(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(testPath, 2)
-	assert.That(testPath.VerifySignatures())
+	assert.NoError(testPath.Prove())
 
 	newChild := key.New()
 	level := 3
@@ -203,16 +239,16 @@ func testVerifyPath(t *testing.T) {
 	)
 
 	assert.SLen(testPath, 3)
-	assert.That(testPath.VerifySignatures())
+	assert.NoError(testPath.Prove())
 }
 
 func testIntroduction(t *testing.T) {
 	defer assert.PushTester(t)()
 
 	assert.SLen(alice.Path, 3)
-	assert.That(alice.Path.VerifySignatures())
+	assert.NoError(alice.Path.Prove())
 	assert.SLen(bob.Path, 3)
-	assert.That(bob.Path.VerifySignatures())
+	assert.NoError(bob.Path.Prove())
 
 	cecilia := entity{
 		Handle: key.New(),
@@ -223,7 +259,7 @@ func testIntroduction(t *testing.T) {
 		WithPosition(1),
 	)
 	assert.SLen(cecilia.Path, 4)
-	assert.That(cecilia.Path.VerifySignatures())
+	assert.NoError(cecilia.Path.Prove())
 	assert.ThatNot(
 		SameRoot(testPath, cecilia.Path),
 		"we have two different roots",
@@ -263,7 +299,7 @@ func testCommonParentLevel(t *testing.T) {
 	//                ↓
 	//             cecilia
 	assert.SLen(cecilia.Path, 4)
-	assert.That(cecilia.Path.VerifySignatures())
+	assert.NoError(cecilia.Path.Prove())
 
 	david := entity{
 		Handle: key.New(),
@@ -434,7 +470,7 @@ func testSameParent(t *testing.T) {
 		WithPosition(1),
 	)
 	assert.That(cecilia.Len() == 4)
-	assert.That(cecilia.Path.VerifySignatures())
+	assert.NoError(cecilia.Path.Prove())
 	assert.That(bob.IsParentFor(cecilia.Path))
 	assert.ThatNot(
 		alice.IsParentFor(cecilia.Path),
