@@ -190,6 +190,7 @@ func (p Path) AbsLen() hop.Distance {
 }
 
 func (p Path) Len() hop.Distance {
+	// TODO: the Anchor is calculated now
 	return hop.Distance(len(p))
 }
 
@@ -224,13 +225,6 @@ func (p Path) leafHash() key.Hash {
 type getBackupKey func(int) key.Public
 
 var (
-	UnsupportedVersion = "Unsupported edge version"
-	WrongAnchor        = "Wrong anchor"
-	BrokenPath         = "Broken path"
-	CycleOrDuplicate   = "Cycle or dublicate"
-	BadSignature       = "Bad signature"
-
-	// TODO: use above below!
 	ErrUnsupportedVersion = errors.New("Unsupported edge version")
 	ErrWrongAnchor        = errors.New("Wrong anchor")
 	ErrBrokenPath         = errors.New("Broken path")
@@ -256,14 +250,11 @@ func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
 
 	for _, edge := range p[1:] {
 		assert.Equal(edge.Body.Version, EdgeVersion, ErrUnsupportedVersion)
+
 		eIDK := edge.Public()
 		eDigest := eIDK.Hash()
-
-		assert.NotEqual(eDigest, prev, ErrBrokenPath)
-//		if eDigest == prev {
-//			return ErrBrokenPath
-//		}
-		assert.ThatNot(seen[eDigest], ErrCycleOrDuplicate)
+		assert.NotEqual(eDigest, prev, ErrBrokenPath)            // tested
+		assert.MKeyNotExists(seen, eDigest, ErrCycleOrDuplicate) // tested
 
 		if edge.Body.Options.BackupKeyIndex != 0 {
 			parentsPubKey = getBKID(edge.Body.Options.BackupKeyIndex)
@@ -287,7 +278,7 @@ func emptyBKImpl(int) key.Public {
 // Prove verifies the whole path, from root to the leaf.
 func (p Path) Prove() (err error) {
 	defer err2.Handle(&err, nil)
-	
+
 	return p.ProveWithGetBKID(emptyBKImpl)
 }
 
