@@ -703,6 +703,7 @@ func TestVerifyPathFail(t *testing.T) {
 	assert.SLen(bob.Path, 1+2, "the Anchor is ONE (1) in the path")
 
 	{
+		// Dublicate alice!
 		// root -> alice -> bob -> alice
 		level = 4
 		testPath2 := bob.Introduce(
@@ -715,16 +716,10 @@ func TestVerifyPathFail(t *testing.T) {
 
 		err := testPath2.Prove()
 		assert.Equal(err, ErrCycleOrDuplicate)
-		assert.NotEqual(err, ErrBrokenPath)
-		errStr := testPath2.Prove().Error()
-
-		println("-----------------")
-		println("err str:", errStr)
-		println("-----------------")
-		assert.Equal(errStr, CycleOrDuplicate)
 	}
 
 	{
+		// Broken path: bob introduce itself!
 		// root -> alice -> bob -> bob
 		level = 4
 		testPath2 := bob.Introduce(
@@ -736,13 +731,6 @@ func TestVerifyPathFail(t *testing.T) {
 		assert.SLen(testPath2, 4)
 
 		err := testPath2.Prove()
-		assert.NotEqual(err, ErrCycleOrDuplicate)
 		assert.Equal(err, ErrBrokenPath)
-		errStr := testPath2.Prove().Error()
-
-		println("-----------------")
-		println("err str:", errStr)
-		println("-----------------")
-		assert.Equal(errStr, BrokenPath)
 	}
 }
