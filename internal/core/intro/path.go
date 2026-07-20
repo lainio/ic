@@ -251,19 +251,18 @@ func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
 	for _, edge := range p[1:] {
 		assert.Equal(edge.Body.Version, EdgeVersion, ErrUnsupportedVersion)
 
-		eIDK := edge.Public()
-		eDigest := eIDK.Hash()
-		assert.NotEqual(eDigest, prev, ErrBrokenPath)            // tested
-		assert.MKeyNotExists(seen, eDigest, ErrCycleOrDuplicate) // tested
+		edgeIDK := edge.Public()
+		edgeDigest := edgeIDK.Hash()
+		assert.NotEqual(edgeDigest, prev, ErrBrokenPath)            // tested
+		assert.MKeyNotExists(seen, edgeDigest, ErrCycleOrDuplicate) // tested
 
 		if edge.Body.Options.BackupKeyIndex != 0 {
 			parentsPubKey = getBKID(edge.Body.Options.BackupKeyIndex)
 		}
-		if !edge.VerifySignature(parentsPubKey) {
-			return ErrBadSignature
-		}
+		assert.That(edge.VerifySignature(parentsPubKey), ErrBadSignature)
+
 		// the next edge is signed with this edge's pub key
-		parentsPubKey = eIDK
+		parentsPubKey = edgeIDK
 		prev = parentsPubKey.Hash()
 		seen[prev] = true
 	}
