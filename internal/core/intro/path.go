@@ -233,7 +233,9 @@ var (
 )
 
 func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
+	//defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
+	defer err2.Handle(&err)
 
 	assert.Equal(p.FirstEdge().Body.Version, EdgeVersion, ErrUnsupportedVersion)
 	assert.Equal(p.FirstEdge().Body.Prev, AnchorDigest(), ErrWrongAnchor)
