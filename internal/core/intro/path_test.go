@@ -1,6 +1,7 @@
 package intro
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -186,7 +187,8 @@ func testVerifyPathFail(t *testing.T) {
 		b2 := c2[1]
 		b2.ParentSig[len(b2.ParentSig)-1] += 0x01
 
-		assert.Equal(c2.Prove(), ErrBadSignature)
+		err := c2.Prove()
+		assert.ErrorIs(err, ErrBadSignature)
 	})
 }
 
@@ -715,7 +717,7 @@ func TestVerifyPathFail(t *testing.T) {
 		assert.SLen(testPath2, 4)
 
 		err := testPath2.Prove()
-		assert.Equal(err, ErrCycleOrDuplicate)
+		assert.ErrorIs(err, ErrCycleOrDuplicate)
 	}
 
 	{
@@ -731,6 +733,7 @@ func TestVerifyPathFail(t *testing.T) {
 		assert.SLen(testPath2, 4)
 
 		err := testPath2.Prove()
-		assert.Equal(err, ErrBrokenPath)
+		assert.ErrorIs(err, ErrBrokenPath)
+		assert.ErrorIsNot(err, ErrCycleOrDuplicate)
 	}
 }
