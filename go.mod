@@ -9,7 +9,7 @@ require (
 	github.com/findy-network/findy-common-go v0.2.71
 	github.com/fxamacker/cbor/v2 v2.9.0
 	github.com/golang/glog v1.2.5
-	github.com/lainio/err2 v1.2.3
+	github.com/lainio/err2 v1.3.0
 	github.com/nats-io/nats.go v1.47.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10

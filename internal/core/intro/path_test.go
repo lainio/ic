@@ -1,7 +1,6 @@
 package intro
 
 import (
-	"errors"
 	"os"
 	"testing"
 

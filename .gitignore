@@ -2,6 +2,7 @@
 .idea
 *.vim
 .envrc
+/.codex/
 
 # Binaries for programs and plugins
 *.exe
