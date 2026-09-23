@@ -237,6 +237,7 @@ func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
 
 	assert.Equal(p.FirstEdge().Body.Version, EdgeVersion, ErrUnsupportedVersion)
 	assert.Equal(p.FirstEdge().Body.Prev, AnchorDigest(), ErrWrongAnchor)
+	assert.SLonger(p, 0, ErrWrongAnchor)
 
 	if p.Len() == 1 {
 		return nil // root edge is valid, see the previous asserts
