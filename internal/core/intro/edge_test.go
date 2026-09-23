@@ -15,11 +15,12 @@ func TestEdge_all(t *testing.T) {
 }
 
 func testNewVerifyEdge(t *testing.T) {
+	defer assert.PushTester(t)()
+
 	const (
 		pincode = 1234
 		size    = 194 // TODO: can be wrong quite soon
 	)
-	defer assert.PushTester(t)()
 
 	cb, ours := NewVerifyEdge(pincode)
 	assert.Equal(cb.Body.Options.Position, 0)
