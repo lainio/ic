@@ -690,6 +690,7 @@ func TestVerifyPathFail(t *testing.T) {
 		key.InfoFromHandle(alice),
 		WithPosition(level),
 	)
+	assert.NoError(alice.Path.Prove(), "alice's introduction path is provable")
 	assert.SLen(alice.Path, 1+1, "the Anchor is ONE (1) in the path")
 	assert.Equal(int(alice.Len()), level, "the Anchor is ONE (1) in the path")
 
@@ -701,6 +702,7 @@ func TestVerifyPathFail(t *testing.T) {
 		key.InfoFromHandle(bob),
 		WithPosition(level),
 	)
+	assert.NoError(bob.Path.Prove(), "bob's introduction path is provable")
 	assert.SLen(bob.Path, 1+2, "the Anchor is ONE (1) in the path")
 
 	{
@@ -716,7 +718,7 @@ func TestVerifyPathFail(t *testing.T) {
 		assert.SLen(testPath2, 4)
 
 		err := testPath2.Prove()
-		assert.ErrorIs(err, ErrCycleOrDuplicate)
+		assert.ErrorIs(err, ErrCycleOrDuplicate, "alice is dublicated")
 	}
 
 	{
@@ -732,7 +734,7 @@ func TestVerifyPathFail(t *testing.T) {
 		assert.SLen(testPath2, 4)
 
 		err := testPath2.Prove()
-		assert.ErrorIs(err, ErrBrokenPath)
-		assert.ErrorIsNot(err, ErrCycleOrDuplicate)
+		assert.ErrorIs(err, ErrBrokenPath, "bob has introduced himself")
+		assert.ErrorIsNot(err, ErrCycleOrDuplicate, "broken path is high prior")
 	}
 }
