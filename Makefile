@@ -6,7 +6,8 @@ PKG3 := github.com/lainio/ic/identity
 PKG4 := github.com/lainio/ic/hop
 PKG5 := github.com/lainio/ic/key
 PKG6 := github.com/lainio/ic/internal/core/intro
-PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4) $(PKG5) $(PKG6)
+PKG7 := github.com/lainio/ic/storage/...
+PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4) $(PKG5) $(PKG6) $(PKG7)
 
 SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
 
@@ -57,6 +58,9 @@ test5:
 test6:
 	$(GO) test $(TEST_ARGS) $(PKG6)
 
+test7:
+	$(GO) test $(TEST_ARGS) $(PKG7)
+
 test:
 	$(GO) test $(TEST_ARGS) $(PKGS)
 
@@ -83,6 +87,9 @@ bench5:
 
 bench6:
 	@$(GO) test $(TEST_ARGS) -bench=. $(PKG6)
+
+bench7:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG7)
 
 vet: | test
 	@$(GO) vet $(PKGS)
