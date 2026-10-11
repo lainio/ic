@@ -224,11 +224,15 @@ func rollbackCases() []rollbackCase {
 		{name: "ignored_invalid_put", finish: func(tx WriteTx) error { _ = tx.Put(nil, nil); return nil }, wantErr: ErrEmptyKey},
 		{name: "err2_error_panic", finish: func(WriteTx) error { try.To(stop); return nil }, wantErr: stop},
 		{name: "unexpected_panic", finish: func(WriteTx) error { panic(marker) }, wantPanic: marker},
-		{name: "runtime_panic", finish: func(WriteTx) error { //nolint:nilderef // we
-			var empty []byte
-			_ = empty[0]
-			return nil
-		}, runtime: true},
+		{
+			name: "runtime_panic",
+			finish: func(WriteTx) error {
+				data := []byte{0}
+				_ = data[len(data)] // Deliberate bounds panic: test rollback.
+				return nil
+			},
+			runtime: true,
+		},
 	}
 }
 
