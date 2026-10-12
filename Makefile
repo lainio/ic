@@ -61,6 +61,9 @@ test6:
 test7:
 	$(GO) test $(TEST_ARGS) $(PKG7)
 
+test7r:
+	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG7)
+
 test:
 	$(GO) test $(TEST_ARGS) $(PKGS)
 
@@ -69,6 +72,9 @@ testv:
 
 testj:
 	$(GO) test $(TEST_ARGS) $(PKGS) -json
+
+testr:
+	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKGS)
 
 bench:
 	@$(GO) test $(TEST_ARGS) -bench=. $(PKGS)
