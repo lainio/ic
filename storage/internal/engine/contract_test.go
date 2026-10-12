@@ -33,6 +33,48 @@ func runContract(t *testing.T, open func(*testing.T) Engine) {
 			checkRolledBack(t, db)
 		})
 	}
+	t.Run("view_unwinding", func(t *testing.T) {
+		defer assert.PushTester(t)()
+		stop := errors.New("injected view failure")
+		marker := &struct{ message string }{"unexpected view panic"}
+		for _, tc := range []struct {
+			name      string
+			finish    func(ReadTx) error
+			wantErr   error
+			wantPanic any
+		}{
+			{name: "err2_error_panic", finish: func(ReadTx) error { try.To(stop); return nil }, wantErr: stop},
+			{name: "unexpected_panic", finish: func(ReadTx) error { panic(marker) }, wantPanic: marker},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				defer assert.PushTester(t)()
+				db := open(t)
+				assert.NoError(db.Update(func(tx WriteTx) error {
+					try.To(tx.Put([]byte("one"), []byte("first")))
+					return tx.Put([]byte("two"), []byte("second"))
+				}))
+				var read ReadTx
+				var err error
+				panicked := capturePanic(func() {
+					err = db.View(func(tx ReadTx) error {
+						read = tx
+						checkRecord(t, tx, "one", "first", true)
+						return tc.finish(tx)
+					})
+				})
+				assert.Equal(panicked, tc.wantPanic, "original View panic must propagate")
+				assert.Equal(err, tc.wantErr, "View must preserve error identity")
+				assert.INotNil(read)
+				_, _, err = read.Get([]byte("one"))
+				assert.ErrorIs(err, ErrTxClosed)
+				checkPair(t, db, "first", "second")
+				assert.NoError(db.Update(func(tx WriteTx) error {
+					return tx.Put([]byte("one"), []byte("updated"))
+				}))
+				checkPair(t, db, "updated", "second")
+			})
+		}
+	})
 	t.Run("callback_and_operation_errors_preserved", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		db := open(t)
