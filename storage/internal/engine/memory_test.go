@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 )
@@ -137,7 +138,9 @@ func TestMemoryConcurrentUpdates(t *testing.T) {
 	defer close(stop)
 	results := make([]<-chan error, workers)
 	for i := range results {
-		results[i] = memoryWorker(func() error {
+		results[i] = memoryWorker(func() (err error) {
+			defer err2.Handle(&err, nil)
+
 			select {
 			case <-start:
 			case <-stop:
@@ -149,25 +152,18 @@ func TestMemoryConcurrentUpdates(t *testing.T) {
 					return nil
 				default:
 				}
-				if err := db.Update(func(tx WriteTx) error {
-					value, found, err := tx.Get([]byte("count"))
-					if err != nil {
-						return err
-					}
-					if !found {
-						return fmt.Errorf("missing counter")
-					}
-					count, err := strconv.Atoi(string(value))
-					if err != nil {
-						return err
-					}
+				try.To(db.Update(func(tx WriteTx) (err error) {
+					defer err2.Handle(&err, nil)
+					defer assert.PushAsserter(assert.Plain)()
+
+					value, found := try.To2(tx.Get([]byte("count")))
+					assert.That(found, "missing counter")
+					count := try.To1(strconv.Atoi(string(value)))
 					// Encourage competing writers to attempt admission between
 					// this read and write; correctness cannot depend on scheduling.
 					runtime.Gosched()
 					return tx.Put([]byte("count"), []byte(strconv.Itoa(count+1)))
-				}); err != nil {
-					return err
-				}
+				}))
 			}
 			return nil
 		})
@@ -261,14 +257,12 @@ func TestMemoryCloseDrains(t *testing.T) {
 
 // Worker observations and errors are checked only by the test goroutine.
 func readMemoryPair(tx ReadTx) (values [2]string, err error) {
+	defer err2.Handle(&err, nil)
+	defer assert.PushAsserter(assert.Plain)()
+
 	for i, key := range []string{"one", "two"} {
-		value, found, err := tx.Get([]byte(key))
-		if err != nil {
-			return values, err
-		}
-		if !found {
-			return values, fmt.Errorf("missing record %s", key)
-		}
+		value, found := try.To2(tx.Get([]byte(key)))
+		assert.That(found, "missing record %s", key)
 		values[i] = string(value)
 	}
 	return values, nil
