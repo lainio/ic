@@ -33,6 +33,25 @@ func runContract(t *testing.T, open func(*testing.T) Engine) {
 			checkRolledBack(t, db)
 		})
 	}
+	t.Run("first_operation_error", func(t *testing.T) {
+		defer assert.PushTester(t)()
+		db := open(t)
+		try.To(db.Update(func(tx WriteTx) error {
+			return tx.Put([]byte("one"), []byte("original"))
+		}))
+		err := db.Update(func(tx WriteTx) error {
+			try.To(tx.Put([]byte("two"), []byte("pending")))
+			firstErr := tx.Put(nil, nil)
+			assert.Equal(firstErr, ErrEmptyKey)
+			assert.Equal(tx.Put([]byte("one"), []byte("replacement")), firstErr)
+			_, _, getErr := tx.Get([]byte("one"))
+			assert.Equal(getErr, firstErr)
+			assert.Equal(tx.Delete([]byte("one")), firstErr)
+			return nil // The first operation error must abort even if ignored here.
+		})
+		assert.Equal(err, ErrEmptyKey, "Update must return the original operation error")
+		checkRolledBack(t, db)
+	})
 	t.Run("view_unwinding", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		stop := errors.New("injected view failure")
@@ -84,8 +103,8 @@ func runContract(t *testing.T, open func(*testing.T) Engine) {
 			_ = tx.Put(nil, nil)
 			return callbackErr
 		})
-		assert.That(errors.Is(err, callbackErr))
-		assert.That(errors.Is(err, ErrEmptyKey))
+		assert.ErrorIs(err, callbackErr)
+		assert.ErrorIs(err, ErrEmptyKey)
 		try.To(db.View(func(tx ReadTx) error {
 			checkRecord(t, tx, "two", "", false)
 			return nil
@@ -182,10 +201,10 @@ func runContract(t *testing.T, open func(*testing.T) Engine) {
 			return nil
 		}))
 		stop := errors.New("abort delete")
-		assert.That(db.Update(func(tx WriteTx) error {
+		assert.Equal(db.Update(func(tx WriteTx) error {
 			try.To(tx.Delete([]byte("empty")))
 			return stop
-		}) == stop)
+		}), stop)
 		try.To(db.View(func(tx ReadTx) error {
 			checkRecord(t, tx, "empty", "", true)
 			return nil
@@ -195,21 +214,21 @@ func runContract(t *testing.T, open func(*testing.T) Engine) {
 		defer assert.PushTester(t)()
 		db := open(t)
 		for _, key := range [][]byte{nil, {}} {
-			assert.That(errors.Is(db.View(func(tx ReadTx) error {
+			assert.ErrorIs(db.View(func(tx ReadTx) error {
 				_, _, err := tx.Get(key)
-				assert.That(errors.Is(err, ErrEmptyKey))
+				assert.ErrorIs(err, ErrEmptyKey)
 				return nil // An ignored read error still reaches View's caller.
-			}), ErrEmptyKey))
+			}), ErrEmptyKey)
 			for _, op := range []func(WriteTx) error{
 				func(tx WriteTx) error { _, _, err := tx.Get(key); return err },
 				func(tx WriteTx) error { return tx.Put(key, nil) },
 				func(tx WriteTx) error { return tx.Delete(key) },
 			} {
-				assert.That(errors.Is(db.Update(func(tx WriteTx) error {
+				assert.ErrorIs(db.Update(func(tx WriteTx) error {
 					try.To(tx.Put([]byte("pending"), []byte("value")))
-					assert.That(errors.Is(op(tx), ErrEmptyKey))
+					assert.ErrorIs(op(tx), ErrEmptyKey)
 					return nil
-				}), ErrEmptyKey))
+				}), ErrEmptyKey)
 			}
 		}
 		try.To(db.View(func(tx ReadTx) error {
@@ -229,13 +248,13 @@ func runContract(t *testing.T, open func(*testing.T) Engine) {
 			return nil
 		}))
 		_, _, err := read.Get([]byte("one"))
-		assert.That(errors.Is(err, ErrTxClosed))
+		assert.ErrorIs(err, ErrTxClosed)
 		try.To(db.Update(func(tx WriteTx) error { write = tx; return nil }))
 		checkExpired(t, write)
 		stop := errors.New("view failure")
-		assert.That(db.View(func(tx ReadTx) error { read = tx; return stop }) == stop)
+		assert.Equal(db.View(func(tx ReadTx) error { read = tx; return stop }), stop)
 		_, _, err = read.Get([]byte("one"))
-		assert.That(errors.Is(err, ErrTxClosed))
+		assert.ErrorIs(err, ErrTxClosed)
 	})
 	t.Run("terminal_close", func(t *testing.T) {
 		defer assert.PushTester(t)()
@@ -243,8 +262,8 @@ func runContract(t *testing.T, open func(*testing.T) Engine) {
 		try.To(db.Close())
 		try.To(db.Close())
 		called := false
-		assert.That(errors.Is(db.View(func(ReadTx) error { called = true; return nil }), ErrClosed))
-		assert.That(errors.Is(db.Update(func(WriteTx) error { called = true; return nil }), ErrClosed))
+		assert.ErrorIs(db.View(func(ReadTx) error { called = true; return nil }), ErrClosed)
+		assert.ErrorIs(db.Update(func(WriteTx) error { called = true; return nil }), ErrClosed)
 		assert.ThatNot(called)
 	})
 }
@@ -295,11 +314,11 @@ func runRollback(t *testing.T, db Engine, tc rollbackCase) {
 		_, ok := panicked.(runtime.Error)
 		assert.That(ok, "runtime panic must propagate")
 	} else {
-		assert.That(panicked == tc.wantPanic, "unexpected panic result")
+		assert.Equal(panicked, tc.wantPanic, "unexpected panic result")
 	}
 	if tc.wantErr != nil {
-		assert.That(errors.Is(err, tc.wantErr), "update must preserve the original error")
-		assert.That(err == tc.wantErr, "error identity must survive")
+		assert.ErrorIs(err, tc.wantErr, "update must preserve the original error")
+		assert.Equal(err, tc.wantErr, "error identity must survive")
 	}
 	checkExpired(t, leaked)
 }
@@ -339,7 +358,7 @@ func checkExpired(t *testing.T, tx WriteTx) {
 	t.Helper()
 	assert.INotNil(tx)
 	_, _, err := tx.Get([]byte("one"))
-	assert.That(errors.Is(err, ErrTxClosed))
-	assert.That(errors.Is(tx.Put([]byte("one"), nil), ErrTxClosed))
-	assert.That(errors.Is(tx.Delete([]byte("one")), ErrTxClosed))
+	assert.ErrorIs(err, ErrTxClosed)
+	assert.ErrorIs(tx.Put([]byte("one"), nil), ErrTxClosed)
+	assert.ErrorIs(tx.Delete([]byte("one")), ErrTxClosed)
 }

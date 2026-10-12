@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,8 +42,8 @@ func TestBoltCommitReopen(t *testing.T) {
 	checkPair(t, reopened, "first", "second")
 	// Reopening creates a distinct instance; the old one remains terminal even
 	// while the new instance owns the file lock.
-	assert.That(errors.Is(db.View(func(ReadTx) error { t.Fatal("closed View called"); return nil }), ErrClosed))
-	assert.That(errors.Is(db.Update(func(WriteTx) error { t.Fatal("closed Update called"); return nil }), ErrClosed))
+	assert.ErrorIs(db.View(func(ReadTx) error { t.Fatal("closed View called"); return nil }), ErrClosed)
+	assert.ErrorIs(db.Update(func(WriteTx) error { t.Fatal("closed Update called"); return nil }), ErrClosed)
 	try.To(db.Close())
 	checkPair(t, reopened, "first", "second")
 }
@@ -70,10 +69,10 @@ func TestBoltBackendErrorRollback(t *testing.T) {
 	// Exercise a bbolt operation error, beyond the engine's empty-key check.
 	err := db.Update(func(tx WriteTx) error {
 		try.To(tx.Put([]byte("one"), []byte("pending")))
-		assert.That(errors.Is(tx.Put(make([]byte, bolt.MaxKeySize+1), nil), berrors.ErrKeyTooLarge))
+		assert.ErrorIs(tx.Put(make([]byte, bolt.MaxKeySize+1), nil), berrors.ErrKeyTooLarge)
 		return nil
 	})
-	assert.That(errors.Is(err, berrors.ErrKeyTooLarge))
+	assert.ErrorIs(err, berrors.ErrKeyTooLarge)
 	try.To(db.Close())
 	try.To(openTestBolt(t, path).View(func(tx ReadTx) error {
 		checkRecord(t, tx, "one", "", false)
@@ -92,15 +91,15 @@ func TestBoltOpen(t *testing.T) {
 	t.Run("missing_parent", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		db, err := OpenBolt(filepath.Join(t.TempDir(), "absent", "engine.db"))
-		assert.That(db == nil)
-		assert.That(errors.Is(err, os.ErrNotExist))
+		assert.INil(db)
+		assert.ErrorIs(err, os.ErrNotExist)
 	})
 	t.Run("invalid_file", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		path := filepath.Join(t.TempDir(), "engine.db")
 		try.To(os.WriteFile(path, []byte("not a bbolt database"), 0600))
 		db, err := OpenBolt(path)
-		assert.That(db == nil)
-		assert.INotNil(err)
+		assert.INil(db)
+		assert.Error(err)
 	})
 }
