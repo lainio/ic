@@ -1,11 +1,12 @@
-// Package record provides private encoding, keying, and envelope authentication
-// for storage's proposed encrypted records. Its envelope adapter encrypts and
-// authenticates opaque payload bytes, without decoding them, checking HMAC lookup
-// tokens or logical keys, or authorizing access. The later record layer must do
-// those checks before returning application records; AEAD success alone is not
-// full record validation. The adapter requires spending permission but does not
-// enforce a global key-usage budget or provide a persistence API. Returned bytes
-// are owned by the caller; inputs are neither changed nor retained.
+// Package record provides private encoding, keying, and full record validation
+// for storage's proposed encrypted records. Record reads authenticate envelopes,
+// decode payloads, verify HMAC lookup tokens, and compare any requested logical
+// key before returning key/value bytes. The lower-level envelope adapter only
+// encrypts and authenticates opaque payloads; AEAD success alone is not full
+// record validation. Sealing requires spending permission but does not enforce
+// a global key-usage budget. These helpers provide neither authorization, replay
+// protection, nor a persistence API. Returned bytes are owned by the caller;
+// inputs are neither changed nor retained.
 package record
 
 import (
