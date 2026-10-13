@@ -65,11 +65,10 @@ func TestMemoryViewSnapshot(t *testing.T) {
 	readAgain := make(chan struct{})
 	observed := make(chan [2]string, 2)
 	reader := memoryWorker(func() error {
-		return db.View(func(tx ReadTx) error {
-			before, err := readMemoryPair(tx)
-			if err != nil {
-				return err
-			}
+		return db.View(func(tx ReadTx) (err error) {
+			defer err2.Handle(&err, nil)
+
+			before := try.To1(readMemoryPair(tx))
 			observed <- before
 			select {
 			case <-readAgain:
@@ -86,19 +85,16 @@ func TestMemoryViewSnapshot(t *testing.T) {
 	pending := make(chan struct{})
 	commit := make(chan struct{})
 	writer := memoryWorker(func() error {
-		return db.Update(func(tx WriteTx) error {
-			if err := tx.Put([]byte("one"), []byte("later")); err != nil {
-				return err
-			}
+		return db.Update(func(tx WriteTx) (err error) {
+			defer err2.Handle(&err, nil)
+			defer assert.PushAsserter(assert.Plain)()
+
+			try.To(tx.Put([]byte("one"), []byte("later")))
 			// The unchanged value is shared across map versions internally.
 			// Mutating a Get result must not alter either version's bytes.
-			value, found, err := tx.Get([]byte("two"))
-			if err != nil {
-				return err
-			}
-			if !found || len(value) == 0 {
-				return fmt.Errorf("missing nonempty record two")
-			}
+			value, found := try.To2(tx.Get([]byte("two")))
+			assert.That(found, "missing nonempty record two")
+			assert.SNotEmpty(value, "missing nonempty record two")
 			value[0] = 'X'
 			close(pending)
 			select {
@@ -210,10 +206,10 @@ func TestMemoryCloseDrains(t *testing.T) {
 				})
 			})
 			awaitMemory(t, entered)
-			closed := memoryWorker(func() error {
-				if err := db.Close(); err != nil {
-					return err
-				}
+			closed := memoryWorker(func() (err error) {
+				defer err2.Handle(&err, nil)
+
+				try.To(db.Close())
 				select {
 				case <-finished:
 					return nil
