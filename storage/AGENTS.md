@@ -8,3 +8,11 @@
 - Preserve intentional error, runtime panic, and unexpected panic propagation tests.
 - Work in small tested increments; run focused tests before storage and race suites.
 - No new feature scope is authorized.
+- Prefer `try.To*` for branches that only propagate errors.
+- Give adopting callbacks/helpers their own `(err error)` and
+  `defer err2.Handle(&err, nil)`; never bind to an enclosing result.
+- Keep `PushTester` on the test goroutine; workers return failures to it.
+- Use scoped `defer assert.PushAsserter(assert.Plain)()` for worker assertions.
+- Keep error observations, send-before-return sequences, and cleanup branches.
+- Preserve signaling and stop paths; do not add blanket recovery.
+- Leave deliberate engine-unwinding tests unrecovered.
