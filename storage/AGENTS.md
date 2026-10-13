@@ -16,3 +16,7 @@
 - Keep error observations, send-before-return sequences, and cleanup branches.
 - Preserve signaling and stop paths; do not add blanket recovery.
 - Leave deliberate engine-unwinding tests unrecovered.
+- Prefer `range` for direct collection traversal or fixed repetition when
+  semantics match; retain explicit loops for changing bounds, non-unit steps,
+  index manipulation, or byte-wise string traversal that range would change.
+- Apply this to new/modified code and tests, not unrelated bulk rewrites.
