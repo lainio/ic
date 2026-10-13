@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 )
 
@@ -24,12 +25,12 @@ var (
 func sealEnvelope(ke []byte, id [16]byte, context []byte, token [32]byte,
 	payload []byte, spend func() error) (envelope []byte, err error) {
 	defer err2.Handle(&err, nil)
+	defer assert.PushAsserter(assert.Plain)()
+
 	aead := try.To1(newEnvelopeAEAD(ke))
 	header := try.To1(encodeHeader(id, len(payload)))
 	aad := try.To1(encodeAAD(header, context, token))
-	if spend == nil {
-		return nil, errBudget
-	}
+	assert.That(spend != nil, errBudget)
 	if cause := spend(); cause != nil {
 		return nil, errors.Join(errBudget, cause)
 	}
@@ -48,10 +49,10 @@ func openEnvelope(ke []byte, id [16]byte, context []byte, token [32]byte,
 	aead := try.To1(newEnvelopeAEAD(ke))
 	header, body := try.To2(parseEnvelope(envelope, id))
 	aad := try.To1(encodeAAD(header, context, token))
-	payload, err = aead.Open(nil, nil, body, aad)
-	if err != nil {
-		return nil, errAuthentication
-	}
+	defer err2.Handle(&err, func(err error) error {
+		return errAuthentication
+	})
+	payload = try.To1(aead.Open(nil, nil, body, aad))
 	return payload, nil
 }
 
