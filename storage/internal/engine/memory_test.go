@@ -281,3 +281,130 @@ func awaitMemory[T any](t *testing.T, result <-chan T) T {
 		return zero
 	}
 }
+
+func TestMemoryNestedSnapshot(t *testing.T) {
+	defer assert.PushTester(t)()
+	db := openTestMemory(t)
+	seedNamespaces(t, db)
+	stop := make(chan struct{})
+	defer close(stop) // Release held callbacks before engine cleanup on failure.
+	readAgain := make(chan struct{})
+	observed := make(chan string, 1)
+	reader := memoryWorker(func() error {
+		return db.View(func(tx ReadTx) (err error) {
+			defer err2.Handle(&err, nil)
+			defer assert.PushAsserter(assert.Plain)()
+
+			left := try.To1(tx.Child([]byte("left")))
+			for stage := range 4 {
+				if stage > 0 {
+					select {
+					case <-readAgain:
+					case <-stop:
+						return nil
+					}
+				}
+				// Reopening the child also checks the held tree's membership.
+				deep := try.To1(left.Child([]byte("deep")))
+				value, found := try.To2(deep.Get([]byte("key")))
+				assert.That(found, "missing descendant record")
+				observed <- string(value)
+			}
+			// A child created by the committed writer is still absent here.
+			_, err = left.Child([]byte("new"))
+			assert.Equal(err, ErrNamespaceNotFound)
+			return err
+		})
+	})
+	assert.Equal(awaitMemory(t, observed), "descendant")
+
+	pending := make(chan struct{})
+	abort := make(chan struct{})
+	aborted := fmt.Errorf("abort nested update")
+	writer := memoryWorker(func() error {
+		return db.Update(func(tx WriteTx) (err error) {
+			defer err2.Handle(&err, nil)
+			left := try.To1(tx.ChildForUpdate([]byte("left")))
+			deep := try.To1(left.ChildForUpdate([]byte("deep")))
+			try.To(deep.Put([]byte("key"), []byte("uncommitted")))
+			try.To1(left.EnsureChild([]byte("aborted")))
+			close(pending)
+			select {
+			case <-abort:
+			case <-stop:
+			}
+			return aborted
+		})
+	})
+	awaitMemory(t, pending)
+	select {
+	case readAgain <- struct{}{}:
+	case <-time.After(5 * time.Second):
+		t.Fatal("held nested reader did not request pending-state check")
+	}
+	assert.Equal(awaitMemory(t, observed), "descendant")
+	// A new reader must also see the committed tree while the writer is pending.
+	current := memoryWorker(func() error {
+		return db.View(func(tx ReadTx) (err error) {
+			defer err2.Handle(&err, nil)
+			defer assert.PushAsserter(assert.Plain)()
+			left := try.To1(tx.Child([]byte("left")))
+			deep := try.To1(left.Child([]byte("deep")))
+			value, found := try.To2(deep.Get([]byte("key")))
+			assert.That(found, "missing committed descendant")
+			assert.Equal(string(value), "descendant")
+			_, err = left.Child([]byte("aborted"))
+			return err
+		})
+	})
+	assert.Equal(awaitMemory(t, current), ErrNamespaceNotFound)
+	close(abort)
+	assert.Equal(awaitMemory(t, writer), aborted)
+	select {
+	case readAgain <- struct{}{}:
+	case <-time.After(5 * time.Second):
+		t.Fatal("held nested reader did not request aborted-state check")
+	}
+	assert.Equal(awaitMemory(t, observed), "descendant")
+	checkNamespaceSeed(t, db)
+
+	committed := memoryWorker(func() error {
+		return db.Update(func(tx WriteTx) (err error) {
+			defer err2.Handle(&err, nil)
+			defer assert.PushAsserter(assert.Plain)()
+			left := try.To1(tx.ChildForUpdate([]byte("left")))
+			deep := try.To1(left.ChildForUpdate([]byte("deep")))
+			try.To(deep.Put([]byte("key"), []byte("committed")))
+			created := try.To1(left.EnsureChild([]byte("new")))
+			try.To(created.Put([]byte("key"), []byte("created")))
+			// Unchanged record bytes may be shared internally, but Get owns its copy.
+			value, found := try.To2(left.Get([]byte("key")))
+			assert.That(found)
+			assert.SNotEmpty(value)
+			value[0] = 'X'
+			return nil
+		})
+	})
+	assert.NoError(awaitMemory(t, committed)) // Commit while the old View is held.
+	select {
+	case readAgain <- struct{}{}:
+	case <-time.After(5 * time.Second):
+		t.Fatal("held nested reader did not request committed-state check")
+	}
+	assert.Equal(awaitMemory(t, observed), "descendant")
+	assert.Equal(awaitMemory(t, reader), ErrNamespaceNotFound)
+	try.To(db.View(func(tx ReadTx) error {
+		left := try.To1(tx.Child([]byte("left")))
+		deep := try.To1(left.Child([]byte("deep")))
+		checkRecord(t, deep, "key", "committed", true)
+		checkRecord(t, left, "key", "left", true)
+		created := try.To1(left.Child([]byte("new")))
+		checkRecord(t, created, "key", "created", true)
+		return nil
+	}))
+	assert.Equal(db.View(func(tx ReadTx) error {
+		left := try.To1(tx.Child([]byte("left")))
+		_, err := left.Child([]byte("aborted"))
+		return err
+	}), ErrNamespaceNotFound)
+}
