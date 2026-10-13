@@ -20,3 +20,14 @@
   semantics match; retain explicit loops for changing bounds, non-unit steps,
   index manipulation, or byte-wise string traversal that range would change.
 - Apply this to new/modified code and tests, not unrelated bulk rewrites.
+
+## Required conditions and error translation
+
+- Use assertions with explicit sentinel errors when they state a requirement
+  clearly; scoped assert.Plain and non-annotating err2 handling preserve identity.
+- Prefer a deferred err2 handler for deliberate error translation at a clear
+  stage boundary, after checks whose error classifications must stay unchanged.
+- A translating defer covers the remaining function scope, not one statement;
+  review its mapping before adding unrelated fallible work beneath it.
+- Keep ordinary propagation, cause-preserving joining/wrapping and replacement
+  distinct. Do not mechanically replace every error branch.
