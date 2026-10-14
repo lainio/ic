@@ -31,3 +31,6 @@
   review its mapping before adding unrelated fallible work beneath it.
 - Keep ordinary propagation, cause-preserving joining/wrapping and replacement
   distinct. Do not mechanically replace every error branch.
+- Prefer specific property helpers in implementation preconditions as well as
+  tests (for example SLen for slice length); equivalent forms are style
+  differences, not defects. Do not perform unrelated bulk rewrites.
