@@ -55,6 +55,12 @@ type ReadNS interface {
 	// single nonempty byte segments (ErrEmptyName otherwise); slashes are literal.
 	// The returned handle has only read capabilities, even through a WriteNS.
 	Child(name []byte) (ns ReadNS, err error)
+	// HasChild probes an immediate child without creating it or retaining name.
+	// Names follow Child's literal segment rules. Absence returns false, nil and
+	// does not fail the transaction. Empty names and records (even empty ones)
+	// return ErrEmptyName and ErrConflict respectively, recording the first
+	// operation error. All errors return false; shared error/expiry rules apply.
+	HasChild(name []byte) (found bool, err error)
 	// Each visits direct records only, including empty values, in unspecified
 	// order. Keys and values are caller-owned copies. A callback error or an
 	// operation error within it stops iteration and fails the transaction even

@@ -156,6 +156,16 @@ func (tx *memoryReadTx) Child(name []byte) (ns ReadNS, err error) {
 	return try.To1(tx.child(name)), nil
 }
 
+func (tx *memoryReadTx) HasChild(name []byte) (bool, error) {
+	if err := tx.checkName(name, ErrEmptyName); err != nil {
+		return false, err
+	}
+	if _, found := tx.ns.records[string(name)]; found {
+		return false, tx.fail(ErrConflict)
+	}
+	return tx.ns.children[string(name)] != nil, nil
+}
+
 func (tx *memoryReadTx) Each(fn func(key, value []byte) error) error {
 	if err := tx.check(); err != nil {
 		return err

@@ -135,6 +135,16 @@ func (tx *boltReadTx) Child(name []byte) (ns ReadNS, err error) {
 	return try.To1(tx.child(name)), nil
 }
 
+func (tx *boltReadTx) HasChild(name []byte) (bool, error) {
+	if err := tx.checkName(name, ErrEmptyName); err != nil {
+		return false, err
+	}
+	if tx.bucket.Get(name) != nil {
+		return false, tx.fail(ErrConflict)
+	}
+	return tx.bucket.Bucket(name) != nil, nil
+}
+
 func (tx *boltReadTx) Each(fn func(key, value []byte) error) error {
 	if err := tx.check(); err != nil {
 		return err

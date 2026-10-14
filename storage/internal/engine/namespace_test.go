@@ -24,6 +24,68 @@ func TestMemoryNamespaces(t *testing.T) {
 
 func runNamespaceContract(t *testing.T, open func(*testing.T) Engine) {
 	t.Helper()
+	t.Run("presence", func(t *testing.T) {
+		defer assert.PushTester(t)()
+		db := open(t)
+		try.To(db.Update(func(tx WriteTx) (err error) {
+			defer err2.Handle(&err, nil)
+			assert.ThatNot(try.To1(tx.HasChild([]byte("a/b"))))
+			parent := try.To1(tx.EnsureChild([]byte("a/b")))
+			assert.That(try.To1(tx.HasChild([]byte("a/b"))))
+			assert.ThatNot(try.To1(tx.HasChild([]byte("a"))))
+			assert.ThatNot(try.To1(parent.HasChild([]byte{0, 3})))
+			child := try.To1(parent.EnsureChild([]byte{0, 3}))
+			assert.That(try.To1(parent.HasChild([]byte{0, 3})))
+			try.To(child.Put([]byte("key"), []byte("nested")))
+			return tx.Put([]byte("root"), []byte("original"))
+		}))
+		try.To(db.View(func(tx ReadTx) (err error) {
+			defer err2.Handle(&err, nil)
+			name := []byte("a/b")
+			assert.That(try.To1(tx.HasChild(name)))
+			name[0] = 'x'
+			assert.ThatNot(try.To1(tx.HasChild(name)))
+			assert.ThatNot(try.To1(tx.HasChild([]byte("a"))))
+			parent := try.To1(tx.Child([]byte("a/b")))
+			assert.That(try.To1(parent.HasChild([]byte{0, 3})))
+			assert.ThatNot(try.To1(parent.HasChild([]byte("absent"))))
+			child := try.To1(parent.Child([]byte{0, 3}))
+			checkRecord(t, child, "key", "nested", true)
+			checkRecord(t, tx, "root", "original", true)
+			return nil
+		}))
+	})
+	t.Run("presence_errors", func(t *testing.T) {
+		defer assert.PushTester(t)()
+		db := open(t)
+		seedNamespaces(t, db)
+		for _, tc := range []struct {
+			name []byte
+			want error
+		}{
+			{nil, ErrEmptyName}, {[]byte{}, ErrEmptyName},
+			{[]byte("key"), ErrConflict}, {[]byte("empty"), ErrConflict},
+		} {
+			probe := func(tx ReadTx) (err error) {
+				defer err2.Handle(&err, nil)
+				left := try.To1(tx.Child([]byte("left")))
+				found, err := left.HasChild(tc.name)
+				assert.ThatNot(found)
+				assert.Equal(err, tc.want)
+				found, err = tx.HasChild([]byte("left"))
+				assert.ThatNot(found)
+				assert.Equal(err, tc.want)
+				return nil // Real probe errors must still fail the transaction.
+			}
+			assert.Equal(db.View(probe), tc.want)
+			assert.Equal(db.Update(func(tx WriteTx) (err error) {
+				defer err2.Handle(&err, nil)
+				try.To(tx.Put([]byte("root"), []byte("pending")))
+				return probe(tx)
+			}), tc.want)
+		}
+		checkNamespaceSeed(t, db)
+	})
 	t.Run("traversal_and_ownership", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		db := open(t)
@@ -194,7 +256,10 @@ func runNamespaceContract(t *testing.T, open func(*testing.T) Engine) {
 			_, first := read.Child([]byte("missing"))
 			assert.Equal(first, ErrNamespaceNotFound)
 			for _, ns := range []WriteNS{tx, left, right} {
-				_, _, err := ns.Get(nil)
+				found, err := ns.HasChild(nil)
+				assert.ThatNot(found)
+				assert.Equal(err, first)
+				_, _, err = ns.Get(nil)
 				assert.Equal(err, first)
 				assert.Equal(ns.Put(nil, nil), first)
 				assert.Equal(ns.Delete(nil), first)
@@ -215,7 +280,10 @@ func runNamespaceContract(t *testing.T, open func(*testing.T) Engine) {
 			right := try.To1(tx.Child([]byte("right")))
 			_, _, first := left.Get(nil)
 			assert.Equal(first, ErrEmptyKey)
-			_, _, err := right.Get([]byte("key"))
+			found, err := right.HasChild(nil)
+			assert.ThatNot(found)
+			assert.Equal(err, first)
+			_, _, err = right.Get([]byte("key"))
 			assert.Equal(err, first)
 			_, err = tx.Child([]byte("left"))
 			assert.Equal(err, first)
@@ -510,7 +578,10 @@ func checkNamespaceSeed(t *testing.T, db Engine) {
 func checkNamespaceExpired(t *testing.T, ns ReadNS) {
 	t.Helper()
 	assert.INotNil(ns)
-	_, _, err := ns.Get(nil)
+	found, err := ns.HasChild(nil)
+	assert.ThatNot(found)
+	assert.Equal(err, ErrTxClosed)
+	_, _, err = ns.Get(nil)
 	assert.Equal(err, ErrTxClosed)
 	child, err := ns.Child(nil)
 	assert.INil(child)
