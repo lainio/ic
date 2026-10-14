@@ -514,9 +514,10 @@ func lifecycleDrain(t *testing.T, open func(*testing.T) *Database) {
 			denied := errors.New("test lease expired")
 			releaseErr, otherRelease := errors.New("first release failed"), errors.New("other release failed")
 			p.mu.Lock()
-			if mode == "expiry" {
+			switch mode {
+			case "expiry":
 				lease.checkErr, lease.releaseErr = denied, releaseErr
-			} else if mode == "close" {
+			case "close":
 				lease.releaseErr, siblingLease.releaseErr = releaseErr, otherRelease
 			}
 			p.mu.Unlock()
