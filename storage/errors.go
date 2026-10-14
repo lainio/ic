@@ -11,6 +11,10 @@ var (
 	ErrLocked = errors.New("storage: vault locked")
 	// ErrTxClosed indicates that the transaction callback has ended.
 	ErrTxClosed = engine.ErrTxClosed
+	// Namespace classifications preserve the engine's sentinel identity.
+	ErrEmptyName         = engine.ErrEmptyName
+	ErrNamespaceNotFound = engine.ErrNamespaceNotFound
+	ErrConflict          = engine.ErrConflict
 	// ErrProvider indicates a missing provider or a nil successful lease.
 	ErrProvider = errors.New("storage: invalid key provider")
 	// ErrAllowance indicates an oversized reservation or a missing spending gate.

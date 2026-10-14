@@ -39,3 +39,5 @@
   add wrappers, or upgrade dependencies merely to express another operator.
 - Equivalent if/else and switch forms are readability choices, not defects.
   Prefer a clear expression of the decision; avoid unrelated bulk conversions.
+- For deliberate runtime-panic tests, reuse the nonnil bounds-panic pattern
+  (`data := []byte{0}; _ = data[len(data)]`), not known-nil dereferences.

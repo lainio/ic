@@ -89,7 +89,7 @@ func vaultRecordsData(t *testing.T, open func(*testing.T) *Database) {
 		read = tx
 		_, writable := tx.(WriteTx)
 		assert.ThatNot(writable)
-		_, raw := tx.(engine.ReadNS)
+		_, raw := any(tx).(engine.ReadNS)
 		assert.ThatNot(raw)
 		checkRecord(t, tx, key, nil, false)
 		return nil
@@ -107,7 +107,7 @@ func vaultRecordsData(t *testing.T, open func(*testing.T) *Database) {
 	try.To(v.Update(func(tx WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
 		write = tx
-		_, raw := tx.(engine.WriteNS)
+		_, raw := any(tx).(engine.WriteNS)
 		assert.ThatNot(raw)
 		try.To(tx.Put(key, value))
 		assert.Equal(string(key), string(originalKey))

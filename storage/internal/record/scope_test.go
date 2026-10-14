@@ -76,6 +76,27 @@ func TestScopeConstruction(t *testing.T) {
 	assert.Equal(p.remaining, 1)
 }
 
+func TestScopeValidatePath(t *testing.T) {
+	defer assert.PushTester(t)()
+	p := try.To1(newScopeProvider(1))
+	t.Cleanup(func() { clear(p.secret) })
+	s := try.To1(Derive(p.secret, [16]byte{1}, [16]byte{2}, p.spend))
+	t.Cleanup(s.Clear)
+	path := [][]byte{{1}, []byte("a/b")}
+	try.To(s.ValidatePath(nil))
+	try.To(s.ValidatePath(path))
+	assert.Equal(string(path[1]), "a/b")
+	for _, invalid := range [][][]byte{{nil}, {make([]byte, maxSegmentSize+1)}, make([][]byte, maxSegments+1)} {
+		assert.Equal(s.ValidatePath(invalid), errFormat)
+	}
+	assert.Equal(p.calls, 0)
+	assert.Equal(p.remaining, 1)
+	s.Clear()
+	assert.Equal(s.ValidatePath(path), ErrCleared)
+	assert.Equal(s.ValidatePath([][]byte{nil}), ErrCleared)
+	assert.Equal(p.calls, 0)
+}
+
 func TestScopeComposition(t *testing.T) {
 	defer assert.PushTester(t)()
 	secret := try.To1(hex.DecodeString(fixtureSecret))

@@ -10,26 +10,12 @@ import (
 	"github.com/lainio/ic/storage/internal/record"
 )
 
-// ReadTx reads encrypted records in one Vault's logical root. Keys are opaque,
-// nonempty bytes. Handles expire at callback exit; later calls return ErrTxClosed.
-// The first operation error stops further work and fails the transaction even
-// when ignored. Handles must not be used concurrently.
-type ReadTx interface {
-	// Get returns verified, caller-owned bytes. Missing records return nil, false,
-	// nil; empty values are present. Any error returns nil, false, err.
-	Get(key []byte) (value []byte, found bool, err error)
-}
+// ReadTx is the logical root of one Vault transaction.
+type ReadTx interface{ ReadNS }
 
-// WriteTx adds atomic mutations and reads its own pending writes. Inputs are
-// neither modified nor retained. An existing record must verify before mutation.
-type WriteTx interface {
-	ReadTx
-	// Put seals a value, including a nil/empty value. A completed seal spends
-	// allowance even if the transaction later aborts or the backend write fails.
-	Put(key, value []byte) (err error)
-	// Delete succeeds on absence and spends no sealing allowance.
-	Delete(key []byte) (err error)
-}
+// WriteTx is the writable logical root. All namespaces commit or roll back
+// together and read the same pending state.
+type WriteTx interface{ WriteNS }
 
 const vaultRecords = "\x01"
 
@@ -39,13 +25,11 @@ const vaultRecords = "\x01"
 func (v *Vault) View(fn func(tx ReadTx) (err error)) (err error) {
 	return v.withScope(func(scope *record.Scope) error {
 		return v.db.engine.View(func(root engine.ReadTx) (err error) {
-			tx := &readTx{scope: scope}
+			tx := &readTx{txState: &txState{scope: scope}, path: [][]byte{{1}}}
 			defer tx.finish(&err)
 			defer err2.Handle(&err, nil)
-			state := try.To1(readVaultRoot(root, v.vault))
-			if try.To1(state.HasChild([]byte(vaultRecords))) {
-				tx.records = try.To1(state.Child([]byte(vaultRecords)))
-			}
+			tx.node = try.To1(readVaultRoot(root, v.vault))
+			try.To1(tx.container(vaultRecords))
 			return fn(tx)
 		})
 	})
@@ -58,20 +42,16 @@ func (v *Vault) View(fn func(tx ReadTx) (err error)) (err error) {
 func (v *Vault) Update(fn func(tx WriteTx) (err error)) (err error) {
 	return v.withScope(func(scope *record.Scope) error {
 		return v.db.engine.Update(func(root engine.WriteTx) (err error) {
-			tx := &writeTx{readTx: &readTx{scope: scope}}
-			defer func() {
-				tx.state = nil
-				tx.finish(&err)
-			}()
+			tx := &writeTx{readTx: &readTx{txState: &txState{scope: scope}, path: [][]byte{{1}}}}
+			defer tx.finish(&err)
 			defer err2.Handle(&err, nil)
 			// Probe through the shared read contract before opening writable state.
 			// Missing collection/Vault is not an invitation to create either one.
 			try.To1(readVaultRoot(root, v.vault))
 			collection := try.To1(root.ChildForUpdate([]byte(vaultCollection)))
 			tx.state = try.To1(collection.ChildForUpdate(v.vault[:]))
-			if try.To1(tx.state.HasChild([]byte(vaultRecords))) {
-				tx.records = try.To1(tx.state.Child([]byte(vaultRecords)))
-			}
+			tx.node = tx.state
+			try.To1(tx.container(vaultRecords))
 			return fn(tx)
 		})
 	})
@@ -89,10 +69,9 @@ func readVaultRoot(root engine.ReadNS, vault VaultID) (state engine.ReadNS, err 
 // Separate concrete capabilities keep a View from asserting to WriteTx. No
 // engine interface is embedded, so raw navigation cannot escape through methods.
 type readTx struct {
-	scope   *record.Scope
-	records engine.ReadNS // Nil is a valid empty logical root.
-	err     error
-	closed  bool
+	*txState
+	node engine.ReadNS
+	path [][]byte // Owned, immutable [01] followed by logical segments.
 }
 
 type writeTx struct {
@@ -100,24 +79,31 @@ type writeTx struct {
 	state engine.WriteNS
 }
 
-func (tx *readTx) finish(err *error) {
+// One state owns the scope reference, first failure and lifetime for all handles.
+type txState struct {
+	scope  *record.Scope
+	err    error
+	closed bool
+}
+
+func (tx *txState) finish(err *error) {
 	tx.closed = true
 	if *err == nil {
 		*err = tx.err
 	} else if tx.err != nil && !errors.Is(*err, tx.err) {
 		*err = errors.Join(*err, tx.err)
 	}
-	tx.scope, tx.records, tx.err = nil, nil, nil
+	tx.scope, tx.err = nil, nil
 }
 
-func (tx *readTx) fail(err error) error {
+func (tx *txState) fail(err error) error {
 	if tx.err == nil {
 		tx.err = err
 	}
 	return tx.err
 }
 
-func (tx *readTx) check() error {
+func (tx *txState) check() error {
 	if tx.closed {
 		return ErrTxClosed
 	}
@@ -129,22 +115,24 @@ func (tx *readTx) Get(key []byte) (value []byte, found bool, err error) {
 		return nil, false, err
 	}
 	defer err2.Handle(&err, tx.fail)
-	token := try.To1(tx.scope.Token([][]byte{{1}}, key))
+	token := try.To1(tx.scope.Token(tx.path, key))
+	try.To(tx.recordName(key))
 	return tx.open(token, key)
 }
 
 // Token validation precedes this helper, so key is nonnil and nonempty. Full
-// Open checks the requested key as well as the expected token and root context.
+// Open checks the requested key as well as the expected token and scoped context.
 func (tx *readTx) open(token [32]byte, key []byte) (value []byte, found bool, err error) {
 	defer err2.Handle(&err, nil)
-	if tx.records == nil {
+	records := try.To1(tx.container(vaultRecords))
+	if records == nil {
 		return nil, false, nil
 	}
-	envelope, exists := try.To2(tx.records.Get(token[:]))
+	envelope, exists := try.To2(records.Get(token[:]))
 	if !exists {
 		return nil, false, nil
 	}
-	_, verified := try.To2(tx.scope.Open([][]byte{{1}}, token, key, envelope))
+	_, verified := try.To2(tx.scope.Open(tx.path, token, key, envelope))
 	return verified, true, nil
 }
 
@@ -153,11 +141,11 @@ func (tx *writeTx) Put(key, value []byte) (err error) {
 		return err
 	}
 	defer err2.Handle(&err, tx.fail)
-	token := try.To1(tx.scope.Token([][]byte{{1}}, key))
+	token := try.To1(tx.scope.Token(tx.path, key))
+	try.To(tx.recordName(key))
 	try.To2(tx.open(token, key))
-	envelope := try.To1(tx.scope.Seal([][]byte{{1}}, key, value))
+	envelope := try.To1(tx.scope.Seal(tx.path, key, value))
 	records := try.To1(tx.state.EnsureChild([]byte(vaultRecords)))
-	tx.records = records
 	return records.Put(token[:], envelope)
 }
 
@@ -166,7 +154,8 @@ func (tx *writeTx) Delete(key []byte) (err error) {
 		return err
 	}
 	defer err2.Handle(&err, tx.fail)
-	token := try.To1(tx.scope.Token([][]byte{{1}}, key))
+	token := try.To1(tx.scope.Token(tx.path, key))
+	try.To(tx.recordName(key))
 	_, found := try.To2(tx.open(token, key))
 	if !found {
 		return nil

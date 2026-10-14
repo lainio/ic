@@ -1,4 +1,4 @@
-// Package storage provides encrypted root-record transactions in unlocked Vaults.
+// Package storage provides encrypted namespace transactions in unlocked Vaults.
 // Keys and finite sealing allowances come from an external provider; production
 // lifetime accounting is not implemented here.
 // Database and Vault must be used through constructed pointers: copying, zero
@@ -111,7 +111,7 @@ func (db *Database) CreateVault(ctx context.Context, vault VaultID, id KeyID,
 
 // UnlockVault authenticates existing state using externally expected identities.
 // It never creates or repairs state. Allowance is reserved once, including zero
-// for read-only work, and verification spends no seals. Publication transfers
+// for work without sealing, and verification spends no seals. Publication transfers
 // sole cleanup ownership to the registered handle under the admission gate.
 func (db *Database) UnlockVault(ctx context.Context, vault VaultID, id KeyID,
 	provider KeyProvider, allowance uint32) (v *Vault, err error) {

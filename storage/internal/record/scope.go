@@ -56,6 +56,17 @@ func (s *Scope) Token(path [][]byte, key []byte) (token [32]byte, err error) {
 	return lookupToken(s.ki, context, s.id, key)
 }
 
+// ValidatePath checks the existing context bounds without spending, deriving
+// keys, computing a lookup token, or retaining any input bytes.
+func (s *Scope) ValidatePath(path [][]byte) (err error) {
+	defer err2.Handle(&err, nil)
+	defer assert.PushAsserter(assert.Plain)()
+
+	assert.That(!s.cleared, ErrCleared)
+	try.To1(encodeContext(s.vault, path))
+	return nil
+}
+
 // Seal validates inputs and spends once before sealing with the existing codec.
 // A completed seal consumes its allowance even when discarded. Use Token to
 // obtain its lookup token; missing or exhausted allowances never enable sealing.
