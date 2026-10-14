@@ -246,8 +246,8 @@ func vaultRecordsAtomic(t *testing.T, open func(*testing.T) *Database) {
 			if mode == "runtime_panic" {
 				func() {
 					defer func() { marker = recover() }()
-					var nilPointer *int
-					_ = *nilPointer
+					data := []byte{0}
+					_ = data[len(data)] // Deliberate bounds panic: test rollback.
 				}()
 			}
 			var saved WriteTx
