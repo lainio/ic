@@ -4,9 +4,11 @@
 // key before returning key/value bytes. The lower-level envelope adapter only
 // encrypts and authenticates opaque payloads; AEAD success alone is not full
 // record validation. Sealing requires spending permission but does not enforce
-// a global key-usage budget. These helpers provide neither authorization, replay
-// protection, nor a persistence API. Returned bytes are owned by the caller;
-// inputs are neither changed nor retained.
+// a global key-usage budget. Stateless codec helpers neither change nor retain
+// inputs. Scope owns derived keys and a spend gate until terminal Clear; key
+// erasure is best effort and requires the owner to drain concurrent work first.
+// Neither provides authorization, replay protection, Vault lifecycle, production
+// accounting, or a persistence API. Returned bytes are owned by the caller.
 package record
 
 import (
