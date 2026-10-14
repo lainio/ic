@@ -37,7 +37,7 @@ func Derive(secret []byte, vault, id [16]byte, spend func() error) (scope *Scope
 	defer err2.Handle(&err, nil)
 	defer assert.PushAsserter(assert.Plain)()
 
-	assert.Equal(len(secret), 32, errFormat)
+	assert.SLen(secret, 32, errFormat)
 	assert.That(spend != nil, errBudget)
 	owned := bytes.Clone(secret)
 	defer clear(owned)
