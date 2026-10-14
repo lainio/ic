@@ -1,5 +1,6 @@
-// Package storage provides partial provider-backed Vault lifecycle integration.
-// It is not yet usable record storage or production lifetime accounting.
+// Package storage provides encrypted root-record transactions in unlocked Vaults.
+// Keys and finite sealing allowances come from an external provider; production
+// lifetime accounting is not implemented here.
 // Database and Vault must be used through constructed pointers: copying, zero
 // values, and reentrant provider or operation callbacks are unsupported.
 package storage
@@ -144,7 +145,7 @@ func (db *Database) UnlockVault(ctx context.Context, vault VaultID, id KeyID,
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	try.To(db.checkAdmission(ctx, lease))
-	v = &Vault{db: db, scope: scope, lease: lease}
+	v = &Vault{db: db, vault: vault, scope: scope, lease: lease}
 	db.vaults[v] = struct{}{}
 	return v, nil
 }

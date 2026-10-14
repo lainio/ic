@@ -11,10 +11,11 @@ import (
 
 // Vault owns one authenticated Scope and lease. Lock affects only this handle;
 // another unlock requires authorization and a new reservation for the same IDs.
-// Use only the pointer returned by UnlockVault. No public record operations are
-// available yet. Already returned owned bytes cannot be revoked by Lock.
+// Use only the pointer returned by UnlockVault. View and Update access encrypted
+// records in its logical root. Returned owned bytes cannot be revoked by Lock.
 type Vault struct {
 	db      *Database
+	vault   VaultID // Immutable routing identity from authenticated publication.
 	scope   *record.Scope
 	lease   Lease
 	active  sync.WaitGroup
