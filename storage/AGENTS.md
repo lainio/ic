@@ -34,3 +34,8 @@
 - Prefer specific property helpers in implementation preconditions as well as
   tests (for example SLen for slice length); equivalent forms are style
   differences, not defects. Do not perform unrelated bulk rewrites.
+- Use existing assertion helpers; use That/ThatNot for predicates without one
+  (for example `allowance <= maxAllowance`). Do not expand the assertion API,
+  add wrappers, or upgrade dependencies merely to express another operator.
+- Equivalent if/else and switch forms are readability choices, not defects.
+  Prefer a clear expression of the decision; avoid unrelated bulk conversions.
