@@ -14,7 +14,7 @@ import (
 )
 
 func ExampleVault() {
-	defer err2.Catch(err2.Stderr)
+	defer err2.Catch(err2.Stdout)
 
 	dir := try.To1(os.MkdirTemp("", "vault-example-"))
 	defer func() { _ = os.RemoveAll(dir) }()
@@ -39,12 +39,12 @@ func ExampleVault() {
 	vault := try.To1(db.UnlockVault(ctx, p.vault, p.id, p, 1))
 
 	try.To(vault.Update(func(tx storage.WriteTx) (err error) {
-		defer err2.Handle(&err)
+		defer err2.Handle(&err, "writing greeting")
 		notes := try.To1(tx.EnsureChild([]byte("notes")))
 		return notes.Put([]byte("greeting"), []byte("hello"))
 	}))
 	try.To(vault.View(func(tx storage.ReadTx) (err error) {
-		defer err2.Handle(&err)
+		defer err2.Handle(&err, "reading greeting")
 		notes := try.To1(tx.Child([]byte("notes")))
 		value, found := try.To2(notes.Get([]byte("greeting")))
 		assert.That(found, "greeting missing before close")
@@ -61,7 +61,7 @@ func ExampleVault() {
 	defer func() { _ = reopened.Close() }()
 	reopenedVault := try.To1(reopened.UnlockVault(ctx, p.vault, p.id, p, 0))
 	try.To(reopenedVault.View(func(tx storage.ReadTx) (err error) {
-		defer err2.Handle(&err)
+		defer err2.Handle(&err, "reading greeting")
 		notes := try.To1(tx.Child([]byte("notes")))
 		value, found := try.To2(notes.Get([]byte("greeting")))
 		assert.That(found, "greeting missing after reopen")
