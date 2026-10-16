@@ -20,7 +20,7 @@ type WriteTx interface{ WriteNS }
 const vaultRecords = "\x01"
 
 // View runs fn once on the calling goroutine with only read capabilities.
-// Admission pins the unlocked scope through engine completion. Recursive
+// Admission pins the open handle's scope through engine completion. Recursive
 // transactions and lifecycle calls inside the callback are unsupported.
 func (v *Vault) View(fn func(tx ReadTx) (err error)) (err error) {
 	return v.withScope(func(scope *record.Scope) error {

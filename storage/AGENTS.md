@@ -41,3 +41,12 @@
   Prefer a clear expression of the decision; avoid unrelated bulk conversions.
 - For deliberate runtime-panic tests, reuse the nonnil bounds-panic pattern
   (`data := []byte{0}; _ = data[len(data)]`), not known-nil dereferences.
+
+## Lifecycle names and caller explanations
+
+- `OpenVault` and `Vault.Close` name the access-handle lifecycle,
+  not mutex locks or record encryption operations.
+- Application examples may annotate errors and use normal assertion messages;
+  exact-sentinel and unwinding tests retain their deliberate error policies.
+- Caller-facing documentation explains inputs, results, and obligations first.
+  Explain unfamiliar concepts and example counters with concrete meanings.

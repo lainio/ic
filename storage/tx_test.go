@@ -40,7 +40,7 @@ func newRecordVault(t *testing.T, db *Database, vault VaultID, allowance uint32)
 	t.Helper()
 	p := newLifecycleProvider(t, allowance+1) // One manifest plus explicit data allowance.
 	try.To(db.CreateVault(context.Background(), vault, KeyID{7}, p))
-	v := try.To1(db.UnlockVault(context.Background(), vault, KeyID{7}, p, allowance))
+	v := try.To1(db.OpenVault(context.Background(), vault, KeyID{7}, p, allowance))
 	return v, p
 }
 
@@ -181,7 +181,7 @@ func vaultRecordsData(t *testing.T, open func(*testing.T) *Database) {
 	assert.Equal(p.spent, uint32(4), "reads and deletes spend nothing, including at exhaustion")
 	assert.Equal(p.reserves, 2, "data operations never reserve again")
 	assert.Equal(bytes.Equal(rawVaultRecord(t, v, 3, []byte("manifest")), manifest), true)
-	try.To(v.Lock())
+	try.To(v.Close())
 	assert.Equal(string(retained), "original")
 	try.To(db.Close())
 	assert.Equal(string(retained), "original")
@@ -604,7 +604,7 @@ func vaultRecordsLifecycle(t *testing.T, open func(*testing.T) *Database) {
 			t.Cleanup(func() { unblock(); finishEngine(); lifecycleSignal(t, workDone) })
 			lifecycleSignal(t, entered)
 			stopResult, stopDone := make(chan error, 1), make(chan struct{})
-			go func() { defer close(stopDone); stopResult <- v.Lock() }()
+			go func() { defer close(stopDone); stopResult <- v.Close() }()
 			t.Cleanup(func() { unblock(); finishEngine(); lifecycleSignal(t, stopDone) })
 			lifecycleStopped(t, db, v)
 			p.mu.Lock()
@@ -613,12 +613,12 @@ func vaultRecordsLifecycle(t *testing.T, open func(*testing.T) *Database) {
 			p.mu.Unlock()
 			assert.Equal(releases, 0)
 			called := false
-			assert.ErrorIs(v.View(func(ReadTx) error { called = true; return nil }), ErrLocked)
-			assert.ErrorIs(v.Update(func(WriteTx) error { called = true; return nil }), ErrLocked)
+			assert.ErrorIs(v.View(func(ReadTx) error { called = true; return nil }), ErrVaultClosed)
+			assert.ErrorIs(v.Update(func(WriteTx) error { called = true; return nil }), ErrVaultClosed)
 			assert.ThatNot(called)
 			select {
 			case <-stopDone:
-				t.Fatal("Lock finished while public callback was held")
+				t.Fatal("Vault.Close finished while public callback was held")
 			default:
 			}
 			unblock()
@@ -631,7 +631,7 @@ func vaultRecordsLifecycle(t *testing.T, open func(*testing.T) *Database) {
 			assert.Equal(releases, 0, "engine return remains pinned after adapter cleanup")
 			select {
 			case <-stopDone:
-				t.Fatal("Lock finished before engine return")
+				t.Fatal("Vault.Close finished before engine return")
 			default:
 			}
 			finishEngine()
@@ -650,7 +650,7 @@ func vaultRecordsLifecycle(t *testing.T, open func(*testing.T) *Database) {
 			assert.Equal(p.reserves, 2)
 			assert.Equal(len(p.calls), 2)
 			checkExpiredRecordTx(t, saved)
-			reader := try.To1(db.UnlockVault(context.Background(), v.vault, KeyID{7}, p, 0))
+			reader := try.To1(db.OpenVault(context.Background(), v.vault, KeyID{7}, p, 0))
 			try.To(reader.View(func(tx ReadTx) (err error) {
 				defer err2.Handle(&err, nil)
 				want := []byte("committed")
@@ -678,7 +678,7 @@ func vaultRecordsLifecycle(t *testing.T, open func(*testing.T) *Database) {
 		called := false
 		assert.ErrorIs(v.View(func(ReadTx) error { called = true; return nil }), denied)
 		result := v.Update(func(WriteTx) error { called = true; return nil })
-		assert.ErrorIs(result, ErrLocked)
+		assert.ErrorIs(result, ErrVaultClosed)
 		assert.ErrorIs(result, denied)
 		assert.ThatNot(called)
 		assert.Equal(lease.releases, 1)
@@ -732,7 +732,7 @@ func TestVaultRecordsReopen(t *testing.T) {
 	reopened := try.To1(OpenBolt(path))
 	t.Cleanup(func() { _ = reopened.Close() })
 	// Same provider and immutable generation; reopening does not reset its budget.
-	reader := try.To1(reopened.UnlockVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
+	reader := try.To1(reopened.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
 	try.To(reader.View(func(tx ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		checkRecord(t, tx, key, []byte("saved"), true)
@@ -751,7 +751,7 @@ func TestVaultRecordsReopen(t *testing.T) {
 	try.To(reopened.Close())
 	final := try.To1(OpenBolt(path))
 	t.Cleanup(func() { _ = final.Close() })
-	last := try.To1(final.UnlockVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
+	last := try.To1(final.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
 	try.To(last.View(func(tx ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		checkRecord(t, tx, key, nil, false)

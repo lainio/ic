@@ -10,7 +10,7 @@ import (
 	"github.com/lainio/ic/storage/internal/engine"
 )
 
-// ReadNS reads one logical namespace in an unlocked Vault. Handles are valid
+// ReadNS reads one logical namespace through an open Vault. Handles are valid
 // only inside the transaction callback and must not be used concurrently. All
 // handles share the first failure, even if ignored; after exit ErrTxClosed wins.
 // Names are opaque nonempty byte segments: slashes and metadata names are literal.

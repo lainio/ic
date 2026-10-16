@@ -1,4 +1,5 @@
-// Package storage provides encrypted namespace transactions in unlocked Vaults.
+// Package storage provides encrypted namespace transactions through open
+// Vault handles.
 // Keys and finite sealing allowances come from an external provider; production
 // lifetime accounting is not implemented here.
 // Database and Vault must be used through constructed pointers: copying, zero
@@ -28,7 +29,7 @@ type Database struct {
 	closed     bool
 	done       chan struct{}
 	vaults     map[*Vault]struct{}
-	cleanupErr error // Completed handle cleanup errors, including concurrent Lock.
+	cleanupErr error // Handle cleanup errors, including concurrent Vault.Close.
 	closeErr   error // Published by closing done.
 }
 
@@ -79,7 +80,7 @@ func (db *Database) admit(ctx context.Context, lease Lease) error {
 	return db.checkAdmission(ctx, lease)
 }
 
-// CreateVault creates only absent state and returns no unlocked handle. A
+// CreateVault creates only absent state and returns no open handle. A
 // duplicate attempt may reserve usage without spending a seal. No usage is
 // refunded. Once admitted, cancellation/Close need not undo a committed create.
 // A Release error can be returned AFTER commit: an error does not imply absence.
@@ -109,11 +110,17 @@ func (db *Database) CreateVault(ctx context.Context, vault VaultID, id KeyID,
 	})
 }
 
-// UnlockVault authenticates existing state using externally expected identities.
-// It never creates or repairs state. Allowance is reserved once, including zero
-// for work without sealing, and verification spends no seals. Publication transfers
-// sole cleanup ownership to the registered handle under the admission gate.
-func (db *Database) UnlockVault(ctx context.Context, vault VaultID, id KeyID,
+// OpenVault returns a handle for reading and updating an existing vault.
+// The application supplies the vault ID, key ID, and provider. The provider
+// decides whether access is allowed and supplies the secret. Storage checks the
+// vault's encrypted identity record (manifest) before returning the handle.
+// Missing or invalid state is never created or repaired; use CreateVault to
+// create a vault separately.
+//
+// Allowance is reserved once for new encryptions; verification spends none.
+// Zero reserves no new encryptions and still permits reading, authorized deletion,
+// and namespace creation. The caller must close the returned handle when done.
+func (db *Database) OpenVault(ctx context.Context, vault VaultID, id KeyID,
 	provider KeyProvider, allowance uint32) (v *Vault, err error) {
 	if err := db.begin(ctx); err != nil {
 		return nil, err
@@ -142,6 +149,8 @@ func (db *Database) UnlockVault(ctx context.Context, vault VaultID, id KeyID,
 		return verifyVaultState(root, scope, vault, id)
 	}))
 
+	// Publication transfers sole cleanup ownership to the registered handle
+	// under the admission gate.
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	try.To(db.checkAdmission(ctx, lease))
@@ -160,9 +169,12 @@ func releaseScope(scope *record.Scope, lease Lease) error {
 	return nil
 }
 
-// Close stops all admission, drains pending operations and owned handles, then
+// Close shuts down this database, its remaining Vault handles, and its engine.
+// To end access through just one handle, use Vault.Close instead.
+// Close rejects new work, waits for pending operations and handle cleanup, then
 // closes the engine. All handle cleanups are attempted even after errors.
 // Repeated/concurrent calls wait for completion and return the same result.
+// Close must not be called from a provider or operation callback.
 func (db *Database) Close() (err error) {
 	db.mu.Lock()
 	if db.closed {
@@ -181,7 +193,7 @@ func (db *Database) Close() (err error) {
 	}
 	db.mu.Unlock()
 	for _, v := range vaults {
-		_ = v.Lock() // Each completed Lock records its result in cleanupErr.
+		_ = v.Close() // Each completed Vault.Close records its result in cleanupErr.
 	}
 	engineErr := db.engine.Close()
 	db.mu.Lock()

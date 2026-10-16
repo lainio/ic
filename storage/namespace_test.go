@@ -265,7 +265,7 @@ func vaultNamespacesAtomic(t *testing.T, open func(*testing.T) *Database) {
 		checkNamespaceFailure(t, ns, ErrTxClosed)
 	}
 	// Zero sealing allowance permits metadata creation and verified deletion.
-	zero := try.To1(db.UnlockVault(context.Background(), v.vault, KeyID{7}, p, 0))
+	zero := try.To1(db.OpenVault(context.Background(), v.vault, KeyID{7}, p, 0))
 	try.To(zero.Update(func(tx WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
 		left := try.To1(tx.ChildForUpdate([]byte("left")))
@@ -631,7 +631,7 @@ func vaultNamespacesContext(t *testing.T, open func(*testing.T) *Database) {
 			p := newLifecycleProvider(t, 3)
 			vault, id := VaultID{1}, KeyID{7}
 			try.To(db.CreateVault(context.Background(), vault, id, p))
-			v := try.To1(db.UnlockVault(context.Background(), vault, id, p, 1))
+			v := try.To1(db.OpenVault(context.Background(), vault, id, p, 1))
 			manifest := namespaceManifest(t, v)
 			key := []byte("key")
 			try.To(v.Update(func(tx WriteTx) (err error) {
@@ -781,7 +781,7 @@ func vaultNamespacesPersistence(t *testing.T) {
 	reopened := try.To1(OpenBolt(path))
 	t.Cleanup(func() { _ = reopened.Close() })
 	// Same provider/generation, with no reservation reset or seal refund.
-	v = try.To1(reopened.UnlockVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
+	v = try.To1(reopened.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
 	try.To(v.View(func(tx ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		checkRecord(t, tx, []byte("root"), []byte("saved"), true)

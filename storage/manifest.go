@@ -27,7 +27,7 @@ const (
 // createVaultState requires a database-root Update and a live Scope derived for
 // the SAME externally expected vault/id, with a finite, preallocated local spend
 // gate (no provider I/O). The trusted caller establishes this pairing; these
-// helpers neither discover nor authorize keys. Future Create/Unlock must pair
+// helpers neither discover nor authorize keys. CreateVault and OpenVault pair
 // them from authorized external inputs.
 //
 // The caller owns Scope and must drain its work before Clear. Neither helper

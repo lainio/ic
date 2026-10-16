@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"io"
 	"path/filepath"
 	"sync"
 	"testing"
@@ -14,13 +15,15 @@ import (
 	"github.com/lainio/ic/storage"
 )
 
+var _ io.Closer = (*storage.Vault)(nil)
+
 // A finite smoke-test provider only; it makes no durable accounting claim.
 type consumerProvider struct {
-	mu        sync.Mutex
-	secret    []byte
-	vault     storage.VaultID
-	id        storage.KeyID
-	remaining uint32
+	mu        sync.Mutex      // Protects counters, not Vault permissions.
+	secret    []byte          // Random 32-byte secret; storage derives keys from it.
+	vault     storage.VaultID // ID of the vault served; not a secret.
+	id        storage.KeyID   // Key version ID; not a secret or cipher selector.
+	remaining uint32          // Encryptions not yet allocated, not space or reads.
 }
 
 type consumerLease struct{ p *consumerProvider }
@@ -98,10 +101,10 @@ func TestVaultConsumer(t *testing.T) {
 			var vaults [2]*storage.Vault
 			for i := range vaults {
 				p := &consumerProvider{secret: make([]byte, 32), vault: storage.VaultID{byte(i + 1)}, id: storage.KeyID{7}, remaining: 2}
-				try.To1(rand.Read(p.secret)) // Independent keys per Vault.
+				try.To1(rand.Read(p.secret)) // Independent random secret per vault.
 				t.Cleanup(func() { clear(p.secret) })
 				try.To(db.CreateVault(context.Background(), p.vault, p.id, p))
-				vaults[i] = try.To1(db.UnlockVault(context.Background(), p.vault, p.id, p, 1))
+				vaults[i] = try.To1(db.OpenVault(context.Background(), p.vault, p.id, p, 1))
 			}
 			try.To(vaults[1].Update(func(tx storage.WriteTx) (err error) {
 				defer err2.Handle(&err, nil)

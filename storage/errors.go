@@ -8,7 +8,8 @@ import (
 
 var (
 	ErrClosed = errors.New("storage: database closed")
-	ErrLocked = errors.New("storage: vault locked")
+	// ErrVaultClosed indicates that this Vault handle no longer accepts operations.
+	ErrVaultClosed = errors.New("storage: vault handle closed")
 	// ErrTxClosed indicates that the transaction callback has ended.
 	ErrTxClosed = engine.ErrTxClosed
 	// Namespace classifications preserve the engine's sentinel identity.
