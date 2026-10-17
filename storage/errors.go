@@ -18,9 +18,8 @@ var (
 	ErrConflict          = engine.ErrConflict
 	// ErrProvider indicates a missing provider or a nil successful lease.
 	ErrProvider = errors.New("storage: invalid key provider")
-	// ErrAllowance indicates an oversized reservation or a missing spending gate.
-	// Providers may also return it for exhausted allowances, preserving causes.
-	ErrAllowance = errors.New("storage: invalid or exhausted allowance")
+	// ErrKeyUsageExhausted indicates an exhausted shared encryption key budget.
+	ErrKeyUsageExhausted = errors.New("storage: encryption key usage limit reached")
 
 	// Manifest classifications preserve the accepted helpers' sentinel identity.
 	ErrVaultExists   = errVaultExists

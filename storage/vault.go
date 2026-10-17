@@ -15,7 +15,7 @@ import (
 // nested namespaces.
 //
 // Close ends this handle's access permanently. Database.OpenVault can return a
-// new handle for the same IDs after authorization and a new reservation.
+// new handle for the same IDs after authorization, using shared key accounting.
 // Closing cannot revoke data already returned to and owned by the caller.
 type Vault struct {
 	db       *Database
@@ -64,8 +64,8 @@ func (v *Vault) withScope(fn func(*record.Scope) error) (err error) {
 // records remain unchanged; Database.Close shuts down the whole database.
 // Close rejects new operations, waits for already accepted work through engine
 // completion, clears owned key buffers best-effort, and releases the lease once.
-// It neither checks authorization again nor revokes precharged gates while work
-// drains.
+// It does not recheck authorization while work drains, refund consumption, or
+// reset the shared key counter.
 //
 // Repeated/concurrent calls wait for cleanup and return its result, including any
 // admission denial and Release error. A cleanup error does not make the closed

@@ -17,27 +17,26 @@ import (
 	"github.com/lainio/ic/storage/internal/record"
 )
 
-var errLifecycleBudget = errors.New("test lifetime budget exhausted")
-
-// This finite provider exists only in tests. Its budget survives new handles and
-// file reopen within the test; it supplies no durable/global accounting proof.
+// This finite provider exists only in tests; it supplies no durable accounting.
+// It conservatively counts several bindings against one test pool. Shared-key
+// tests retain the same provider, secret, VaultID and KeyID for every handle.
 type lifecycleProvider struct {
-	mu        sync.Mutex
-	secret    []byte
-	remaining uint32
-	reserved  uint32
-	spent     uint32
-	calls     []struct {
+	mu     sync.Mutex
+	secret []byte
+	// Permitted encryptions left in the pool shared by every lease from this
+	// provider. New handles and file reopening never reset it.
+	remainingEncryptions uint32
+	spent                uint32 // Successful debits, including discarded seals.
+	consumeCalls         int    // Attempts, including injected/exhausted failures.
+	calls                []struct {
 		vault VaultID
 		id    KeyID
 	}
 	leases                                       []*lifecycleLease
-	acquireErr, checkErr, reserveErr, releaseErr error
+	acquireErr, checkErr, consumeErr, releaseErr error
 	failCheckAt                                  int
-	nilLease, nilGate                            bool
-	reserves                                     int
+	nilLease                                     bool
 	acquireEntered, acquireWait                  chan struct{}
-	reserveEntered, reserveWait                  chan struct{}
 }
 
 type lifecycleLease struct {
@@ -50,7 +49,7 @@ type lifecycleLease struct {
 
 func newLifecycleProvider(t *testing.T, budget uint32) *lifecycleProvider {
 	t.Helper()
-	return &lifecycleProvider{secret: manifestSecret(t), remaining: budget}
+	return &lifecycleProvider{secret: manifestSecret(t), remainingEncryptions: budget}
 }
 
 func (p *lifecycleProvider) Acquire(ctx context.Context, vault VaultID, id KeyID) (Lease, error) {
@@ -96,38 +95,20 @@ func (l *lifecycleLease) Check() error {
 	return nil
 }
 
-func (l *lifecycleLease) Reserve(n uint32) (func() error, error) {
+func (l *lifecycleLease) ConsumeEncryption() error {
 	p := l.p
-	if p.reserveEntered != nil {
-		p.reserveEntered <- struct{}{}
-		<-p.reserveWait
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.reserves++
-	if p.reserveErr != nil {
-		return nil, p.reserveErr
+	p.consumeCalls++
+	if p.consumeErr != nil {
+		return p.consumeErr
 	}
-	if n > p.remaining {
-		return nil, errLifecycleBudget
+	if p.remainingEncryptions == 0 {
+		return ErrKeyUsageExhausted
 	}
-	p.remaining -= n
-	p.reserved += n
-	if p.nilGate {
-		return nil, nil
-	}
-	// The gate uses only local synchronized state, with no Check or provider I/O.
-	remaining := n
-	return func() error {
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		if remaining == 0 {
-			return errLifecycleBudget
-		}
-		remaining--
-		p.spent++
-		return nil
-	}, nil
+	p.remainingEncryptions--
+	p.spent++
+	return nil
 }
 
 func (l *lifecycleLease) Release() error {
@@ -150,7 +131,6 @@ func TestVaultLifecycle(t *testing.T) {
 		t.Run(backend.name, func(t *testing.T) {
 			t.Run("flow", func(t *testing.T) { lifecycleFlow(t, backend.open) })
 			t.Run("failures", func(t *testing.T) { lifecycleFailures(t, backend.open) })
-			t.Run("verification", func(t *testing.T) { lifecycleVerificationFailure(t, backend.open) })
 			t.Run("drain", func(t *testing.T) { lifecycleDrain(t, backend.open) })
 			t.Run("callback_unwinding", func(t *testing.T) { lifecycleUnwinding(t, backend.open) })
 			t.Run("pending", func(t *testing.T) { lifecyclePending(t, backend.open) })
@@ -165,7 +145,7 @@ func lifecycleFlow(t *testing.T, open func(*testing.T) *Database) {
 	t.Cleanup(func() { _ = db.Close() }) // Fallback if an assertion aborts; checked below.
 	ctx := context.Background()
 	vault, id := VaultID{1, 7}, KeyID{2, 9}
-	p := newLifecycleProvider(t, 4)
+	p := newLifecycleProvider(t, 2)
 	borrowed := bytes.Clone(p.secret)
 	t.Cleanup(func() { clear(borrowed) })
 	assert.Equal(ErrVaultExists, errVaultExists)
@@ -173,14 +153,14 @@ func lifecycleFlow(t *testing.T, open func(*testing.T) *Database) {
 	assert.Equal(ErrVaultManifest, errVaultManifest)
 	try.To(db.CreateVault(ctx, vault, id, p))
 	assert.Equal(p.spent, uint32(1))
-	assert.Equal(p.reserved, uint32(1))
+	assert.Equal(p.consumeCalls, 1)
 	assert.Equal(p.leases[0].releases, 1)
 	assert.ErrorIs(db.CreateVault(ctx, vault, id, p), ErrVaultExists)
-	assert.Equal(p.spent, uint32(1), "duplicate reserves but does not seal")
-	assert.Equal(p.reserved, uint32(2))
+	assert.Equal(p.spent, uint32(1), "duplicate does not consume")
+	assert.Equal(p.consumeCalls, 1)
 	assert.Equal(p.leases[1].releases, 1)
 
-	v := try.To1(db.OpenVault(ctx, vault, id, p, 2))
+	v := try.To1(db.OpenVault(ctx, vault, id, p))
 	assert.Equal(p.spent, uint32(1), "open/verification do not spend")
 	var token [32]byte
 	var envelope, owned []byte
@@ -191,7 +171,7 @@ func lifecycleFlow(t *testing.T, open func(*testing.T) *Database) {
 		_, owned = try.To2(s.Open(nil, token, []byte("key"), envelope))
 		return nil
 	}))
-	try.To(v.Close()) // One unused seal is forfeited.
+	try.To(v.Close()) // Closing consumes nothing.
 	try.To(v.Close())
 	assert.Equal(p.leases[2].releases, 1)
 	assert.ErrorIs(v.withScope(func(*record.Scope) error {
@@ -200,7 +180,7 @@ func lifecycleFlow(t *testing.T, open func(*testing.T) *Database) {
 	}), ErrVaultClosed)
 	assert.Equal(string(owned), "value")
 
-	ro := try.To1(db.OpenVault(ctx, vault, id, p, 0))
+	ro := try.To1(db.OpenVault(ctx, vault, id, p))
 	assert.NotEqual(ro, v)
 	try.To(ro.withScope(func(s *record.Scope) (err error) {
 		defer err2.Handle(&err, nil)
@@ -209,11 +189,11 @@ func lifecycleFlow(t *testing.T, open func(*testing.T) *Database) {
 		assert.Equal(string(value), "value")
 		sealed, err := s.Seal(nil, []byte("key"), nil)
 		assert.SNil(sealed)
-		assert.ErrorIs(err, errLifecycleBudget)
+		assert.ErrorIs(err, ErrKeyUsageExhausted)
 		return nil
 	}))
 	assert.Equal(p.spent, uint32(2))
-	assert.Equal(p.remaining, uint32(0))
+	assert.Equal(p.remainingEncryptions, uint32(0))
 	try.To(ro.Close())
 	for _, call := range p.calls {
 		assert.Equal(call.vault, vault)
@@ -222,10 +202,10 @@ func lifecycleFlow(t *testing.T, open func(*testing.T) *Database) {
 	assert.Equal(bytes.Equal(p.secret, borrowed), true, "storage never clears borrowed bytes")
 
 	wrong := newLifecycleProvider(t, 1)
-	missing, err := db.OpenVault(ctx, VaultID{99}, id, wrong, 0)
+	missing, err := db.OpenVault(ctx, VaultID{99}, id, wrong)
 	assert.Nil(missing)
 	assert.ErrorIs(err, ErrVaultNotFound)
-	bad, err := db.OpenVault(ctx, vault, id, wrong, 0)
+	bad, err := db.OpenVault(ctx, vault, id, wrong)
 	assert.Nil(bad)
 	assert.ErrorIs(err, ErrVaultManifest)
 	for _, lease := range wrong.leases {
@@ -248,26 +228,31 @@ func TestVaultLifecycleReopen(t *testing.T) {
 	assert.ErrorIs(db.CreateVault(ctx, vault, id, p), releaseErr)
 	p.releaseErr = nil
 	// Creation committed despite its cleanup error, and remains after reopen.
-	v := try.To1(db.OpenVault(ctx, vault, id, p, 1))
-	try.To(v.Close()) // Forfeit an unused reservation.
+	v := try.To1(db.OpenVault(ctx, vault, id, p))
+	try.To(v.Close()) // Keep the unused shared encryption.
 	try.To(db.Close())
 
 	reopened := try.To1(OpenBolt(path))
 	t.Cleanup(func() { _ = reopened.Close() })
-	noKey, err := reopened.OpenVault(ctx, vault, id, nil, 0)
+	noKey, err := reopened.OpenVault(ctx, vault, id, nil)
 	assert.Nil(noKey)
 	assert.ErrorIs(err, ErrProvider)
-	noBudget, err := reopened.OpenVault(ctx, vault, id, p, 1)
-	assert.Nil(noBudget)
-	assert.ErrorIs(err, errLifecycleBudget)
-	ro := try.To1(reopened.OpenVault(ctx, vault, id, p, 0))
+	ro := try.To1(reopened.OpenVault(ctx, vault, id, p))
 	try.To(ro.withScope(func(s *record.Scope) error {
 		_, err := s.Token(nil, []byte("read"))
 		return err
 	}))
-	assert.Equal(p.remaining, uint32(0))
-	assert.Equal(p.spent, uint32(1))
-	assert.Equal(p.reserved, uint32(2))
+	assert.Equal(p.remainingEncryptions, uint32(1))
+	assert.Equal(p.consumeCalls, 1, "open/close and reopen never consume")
+	try.To(ro.Update(func(tx WriteTx) error {
+		return tx.Put([]byte("last"), []byte("value"))
+	}))
+	assert.ErrorIs(ro.Update(func(tx WriteTx) error {
+		return tx.Put([]byte("denied"), nil)
+	}), ErrKeyUsageExhausted)
+	assert.Equal(p.remainingEncryptions, uint32(0))
+	assert.Equal(p.spent, uint32(2))
+	assert.Equal(p.consumeCalls, 3)
 	try.To(reopened.Close())
 	for _, l := range p.leases {
 		assert.Equal(l.releases, 1)
@@ -281,8 +266,9 @@ func TestVaultLifecycleReopen(t *testing.T) {
 func lifecycleFailures(t *testing.T, open func(*testing.T) *Database) {
 	for _, operation := range []string{"create", "open"} {
 		t.Run(operation, func(t *testing.T) {
-			for _, name := range []string{"acquire", "nil_lease", "check", "reserve", "nil_gate", "secret", "admission", "engine", "publication"} {
-				if operation == "create" && name == "publication" {
+			for _, name := range []string{"acquire", "nil_lease", "check", "consume", "secret", "admission", "engine", "publication"} {
+				if operation == "create" && name == "publication" ||
+					operation == "open" && name == "consume" {
 					continue
 				}
 				t.Run(name, func(t *testing.T) {
@@ -295,29 +281,27 @@ func lifecycleFailures(t *testing.T, open func(*testing.T) *Database) {
 					if operation == "open" && name != "engine" {
 						try.To(db.CreateVault(ctx, vault, id, p))
 					}
-					beforeLeases, beforeReserves := len(p.leases), p.reserves
-					beforeSpent, beforeReserved := p.spent, p.reserved
+					beforeLeases, beforeCalls := len(p.leases), p.consumeCalls
+					beforeSpent, beforeRemaining := p.spent, p.remainingEncryptions
 					cause := errors.New("injected provider failure")
 					releaseErr := errors.New("injected release failure")
 					p.releaseErr = releaseErr
 					want := cause
-					wantLease, wantReserve := true, true
+					wantLease := true
 					switch name {
 					case "acquire":
 						p.acquireErr = cause
-						wantLease, wantReserve = false, false
+						wantLease = false
 					case "nil_lease":
 						p.nilLease, want = true, ErrProvider
-						wantLease, wantReserve = false, false
+						wantLease = false
 					case "check":
-						p.checkErr, wantReserve = cause, false
-					case "reserve":
-						p.reserveErr = cause
-					case "nil_gate":
-						p.nilGate, want = true, ErrAllowance
+						p.checkErr = cause
+					case "consume":
+						p.consumeErr = cause
 					case "secret":
 						p.secret = p.secret[:31]
-						_, want = record.Derive(p.secret, vault, id, func() error { return errLifecycleBudget })
+						_, want = record.Derive(p.secret, vault, id, func() error { return ErrKeyUsageExhausted })
 						assert.Error(want)
 					case "admission":
 						p.checkErr, p.failCheckAt = cause, 2
@@ -336,7 +320,7 @@ func lifecycleFailures(t *testing.T, open func(*testing.T) *Database) {
 						err = db.CreateVault(ctx, vault, id, p)
 					} else {
 						var v *Vault
-						v, err = db.OpenVault(ctx, vault, id, p, 1)
+						v, err = db.OpenVault(ctx, vault, id, p)
 						assert.Nil(v, "no handle may escape a failed open")
 					}
 					assert.ErrorIs(err, want)
@@ -348,22 +332,21 @@ func lifecycleFailures(t *testing.T, open func(*testing.T) *Database) {
 						assert.Equal(len(p.leases), beforeLeases)
 						assert.ThatNot(errors.Is(err, releaseErr))
 					}
-					if wantReserve {
-						assert.Equal(p.reserves, beforeReserves+1)
-						if name != "reserve" {
-							assert.Equal(p.reserved, beforeReserved+1, "failed work never refunds")
-						}
-					} else {
-						assert.Equal(p.reserves, beforeReserves)
+					wantCalls := beforeCalls
+					if name == "consume" {
+						wantCalls++
+						assert.ThatNot(errors.Is(err, ErrKeyUsageExhausted))
 					}
+					assert.Equal(p.consumeCalls, wantCalls)
+					assert.Equal(p.remainingEncryptions, beforeRemaining)
 					assert.Equal(p.spent, beforeSpent)
 					assert.Equal(bytes.Equal(p.secret, borrowed), true)
 					assert.Equal(len(db.vaults), 0)
 					if operation == "create" && name != "engine" {
-						p.acquireErr, p.checkErr, p.reserveErr, p.releaseErr = nil, nil, nil, nil
-						p.nilGate, p.nilLease = false, false
+						p.acquireErr, p.checkErr, p.consumeErr, p.releaseErr = nil, nil, nil, nil
+						p.nilLease = false
 						p.secret = p.secret[:32]
-						v, err := db.OpenVault(ctx, vault, id, p, 0)
+						v, err := db.OpenVault(ctx, vault, id, p)
 						assert.Nil(v)
 						assert.ErrorIs(err, ErrVaultNotFound, "failed creation did not leave state")
 					}
@@ -372,26 +355,28 @@ func lifecycleFailures(t *testing.T, open func(*testing.T) *Database) {
 			}
 		})
 	}
-	t.Run("bounds_and_cancelled_context", func(t *testing.T) {
+	t.Run("cancelled_context_and_nil_provider", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		db := open(t)
 		t.Cleanup(func() { _ = db.Close() })
-		p := newLifecycleProvider(t, maxAllowance)
-		v, err := db.OpenVault(context.Background(), VaultID{1}, KeyID{2}, p, maxAllowance+1)
-		assert.Nil(v)
-		assert.ErrorIs(err, ErrAllowance)
+		p := newLifecycleProvider(t, 1)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		assert.ErrorIs(db.CreateVault(ctx, VaultID{1}, KeyID{2}, p), context.Canceled)
-		v, err = db.OpenVault(ctx, VaultID{1}, KeyID{2}, p, 0)
+		v, err := db.OpenVault(ctx, VaultID{1}, KeyID{2}, p)
 		assert.Nil(v)
 		assert.ErrorIs(err, context.Canceled)
 		assert.SLen(p.calls, 0)
-		v, err = db.OpenVault(context.Background(), VaultID{1}, KeyID{2}, p, maxAllowance)
+		ctx = context.Background()
+		assert.ErrorIs(db.CreateVault(ctx, VaultID{1}, KeyID{2}, nil), ErrProvider)
+		v, err = db.OpenVault(ctx, VaultID{1}, KeyID{2}, nil)
 		assert.Nil(v)
-		assert.ErrorIs(err, ErrVaultNotFound, "the cap itself is an allowed reservation")
-		assert.Equal(p.reserved, maxAllowance)
-		assert.Equal(p.remaining, uint32(0))
+		assert.ErrorIs(err, ErrProvider)
+		v, err = db.OpenVault(ctx, VaultID{1}, KeyID{2}, p)
+		assert.Nil(v)
+		assert.ErrorIs(err, ErrVaultNotFound)
+		assert.Equal(p.consumeCalls, 0)
+		assert.Equal(p.remainingEncryptions, uint32(1))
 		assert.Equal(p.leases[0].releases, 1)
 		try.To(db.Close())
 	})
@@ -416,15 +401,16 @@ func lifecycleVerificationFailure(t *testing.T, open func(*testing.T) *Database)
 	}))
 	releaseErr := errors.New("failed verification release")
 	p.releaseErr = releaseErr
-	for _, allowance := range []uint32{1, 0} {
-		v, err := db.OpenVault(ctx, vault, id, p, allowance)
+	for range 2 {
+		v, err := db.OpenVault(ctx, vault, id, p)
 		assert.Nil(v)
 		assert.ErrorIs(err, ErrVaultManifest)
 		assert.ErrorIs(err, cause, "record cause survives manifest and lifecycle composition")
 		assert.ErrorIs(err, releaseErr)
 	}
 	assert.Equal(p.spent, uint32(1))
-	assert.Equal(p.remaining, uint32(0), "failed verification forfeits reservation")
+	assert.Equal(p.remainingEncryptions, uint32(1), "failed verification consumes nothing")
+	assert.Equal(p.consumeCalls, 1)
 	for _, lease := range p.leases {
 		assert.Equal(lease.releases, 1)
 	}
@@ -484,8 +470,8 @@ func lifecycleDrain(t *testing.T, open func(*testing.T) *Database) {
 			vault, id := VaultID{1}, KeyID{2}
 			p := newLifecycleProvider(t, 3)
 			try.To(db.CreateVault(ctx, vault, id, p))
-			v := try.To1(db.OpenVault(ctx, vault, id, p, 1))
-			sibling := try.To1(db.OpenVault(ctx, vault, id, p, 1))
+			v := try.To1(db.OpenVault(ctx, vault, id, p))
+			sibling := try.To1(db.OpenVault(ctx, vault, id, p))
 			lease := v.lease.(*lifecycleLease)
 			siblingLease := sibling.lease.(*lifecycleLease)
 			scope := v.scope // Retained only to inspect Clear after draining.
@@ -501,7 +487,7 @@ func lifecycleDrain(t *testing.T, open func(*testing.T) *Database) {
 					token := try.To1(s.Token(nil, []byte("held")))
 					close(entered)
 					<-resume
-					// Precharged work can still seal while either Close waits,
+					// Admitted work can still consume while either Close waits,
 					// or after expiry.
 					envelope := try.To1(s.Seal(nil, []byte("held"), []byte("owned")))
 					_, owned = try.To2(s.Open(nil, token, []byte("held"), envelope))
@@ -617,7 +603,7 @@ func lifecycleDrain(t *testing.T, open func(*testing.T) *Database) {
 			assert.ThatNot(called, "engine closes even after failing lease releases")
 			calls := len(p.calls)
 			assert.ErrorIs(db.CreateVault(ctx, vault, id, p), ErrClosed)
-			late, err := db.OpenVault(ctx, vault, id, p, 0)
+			late, err := db.OpenVault(ctx, vault, id, p)
 			assert.Nil(late)
 			assert.ErrorIs(err, ErrClosed)
 			assert.Equal(len(p.calls), calls)
@@ -632,7 +618,7 @@ func lifecycleUnwinding(t *testing.T, open func(*testing.T) *Database) {
 	p := newLifecycleProvider(t, 1)
 	ctx := context.Background()
 	try.To(db.CreateVault(ctx, VaultID{1}, KeyID{2}, p))
-	v := try.To1(db.OpenVault(ctx, VaultID{1}, KeyID{2}, p, 0))
+	v := try.To1(db.OpenVault(ctx, VaultID{1}, KeyID{2}, p))
 	callbackErr := errors.New("callback failure")
 	assert.Equal(v.withScope(func(*record.Scope) error { return callbackErr }), callbackErr)
 	// Deliberately leave this err2 panic for the admission boundary to recover.
@@ -670,62 +656,56 @@ func lifecycleUnwinding(t *testing.T, open func(*testing.T) *Database) {
 
 func lifecyclePending(t *testing.T, open func(*testing.T) *Database) {
 	for _, operation := range []string{"create", "open"} {
-		for _, stage := range []string{"acquire", "reserve"} {
-			t.Run(operation+"_"+stage, func(t *testing.T) {
-				defer assert.PushTester(t)()
-				db := open(t)
-				t.Cleanup(func() { _ = db.Close() })
-				p := newLifecycleProvider(t, 2)
-				ctx := context.Background()
-				vault, id := VaultID{1}, KeyID{2}
-				if operation == "open" {
-					try.To(db.CreateVault(ctx, vault, id, p))
-				}
-				entered, resume := make(chan struct{}), make(chan struct{})
-				unblock := sync.OnceFunc(func() { close(resume) })
-				if stage == "acquire" {
-					p.acquireEntered, p.acquireWait = entered, resume
+		t.Run(operation+"_acquire", func(t *testing.T) {
+			defer assert.PushTester(t)()
+			db := open(t)
+			t.Cleanup(func() { _ = db.Close() })
+			p := newLifecycleProvider(t, 2)
+			ctx := context.Background()
+			vault, id := VaultID{1}, KeyID{2}
+			if operation == "open" {
+				try.To(db.CreateVault(ctx, vault, id, p))
+			}
+			entered, resume := make(chan struct{}), make(chan struct{})
+			unblock := sync.OnceFunc(func() { close(resume) })
+			p.acquireEntered, p.acquireWait = entered, resume
+			var handle *Vault
+			result, workDone := make(chan error, 1), make(chan struct{})
+			go func() {
+				defer close(workDone)
+				if operation == "create" {
+					result <- db.CreateVault(ctx, vault, id, p)
 				} else {
-					p.reserveEntered, p.reserveWait = entered, resume
+					var err error
+					handle, err = db.OpenVault(ctx, vault, id, p)
+					result <- err
 				}
-				var handle *Vault
-				result, workDone := make(chan error, 1), make(chan struct{})
-				go func() {
-					defer close(workDone)
-					if operation == "create" {
-						result <- db.CreateVault(ctx, vault, id, p)
-					} else {
-						var err error
-						handle, err = db.OpenVault(ctx, vault, id, p, 1)
-						result <- err
-					}
-				}()
-				t.Cleanup(func() { unblock(); lifecycleSignal(t, workDone) })
-				lifecycleSignal(t, entered)
-				closed, closeDone := make(chan error, 1), make(chan struct{})
-				go func() { defer close(closeDone); closed <- db.Close() }()
-				t.Cleanup(func() { unblock(); lifecycleSignal(t, closeDone) })
-				lifecycleStopped(t, db, nil)
-				select {
-				case <-closeDone:
-					t.Fatal("Close failed to drain pending provider work")
-				default:
-				}
-				// Admission remains responsive while provider I/O is blocked.
-				assert.ErrorIs(db.CreateVault(ctx, VaultID{9}, id, p), ErrClosed)
-				unblock()
-				assert.ErrorIs(lifecycleResult(t, result), ErrClosed)
-				assert.Nil(handle, "no publication after Close starts")
-				try.To(lifecycleResult(t, closed))
-				for _, lease := range p.leases {
-					assert.Equal(lease.releases, 1)
-				}
-				assert.Equal(len(db.vaults), 0)
-				assert.Equal(db.engine.View(func(engine.ReadTx) error { return nil }), engine.ErrClosed)
-			})
-		}
+			}()
+			t.Cleanup(func() { unblock(); lifecycleSignal(t, workDone) })
+			lifecycleSignal(t, entered)
+			closed, closeDone := make(chan error, 1), make(chan struct{})
+			go func() { defer close(closeDone); closed <- db.Close() }()
+			t.Cleanup(func() { unblock(); lifecycleSignal(t, closeDone) })
+			lifecycleStopped(t, db, nil)
+			select {
+			case <-closeDone:
+				t.Fatal("Close failed to drain pending provider work")
+			default:
+			}
+			// Admission remains responsive while provider I/O is blocked.
+			assert.ErrorIs(db.CreateVault(ctx, VaultID{9}, id, p), ErrClosed)
+			unblock()
+			assert.ErrorIs(lifecycleResult(t, result), ErrClosed)
+			assert.Nil(handle, "no publication after Close starts")
+			try.To(lifecycleResult(t, closed))
+			for _, lease := range p.leases {
+				assert.Equal(lease.releases, 1)
+			}
+			assert.Equal(len(db.vaults), 0)
+			assert.Equal(db.engine.View(func(engine.ReadTx) error { return nil }), engine.ErrClosed)
+		})
 	}
-	t.Run("cancel_after_reservation", func(t *testing.T) {
+	t.Run("cancel_during_acquire", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		db := open(t)
 		t.Cleanup(func() { _ = db.Close() })
@@ -733,25 +713,27 @@ func lifecyclePending(t *testing.T, open func(*testing.T) *Database) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		try.To(db.CreateVault(ctx, VaultID{1}, KeyID{2}, p))
-		p.reserveEntered, p.reserveWait = make(chan struct{}), make(chan struct{})
-		unblock := sync.OnceFunc(func() { close(p.reserveWait) })
+		p.acquireEntered, p.acquireWait = make(chan struct{}), make(chan struct{})
+		unblock := sync.OnceFunc(func() { close(p.acquireWait) })
 		result, done := make(chan error, 1), make(chan struct{})
 		var handle *Vault
 		go func() {
 			defer close(done)
 			var err error
-			handle, err = db.OpenVault(ctx, VaultID{1}, KeyID{2}, p, 1)
+			handle, err = db.OpenVault(ctx, VaultID{1}, KeyID{2}, p)
 			result <- err
 		}()
 		t.Cleanup(func() { unblock(); lifecycleSignal(t, done) })
-		lifecycleSignal(t, p.reserveEntered)
+		lifecycleSignal(t, p.acquireEntered)
 		cancel()
 		unblock()
 		assert.ErrorIs(lifecycleResult(t, result), context.Canceled)
 		assert.Nil(handle)
-		assert.Equal(p.remaining, uint32(0))
+		assert.Equal(p.remainingEncryptions, uint32(1))
 		assert.Equal(p.spent, uint32(1))
-		assert.Equal(p.leases[1].releases, 1)
+		assert.Equal(p.consumeCalls, 1)
+		assert.Equal(len(p.leases), 1, "cancelled Acquire returns no lease")
+		assert.Equal(p.leases[0].releases, 1)
 		try.To(db.Close())
 	})
 }
@@ -793,7 +775,7 @@ func lifecyclePublication(t *testing.T, open func(*testing.T) *Database) {
 			go func() {
 				defer close(workDone)
 				var err error
-				handle, err = db.OpenVault(ctx, VaultID{1}, KeyID{2}, p, 1)
+				handle, err = db.OpenVault(ctx, VaultID{1}, KeyID{2}, p)
 				result <- err
 			}()
 			t.Cleanup(func() { unblock(); lifecycleSignal(t, workDone) })
@@ -815,8 +797,9 @@ func lifecyclePublication(t *testing.T, open func(*testing.T) *Database) {
 				try.To(lifecycleResult(t, closed))
 			}
 			assert.Equal(p.leases[1].releases, 1)
-			assert.Equal(p.remaining, uint32(0))
+			assert.Equal(p.remainingEncryptions, uint32(1))
 			assert.Equal(p.spent, uint32(1))
+			assert.Equal(p.consumeCalls, 1)
 			assert.Equal(len(db.vaults), 0)
 			try.To(db.Close())
 		})

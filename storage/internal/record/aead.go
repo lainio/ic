@@ -18,9 +18,9 @@ var (
 // sealEnvelope encrypts an opaque encodePlaintext payload, checking its size but
 // not parsing it. The caller supplies KE, KeyID, expected context, and token;
 // this adapter does not compute or validate the logical-key/token relationship.
-// spend must consume one previously allocated allowance tied to this actual KE.
-// Validation precedes spending; a completed seal consumes its allowance even if
-// discarded. There is no refund, and a new call does not reset the key's budget.
+// spend must atomically consume one permitted encryption for this actual KE.
+// Validation precedes spending; a successful debit remains consumed even if
+// sealing fails. There is no refund or reset of the key's shared budget.
 // Global lifetime accounting remains the caller's D4 responsibility.
 func sealEnvelope(ke []byte, id [16]byte, context []byte, token [32]byte,
 	payload []byte, spend func() error) (envelope []byte, err error) {

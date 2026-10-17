@@ -167,7 +167,7 @@ func vaultNamespacesData(t *testing.T, open func(*testing.T) *Database) {
 		return nil
 	}))
 	assert.Equal(p.spent, spent)
-	assert.Equal(p.reserves, 2)
+	assert.Equal(p.consumeCalls, int(p.spent))
 	try.To(db.Close())
 }
 
@@ -236,7 +236,7 @@ func vaultNamespacesAtomic(t *testing.T, open func(*testing.T) *Database) {
 		}
 		try.To(right.Delete(key))
 		first = created.Put([]byte("exhausted"), nil)
-		assert.ErrorIs(first, errLifecycleBudget)
+		assert.ErrorIs(first, ErrKeyUsageExhausted)
 		for _, ns := range saved {
 			checkNamespaceFailure(t, ns, first)
 		}
@@ -248,7 +248,7 @@ func vaultNamespacesAtomic(t *testing.T, open func(*testing.T) *Database) {
 		checkNamespaceFailure(t, ns, ErrTxClosed)
 	}
 	assert.Equal(p.spent, uint32(7), "rolled-back seals stay spent")
-	assert.Equal(p.reserves, 2)
+	assert.Equal(p.consumeCalls, int(p.spent)+1)
 	assert.Equal(len(p.calls), 2)
 	try.To(v.View(func(tx ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
@@ -264,8 +264,8 @@ func vaultNamespacesAtomic(t *testing.T, open func(*testing.T) *Database) {
 	for _, ns := range saved {
 		checkNamespaceFailure(t, ns, ErrTxClosed)
 	}
-	// Zero sealing allowance permits metadata creation and verified deletion.
-	zero := try.To1(db.OpenVault(context.Background(), v.vault, KeyID{7}, p, 0))
+	// An exhausted shared budget permits metadata creation and verified deletion.
+	zero := try.To1(db.OpenVault(context.Background(), v.vault, KeyID{7}, p))
 	try.To(zero.Update(func(tx WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
 		left := try.To1(tx.ChildForUpdate([]byte("left")))
@@ -627,11 +627,11 @@ func vaultNamespacesContext(t *testing.T, open func(*testing.T) *Database) {
 			defer assert.PushTester(t)()
 			db := open(t)
 			t.Cleanup(func() { _ = db.Close() })
-			// One manifest, one valid record, one reserved fixture seal if needed.
+			// One manifest, one valid record, one fixture encryption if needed.
 			p := newLifecycleProvider(t, 3)
 			vault, id := VaultID{1}, KeyID{7}
 			try.To(db.CreateVault(context.Background(), vault, id, p))
-			v := try.To1(db.OpenVault(context.Background(), vault, id, p, 1))
+			v := try.To1(db.OpenVault(context.Background(), vault, id, p))
 			manifest := namespaceManifest(t, v)
 			key := []byte("key")
 			try.To(v.Update(func(tx WriteTx) (err error) {
@@ -685,8 +685,7 @@ func vaultNamespacesContext(t *testing.T, open func(*testing.T) *Database) {
 				payload := try.To1(aead.Open(nil, nil, envelope[22:], aad))
 				assert.Equal(string(payload[4:7]), "key")
 				payload[4] = 'X' // Same valid lengths, a different logical key.
-				spend := try.To1(v.lease.Reserve(1))
-				try.To(spend())
+				try.To(v.lease.ConsumeEncryption())
 				envelope = append(bytes.Clone(envelope[:22]), aead.Seal(nil, nil, payload, aad)...)
 				authenticated := try.To1(aead.Open(nil, nil, envelope[22:], aad))
 				assert.Equal(bytes.Equal(authenticated, payload), true)
@@ -780,8 +779,8 @@ func vaultNamespacesPersistence(t *testing.T) {
 	try.To(db.Close())
 	reopened := try.To1(OpenBolt(path))
 	t.Cleanup(func() { _ = reopened.Close() })
-	// Same provider/generation, with no reservation reset or seal refund.
-	v = try.To1(reopened.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
+	// Same provider/generation, with no counter reset or seal refund.
+	v = try.To1(reopened.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p))
 	try.To(v.View(func(tx ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		checkRecord(t, tx, []byte("root"), []byte("saved"), true)
@@ -791,8 +790,8 @@ func vaultNamespacesPersistence(t *testing.T) {
 		return nil
 	}))
 	assert.Equal(bytes.Equal(namespaceManifest(t, v), manifest), true)
-	assert.Equal(p.remaining, uint32(0))
-	assert.Equal(p.reserved, uint32(4))
+	assert.Equal(p.remainingEncryptions, uint32(0))
+	assert.Equal(p.consumeCalls, 4)
 	assert.Equal(p.spent, uint32(4))
 	try.To(reopened.Close())
 }

@@ -19,11 +19,26 @@ var _ io.Closer = (*storage.Vault)(nil)
 
 // A finite smoke-test provider only; it makes no durable accounting claim.
 type consumerProvider struct {
-	mu        sync.Mutex      // Protects counters, not Vault permissions.
-	secret    []byte          // Random 32-byte secret; storage derives keys from it.
-	vault     storage.VaultID // ID of the vault served; not a secret.
-	id        storage.KeyID   // Key version ID; not a secret or cipher selector.
-	remaining uint32          // Encryptions not yet allocated, not space or reads.
+	mu     sync.Mutex      // Protects counters, not Vault permissions.
+	secret []byte          // Random 32-byte secret; storage derives keys from it.
+	vault  storage.VaultID // ID of the vault served; not a secret.
+	id     storage.KeyID   // Key version ID; not a secret or cipher selector.
+	// Remaining permitted encryptions for this secret/vault/key binding.
+	// All leases share it, and reopening a file does not reset it.
+	remainingEncryptions uint32
+}
+
+// exampleEncryptionBudget follows the existing 2^24 development policy.
+// It is a finite in-process test default, independent of application workload;
+// it supplies no lifetime enforcement across process restarts, copies or restores.
+const exampleEncryptionBudget uint32 = 1 << 24
+
+func newConsumerProvider(vault storage.VaultID, id storage.KeyID,
+	secret []byte) *consumerProvider {
+	return &consumerProvider{
+		vault: vault, id: id, secret: secret,
+		remainingEncryptions: exampleEncryptionBudget,
+	}
 }
 
 type consumerLease struct{ p *consumerProvider }
@@ -42,23 +57,15 @@ func (l *consumerLease) Secret() []byte { return l.p.secret }
 func (l *consumerLease) Check() error   { return nil }
 func (l *consumerLease) Release() error { return nil }
 
-func (l *consumerLease) Reserve(n uint32) (func() error, error) {
+func (l *consumerLease) ConsumeEncryption() error {
 	p := l.p
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if n > p.remaining {
-		return nil, storage.ErrAllowance
+	if p.remainingEncryptions == 0 {
+		return storage.ErrKeyUsageExhausted
 	}
-	p.remaining -= n
-	return func() error {
-		p.mu.Lock()
-		defer p.mu.Unlock()
-		if n == 0 {
-			return storage.ErrAllowance
-		}
-		n--
-		return nil
-	}, nil
+	p.remainingEncryptions--
+	return nil
 }
 
 // The consumer receives only its designated Vault, with no routing/key access.
@@ -100,11 +107,11 @@ func TestVaultConsumer(t *testing.T) {
 			t.Cleanup(func() { _ = db.Close() })
 			var vaults [2]*storage.Vault
 			for i := range vaults {
-				p := &consumerProvider{secret: make([]byte, 32), vault: storage.VaultID{byte(i + 1)}, id: storage.KeyID{7}, remaining: 2}
+				p := newConsumerProvider(storage.VaultID{byte(i + 1)}, storage.KeyID{7}, make([]byte, 32))
 				try.To1(rand.Read(p.secret)) // Independent random secret per vault.
 				t.Cleanup(func() { clear(p.secret) })
 				try.To(db.CreateVault(context.Background(), p.vault, p.id, p))
-				vaults[i] = try.To1(db.OpenVault(context.Background(), p.vault, p.id, p, 1))
+				vaults[i] = try.To1(db.OpenVault(context.Background(), p.vault, p.id, p))
 			}
 			try.To(vaults[1].Update(func(tx storage.WriteTx) (err error) {
 				defer err2.Handle(&err, nil)

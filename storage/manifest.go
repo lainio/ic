@@ -25,15 +25,15 @@ const (
 )
 
 // createVaultState requires a database-root Update and a live Scope derived for
-// the SAME externally expected vault/id, with a finite, preallocated local spend
-// gate (no provider I/O). The trusted caller establishes this pairing; these
+// the SAME externally expected vault/id, with shared local encryption accounting
+// (no provider I/O). The trusted caller establishes this pairing; these
 // helpers neither discover nor authorize keys. CreateVault and OpenVault pair
 // them from authorized external inputs.
 //
 // The caller owns Scope and must drain its work before Clear. Neither helper
 // acquires, releases, or clears it. Callers MUST propagate helper errors into the
 // engine callback. This private composition is not a public abort-only Vault API.
-// A discarded seal still consumes its allowance, including on transaction rollback.
+// A successful debit remains consumed, including on transaction rollback.
 func createVaultState(root engine.WriteTx, scope *record.Scope,
 	vault, id [16]byte) (err error) {
 	defer err2.Handle(&err, nil)
@@ -61,7 +61,7 @@ func createVaultState(root engine.WriteTx, scope *record.Scope,
 // verifyVaultState requires a database-root transaction and the same trusted
 // Scope/expected-ID pairing and ownership as createVaultState. It only reads;
 // missing or invalid state is never created, repaired, or adopted. Verification
-// spends nothing, including when the Scope's local allowance is exhausted.
+// spends nothing, including when the shared key budget is exhausted.
 func verifyVaultState(root engine.ReadTx, scope *record.Scope,
 	vault, id [16]byte) (err error) {
 	defer err2.Handle(&err, nil)

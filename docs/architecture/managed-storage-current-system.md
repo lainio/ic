@@ -5,18 +5,22 @@
 on `new-managed-db-c1-v3`.
 **White-box guide starting HEAD:** `1d673911aa30e092e60744e92055941e5d9d7bb1`
 on `new-managed-db-c1-v3`; initially clean.
-This equals `REVIEWED_BASE`, whose ancestry check passed.
+That guide's starting HEAD equaled its `REVIEWED_BASE`; ancestry passed.
+**Run 21 policy update base:** `d59a1f7aee2103f3505c7955e21e31aae83634f1`
+on `new-managed-db-c1-v3`; initially clean and ancestry confirmed.
+This run replaces caller-sized reservations with on-demand shared key usage.
+Historical proposals and prompts retain their original policy.
 **Purpose:** Explain implemented code, not authorize additional features.
 
 Start with `notes.Put([]byte("greeting"), []byte("hello"))`.
 The package adds keyed lookup, authenticated encryption of the logical
 key/value, and access-handle lifetime management around that familiar operation.
-It also tracks encryption quota reserved in advance, called a precharged
-allowance.
+It consumes one permitted encryption from shared provider accounting immediately
+before sealing.
 bbolt still owns the durable transaction.
 
 Read [Core concepts](#core-concepts), then the
-[allowance walkthrough](#encryption-allowance-walkthrough), then the
+[usage walkthrough](#encryption-usage-walkthrough), then the
 [record walkthrough](#record-write-and-read-walkthrough).
 The [deployment overview](#deployment-at-a-glance) and
 [UML source diagrams](#uml-source-diagrams) show the component boundaries.
@@ -41,7 +45,7 @@ One Go process
                       |                     |
                 Internal Engine      record.Scope / codec
                 /            \              |
-       bbolt adapter     Memory adapter     local spending gate
+       bbolt adapter     Memory adapter     shared key counter
              |                |
        bbolt library      Go heap tree
              |            (ephemeral)
@@ -55,7 +59,7 @@ The codec is used with both. No external database service is required.
 This is a map of the storage tests and library components.
 It is not a claim that the IntroTree CLI is integrated with this storage API.
 The application-owned provider is an in-process fixture shared by the consumer
-test and `storage/example_test.go`.
+test and both runnable examples.
 See [Unfinished guarantees](#unfinished-guarantees) for the production boundary.
 
 The bbolt adapter calls bbolt's own `DB.View` and `DB.Update`.
@@ -66,7 +70,8 @@ A memory read snapshot is a stable view of an existing tree, not a backup file.
 ## Core concepts
 
 These terms describe the current implementation.
-Code links give functions and line ranges at the white-box guide starting HEAD.
+Code links identify functions; historical line ranges retain the guide's
+provenance.
 The [source notes](#source-locators) distinguish proposals and
 primitive guidance.
 
@@ -82,9 +87,9 @@ primitive guidance.
 | `record.Scope` | Owned derived keys, identity binding, and spending function; not a transaction. | `Scope`, `Derive`, [`scope.go:15–46`][scope] |
 | Provider / `Lease` | Application implementation / one acquired access object supplying checks and a borrowed secret. | `KeyProvider`, `Lease`, [`keyprovider.go:12–48`][lease] |
 | Admission / active-work pin | Check permission/lifetime, then track accepted work so close waits before key cleanup; no quota allocation. | `withScope`, `Close`, [`vault.go:36–87`][vault-lifecycle] |
-| Unreserved budget / reserved allowance | `p.remaining` is unallocated quota; captured `n` is unused quota in one reservation. | `consumerLease.Reserve`, [`vault_consumer_test.go:45–62`][reserve] |
-| Precharging / `Reserve` | Deduct quota in advance and return its spending function; create no ciphertext. | `OpenVault`, [`db.go:139–150`][open-reserve]; [`consumerLease.Reserve`][reserve] |
-| Gate / local spending gate | A `func() error` consumes one reserved encryption or fails; no authorization recheck or remote call. | Closure in [`consumerLease.Reserve`][reserve]; call in [`sealEnvelope`][seal-envelope] |
+| Shared encryption budget | `remainingEncryptions` counts permitted encryptions left for the provider's actual key, shared by all leases. | [`consumerProvider`][consumer-provider] |
+| On-demand consumption | `ConsumeEncryption()` atomically debits one before sealing; no disk/network I/O, refill, or authorization recheck. | [`Lease`][lease]; [`consumerLease.ConsumeEncryption`][consume] |
+| Codec callback | `record.Derive` receives `lease.ConsumeEncryption` as a `func() error`; deriving and verifying consume nothing. | [`CreateVault`][create-vault]; [`OpenVault`][open-vault]; [`sealEnvelope`][seal-envelope] |
 | `Database` / `Vault` | One backend and its handles / one open handle bound to expected vault and key IDs. | [`db.go:23–34`][database]; [`vault.go:12–30`][vault] |
 | Engine adapter | Common backend operations; the bbolt implementation delegates to bbolt. | `boltEngine.View`, `Update`, [`bbolt.go:46–74`][bolt-tx] |
 
@@ -96,8 +101,8 @@ This is the implemented separation between encryption and equality lookup.
 
 A lease is acquired once for a handle; admission calls its `Check` for each
 `View` or `Update`.
-The returned spending function has a narrower job: consume the reservation
-when encryption occurs.
+The lease's `ConsumeEncryption` method has a narrower job: atomically debit
+shared usage when encryption occurs.
 The example's `Check` and `Release` return `nil`; they demonstrate neither
 revocation nor production key custody.
 
@@ -114,13 +119,13 @@ clears owned key buffers best-effort, and releases the lease once.
 Other independently opened handles and stored records remain usable and
 unchanged.
 The closed handle cannot be reopened; `Database.OpenVault` returns a new one
-after provider authorization and a new reservation, which may be `0`.
+after provider authorization, retaining the same shared usage counter.
 Closing cannot revoke previously returned caller-owned data.
 Repeated or concurrent calls wait for cleanup and return the same result,
 including any admission denial and lease-release error.
 A cleanup error does not make the closed handle reusable.
-Accepted work retains its precharged allowance while closing waits;
-closing does not recheck authorization.
+Accepted work may continue consuming from the live shared counter while closing
+waits. Closing does not recheck authorization, consume, refund, or reset usage.
 
 `Database.Close` shuts down the engine and its remaining handles.
 It stops new work, drains pending operations and handles,
@@ -192,7 +197,7 @@ node "Development host" {
         component "Storage adapters" as Tx
         component "record.Scope + codec" as Codec
         component "Application-owned provider + leases\nFinite test fixture" as Provider
-        component "Precharged local spending gate" as Gate
+        component "Shared key usage counter\nLocal to provider" as Gate
         interface "Internal Engine" as Engine
         component "bbolt adapter" as BoltAdapter
         component "bbolt library\nOwns durable transactions" as Bolt
@@ -204,11 +209,11 @@ node "Development host" {
 Owner --> API : open database / create vault / open handle / close
 Owner --> Provider : supply
 Consumer --> API : own Vault only
-API --> Provider : acquire / check / reserve / release
+API --> Provider : acquire / secret / check / release
 API --> Tx : admitted operation
 Tx --> Codec : tokens / seal / verify
-Provider --> Gate : allocates test allowance
-Codec --> Gate : spend before seal
+Provider --> Gate : owns shared finite counter
+Codec --> Gate : ConsumeEncryption before seal
 Tx --> Engine
 Engine --> BoltAdapter : persistent backend
 Engine --> Memory : alternative test backend
@@ -244,11 +249,11 @@ note over Owner, Bolt
   Happy path for existing state. Identity is supplied by the caller.
   Provider calls and crypto details are grouped for readability.
 end note
-Owner -> DB : OpenVault(ctx, VaultID, KeyID, provider, allowance)
+Owner -> DB : OpenVault(ctx, VaultID, KeyID, provider)
 DB -> DB : admit pending operation
-DB -> Provider : Acquire; Check; Reserve; Secret
-Provider --> DB : owned lease, borrowed secret, finite gate
-DB -> Codec : Derive(secret, expected identities, gate)
+DB -> Provider : Acquire; Check; Secret
+Provider --> DB : owned lease, borrowed secret
+DB -> Codec : Derive(secret, expected identities, lease.ConsumeEncryption)
 Codec --> DB : key-owning Scope
 DB -> DB : recheck admission and lease
 DB -> Engine : View(verifyVaultState)
@@ -287,7 +292,7 @@ participant "Database + Vault" as Vault
 participant "Provider / Lease" as Lease
 participant "Storage adapters" as Tx
 participant "record.Scope + codec" as Codec
-participant "Local spending gate" as Gate
+participant "Provider's shared key counter" as Gate
 participant "Engine adapter" as Engine
 participant "bbolt" as Bolt
 Consumer -> Vault : Update(fn)
@@ -302,8 +307,8 @@ Tx -> Consumer : fn(scoped transaction)
 Consumer -> Tx : Put(logical key, value)
 Tx -> Codec : Token; verify existing record if present
 Tx -> Codec : Seal(logical key, value)
-Codec -> Gate : spend one precharged allowance
-Gate --> Codec : allowed
+Codec -> Gate : Lease.ConsumeEncryption() — local atomic debit
+Gate --> Codec : nil only after successful debit
 Codec --> Tx : encrypted envelope
 Tx -> Engine : Put(token, envelope)
 Engine -> Bolt : Bucket.Put within active transaction
@@ -323,6 +328,7 @@ Engine --> Vault : result / propagated panic
 Vault -> Vault : release active-work pin
 Vault --> Consumer : result / propagated panic
 note over Tx, Bolt
+  Consumption has no I/O or authorization recheck.
   Crypto failure can occur before Bucket.Put.
   The current adapter latches it even if the caller ignores it.
   bbolt still performs the durable commit or rollback.
@@ -330,7 +336,7 @@ end note
 @enduml
 ~~~
 
-## Runnable example
+## Runnable examples
 
 `ExampleVault` in `storage/example_test.go` uses a temporary bbolt file and
 the finite provider from `storage/vault_consumer_test.go`.
@@ -339,16 +345,24 @@ It creates a vault, opens a handle, writes and reads a nested greeting, closes
 the handle and database, then reopens the file and reads through a new handle.
 It demonstrates the library API within one process; it adds no CLI integration.
 
+`ExampleDatabase_OpenVault` in `storage/example_database_openvault_test.go`
+remains the owner's playground: `writeCount` changes its repeated writes.
+Both examples use the same test-only provider constructor and retain their
+checked output. Neither chooses a quota from the workload.
+
 `rand.Read` fills the 32-byte `secret` buffer with random bytes;
 the example keeps the provider and secret alive across file reopening.
 
-## Encryption allowance walkthrough
+## Encryption usage walkthrough
 
-The example permits two encryptions: one for the encrypted identity record
-(manifest), and one for the greeting.
-The two counters below track allocation and spending of that quota.
+Ordinary callers open an existing vault without predicting future writes:
 
-### Why count encryptions and reserve them
+~~~go
+func (db *Database) OpenVault(ctx context.Context, vault VaultID, id KeyID,
+    provider KeyProvider) (v *Vault, err error)
+~~~
+
+### Why count encryptions
 
 Current encryption uses AES-GCM with random nonces through
 `newEnvelopeAEAD` in [`aead.go:59–66`][new-aead].
@@ -363,74 +377,62 @@ safety.
 
 The [record design, D2][record-design] proposes a stricter lifetime cap of
 `2^24` encryptions per actual derived `KE`, across namespaces, files, processes,
-reopens, and restores.
-That remains a proposed lifetime guarantee.
-Current `maxAllowance` and `OpenVault` bound each reservation request to `2^24`
-([`db.go:21`][max-allowance], [`db.go:139–150`][open-reserve]).
-Neither this request bound nor the example's tiny budget proves an enforced
-lifetime total.
+reopens, and restores. That lifetime guarantee remains unimplemented.
+The examples use the named `exampleEncryptionBudget = 1 << 24` development
+default in [the provider fixture][consumer-provider]. The constructor sets it
+once, independently of application workload. Tiny budgets are test injections.
+The former per-request bound did not enforce a lifetime total and is removed.
 
-**Chosen policy:** reserve a batch before entering the engine transaction,
-then spend locally while sealing.
-The [record design's OPEN D4][record-design] and
-[Vault proposal's access boundary][vault-design] state the rationale:
-keep provider/accounting I/O outside the engine transaction.
-`CreateVault` and `OpenVault` implement this ordering;
-the [lease contract][lease] requires a local gate with no provider I/O.
-AES-GCM and bbolt do not prescribe this `Reserve`/gate API.
-Precharging allocates encryption quota, not pages, placeholders, money,
-partially written records, or a stream format.
-The example needs no remote accounting service.
+**Run 21 policy:** `Lease.ConsumeEncryption` debits shared usage on demand.
+It is the narrowly permitted provider call inside an engine transaction.
+It performs only short, synchronized in-process accounting: no disk/network
+I/O, replenishment, storage reentry, or new authorization check.
+`Acquire`, `Secret`, and `Release` remain outside engine transactions;
+`Check` remains an admission check, separate from quota.
+This policy supersedes the reservation policy in the historical proposals.
 
-### The example's counters
+### One shared counter
 
-In [`consumerProvider` and `consumerLease.Reserve`][consumer-provider]:
+In [`consumerProvider`][consumer-provider], `remainingEncryptions` counts
+permitted encryptions left for its fixed secret, `VaultID`, and `KeyID`.
+Its mutex makes a successful debit atomic across all leases and handles,
+including separate `Database` instances using that provider and binding.
+`Acquire`, `OpenVault`, `Close`, and `Release` never allocate or reset it.
+The broader `lifecycleProvider` test fake conservatively shares one pool
+across several bindings; shared-key tests keep all key inputs fixed.
 
-- `p.remaining` is quota the provider has **not** allocated to a reservation.
-- Captured `n` in the returned closure is unused quota inside **that**
-  reservation; it is not another field in `consumerProvider`.
+For `ExampleVault`, let `B = exampleEncryptionBudget`.
+Consumption calls count attempts; successful debits reduce the counter.
 
-The provider's mutex protects both counters; it does not grant vault access.
-These are the states after the named steps in [`ExampleVault`][example].
-“Encryptions performed” is explanatory bookkeeping, not a fixture field.
+| Step completed | `remainingEncryptions` | Successful debits |
+|---|---:|---:|
+| Provider constructed | B | 0 |
+| `CreateVault`: seal identity record | B − 1 | 1 |
+| `OpenVault(ctx, vaultID, keyID, provider)` | B − 1 | 1 |
+| `Put` greeting | B − 2 | 2 |
+| Read greeting; close handle and database | B − 2 | 2 |
+| Reopen file and handle with the same provider | B − 2 | 2 |
+| Read greeting | B − 2 | 2 |
 
-| Step completed | Unreserved `p.remaining` | Unused handle allowance | Encryptions performed |
-|---|---:|---:|---:|
-| Provider constructed | 2 | Not applicable | 0 |
-| `CreateVault` | 1 | Not applicable | 1 |
-| `OpenVault(..., 1)` | 0 | 1 | 1 |
-| `Put` of greeting | 0 | 0 | 2 |
-| `Close` and reopen with `OpenVault(..., 0)` | 0 | 0 | 2 |
-| Read greeting | 0 | 0 | 2 |
+`CreateVault` and `OpenVault` pass `lease.ConsumeEncryption` to the existing
+`record.Derive` callback slot. Neither calls it eagerly.
+Creation consumes once when sealing the manifest; duplicate creation and
+failed verification consume nothing. Opening only verifies existing data.
 
-`CreateVault` has its own temporary reservation of one, spends it on the
-manifest, then clears its scope and releases its lease
-([`db.go:88–111`][create-vault], [`createVaultState`][manifest]).
-There is no published handle at that step.
-Reservation alone creates no ciphertext: after the first `OpenVault`,
-`p.remaining` is zero but the handle still has permission for one encryption.
-Opening verifies the manifest without spending.
-The example also reads before closing; that read leaves the counters unchanged.
-Reopening in the same process retains the provider's zero balance and obtains
-a new gate whose captured `n` is zero.
+Each valid seal invokes the callback immediately before `AEAD.Seal`.
+A failed debit permits no encryption. Successful consumption is never refunded,
+even if encryption does not finish, a write fails, a transaction rolls back,
+or the handle closes. Unused quota stays available through the shared counter.
+The codec retains its existing `errors.Join` behavior and injected causes.
 
-Two separate no-refund rules apply:
-
-- **Unused quota:** discarding a reservation forfeits its unused allowance.
-  This is our conservative allocation policy, not evidence that those
-  encryptions occurred.
-  `Reserve` deducts the whole batch; `Scope.Clear` drops the gate and never
-  refunds it ([`scope.go:96–106`][clear]).
-- **Performed encryption:** rollback cannot undo an encryption already done.
-  `sealEnvelope` spends before AES-GCM `Seal`, and a failed backend write or
-  commit does not refund that spend ([`aead.go:30–38`][seal-envelope]).
-
-Zero allowance is not a read-only authorization flag.
-Reads, verified deletes, and namespace creation require no new encryption
-in the existing API ([`Get` and `Delete`][record-ops],
-[`EnsureChild` and `writeChild`][write-child]).
-Replacing a record can spend another encryption even though record count stays
-constant; [`writeTx.Put`][put] seals after verifying the existing record.
+Real exhaustion in the fixtures matches `ErrKeyUsageExhausted`,
+with message "storage: encryption key usage limit reached".
+It does not revoke the handle or turn `Check` into a quota check.
+Reads, verified deletes, and namespace creation still work when authorized.
+A failed `Put` latches the first transaction error, so ignoring exhaustion
+cannot commit earlier pending writes; successful debits remain consumed.
+`TestVaultKeyUsage` exercises these boundaries and concurrent consumption
+without relying on database writer serialization.
 
 ## Record write and read walkthrough
 
@@ -499,7 +501,7 @@ in [`newEnvelopeAEAD`][new-aead].
    its token, and compares the decoded logical key with requested `greeting`.
    [`decodePlaintext`][plaintext] returns owned key/value bytes;
    `Get` returns the verified `hello` bytes with `found == true`.
-   No allowance is spent.
+   No encryption is consumed.
 
 [`Each`, `namespace.go:150–168`][each] obtains original keys from decrypted
 payloads through the same `Scope.Open`, with no requested key to compare.
@@ -517,9 +519,10 @@ authentic restored bytes do not establish fresh application authority.
 
 ## Unfinished guarantees
 
-The current example/test providers enforce finite in-process allowances.
-Durable lifetime accounting, freshness across restart/restore, and production
-key custody remain unfinished.
+The current example/test providers enforce finite in-process shared budgets.
+The implementation supplies no production durable key-usage accounting.
+Lifetime enforcement across process restarts, copies, and restores, freshness,
+and production key custody remain unfinished.
 The [Vault proposal's conditional accounting section][accounting-design]
 describes obligations, not an implemented ledger or remote service.
 Reopening the example's file preserves a live provider; it proves none of
@@ -535,16 +538,16 @@ snapshot implementation, or V19 application-recovery guarantee.
 The original component map and diagrams retain their earlier provenance.
 `OpenVault` and `Vault.Close` were `UnlockVault` and `Vault.Lock`
 at the original baseline.
-All code ranges linked above were checked at
+The original code ranges were checked at
 `1d673911aa30e092e60744e92055941e5d9d7bb1`, the white-box guide starting HEAD.
-The two Go comment pointers added with this guide shift subsequent line numbers;
-function names remain navigation aids.
+Run 21 changes the policy and updates the consumption and opening links below;
+untouched ranges retain the historical guide's line numbers.
 Neither historical provenance nor this source inspection is new test execution.
 
 Additional lifecycle and backend entry points at that revision:
 
 - [`storage/db.go:36–49`][constructors]: `OpenBolt`, `NewMemory`.
-- [`storage/db.go:113–170`][open-vault]: `OpenVault`, `releaseScope`.
+- [`storage/db.go`][open-vault]: `OpenVault`, `releaseScope`.
 - [`storage/db.go:172–204`][close-db]: `Database.Close`.
 - [`storage/internal/engine/memory.go:48–111`][memory]: `begin`, `View`,
   `Update`, `Close`.
@@ -555,7 +558,7 @@ Rationale and open obligations come from the historical proposals:
 
 - `managed-storage-record-design.md:31–39, 65`: context, derivation,
   proposed lifetime cap, and OPEN D4 accounting.
-- `managed-storage-vault-design.md:31–43, 45–60`: reservation/admission policy
+- `managed-storage-vault-design.md:31–43, 45–60`: historical reservation policy
   and conditional production accounting.
 - `managed-storage-snapshot-design.md:26–39, 79–88`: deferred scope and
   absent production guarantees.
@@ -583,20 +586,18 @@ This primitive limit is separate from the proposed storage lifetime policy.
 [aad]: ../../storage/internal/record/encoding.go#L181-L194
 [manifest]: ../../storage/manifest.go#L37-L95
 [scope]: ../../storage/internal/record/scope.go#L15-L46
-[lease]: ../../storage/keyprovider.go#L12-L48
+[lease]: ../../storage/keyprovider.go#L23-L55
 [vault-lifecycle]: ../../storage/vault.go#L36-L87
-[reserve]: ../../storage/vault_consumer_test.go#L45-L62
-[open-reserve]: ../../storage/db.go#L139-L150
+[consume]: ../../storage/vault_consumer_test.go#L60
 [database]: ../../storage/db.go#L23-L34
 [vault]: ../../storage/vault.go#L12-L30
 [bolt-tx]: ../../storage/internal/engine/bbolt.go#L46-L74
 [new-aead]: ../../storage/internal/record/aead.go#L59-L66
 [record-design]: managed-storage-record-design.md#2-d2
 [vault-design]: managed-storage-vault-design.md#proposed-access-boundary
-[max-allowance]: ../../storage/db.go#L21
-[consumer-provider]: ../../storage/vault_consumer_test.go#L20-L62
-[example]: ../../storage/example_test.go#L16-L84
-[create-vault]: ../../storage/db.go#L88-L111
+[consumer-provider]: ../../storage/vault_consumer_test.go#L20-L70
+[example]: ../../storage/example_test.go#L16
+[create-vault]: ../../storage/db.go#L86
 [clear]: ../../storage/internal/record/scope.go#L96-L106
 [record-ops]: ../../storage/tx.go#L113-L165
 [write-child]: ../../storage/namespace.go#L126-L148
@@ -617,7 +618,7 @@ This primitive limit is separate from the proposed storage lifetime policy.
 [accounting-design]: managed-storage-vault-design.md#conditional-embedded-accounting
 [snapshot-scope]: managed-storage-snapshot-design.md#2-what-remains-deferred
 [constructors]: ../../storage/db.go#L36-L49
-[open-vault]: ../../storage/db.go#L113-L170
+[open-vault]: ../../storage/db.go#L120
 [close-db]: ../../storage/db.go#L172-L204
 [memory]: ../../storage/internal/engine/memory.go#L48-L111
 [consumer]: ../../storage/vault_consumer_test.go#L64-L142

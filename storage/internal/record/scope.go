@@ -31,8 +31,8 @@ type Scope struct {
 // derived keys. The secret must contain exactly 32 bytes; its entropy and the
 // caller's authorization are external responsibilities. Derive copies the
 // borrowed secret for derivation, clears that copy on exit, and never spends.
-// The gate must consume an allowance for the actual derived encryption key on
-// each successful call, without provider I/O. Derive does not reset allowances.
+// The callback must atomically debit the shared actual-key counter on each
+// successful call, without provider I/O. Derive does not reset that counter.
 func Derive(secret []byte, vault, id [16]byte, spend func() error) (scope *Scope, err error) {
 	defer err2.Handle(&err, nil)
 	defer assert.PushAsserter(assert.Plain)()
@@ -68,8 +68,8 @@ func (s *Scope) ValidatePath(path [][]byte) (err error) {
 }
 
 // Seal validates inputs and spends once before sealing with the existing codec.
-// A completed seal consumes its allowance even when discarded. Use Token to
-// obtain its lookup token; missing or exhausted allowances never enable sealing.
+// A successful debit remains consumed even when sealing fails. Use Token to
+// obtain its lookup token; missing or exhausted budgets never enable sealing.
 func (s *Scope) Seal(path [][]byte, key, value []byte) (envelope []byte, err error) {
 	defer err2.Handle(&err, nil)
 	defer assert.PushAsserter(assert.Plain)()
@@ -83,7 +83,7 @@ func (s *Scope) Seal(path [][]byte, key, value []byte) (envelope []byte, err err
 // Open authenticates, decodes, verifies the token, and checks any requested key
 // before returning owned bytes. Nil wantKey selects iteration; a nonnil key must
 // be nonempty. Expected identity comes from Scope, never the envelope. Open does
-// not spend and remains available when the allowance is exhausted.
+// not spend and remains available when the shared budget is exhausted.
 func (s *Scope) Open(path [][]byte, token [32]byte, wantKey, envelope []byte) (key, value []byte, err error) {
 	defer err2.Handle(&err, nil)
 	defer assert.PushAsserter(assert.Plain)()

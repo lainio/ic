@@ -44,10 +44,10 @@ type WriteNS interface {
 	// EnsureChild creates or opens an immediate child, without spending a seal.
 	EnsureChild(name []byte) (ns WriteNS, err error)
 	// Put verifies any existing record, then seals even an empty value. A seal
-	// spends allowance even if the transaction aborts or the backend write fails.
+	// consumes shared key usage even if the transaction or backend write fails.
 	Put(key, value []byte) (err error)
 	// Delete verifies and deletes records only. Absence succeeds without creating
-	// containers. It spends no seals, including with a zero sealing allowance.
+	// containers. It consumes no encryptions, including at budget exhaustion.
 	Delete(key []byte) (err error)
 }
 

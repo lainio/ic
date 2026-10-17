@@ -23,29 +23,34 @@ type KeyProvider interface {
 // Lease supplies authorization and borrowed secret bytes until Release.
 // Storage calls Release exactly once for each successfully acquired lease.
 //
-// Methods must terminate and must not reenter storage. Acquire, Reserve and
+// Methods must terminate and must not reenter storage. Acquire, Secret and
 // Release run outside storage admission gates and engine transactions; Check
 // may run under the admission gate, but never under an engine lock.
+// ConsumeEncryption is the narrowly allowed local accounting call inside an
+// engine transaction, immediately before sealing.
 type Lease interface {
 	// Secret returns the borrowed 32-byte secret for deriving storage keys.
 	Secret() []byte
 	// Check synchronizes authorization and availability checks. Revocation is
 	// observed at admission; already admitted work is allowed to finish.
 	Check() error
-	// Reserve allocates n encryptions, not storage space or reads. It returns a
-	// nonnil concurrency-safe local spending gate; each encryption spends one.
-	// The gate performs no provider I/O or authorization rechecks. Reservations
-	// are irrevocable: failed/unused reservations are not refunded.
+	// ConsumeEncryption atomically debits one permitted encryption for the actual
+	// derived key, returning nil only after success. All leases using that key,
+	// including across Database instances, must share accounting. Acquire,
+	// OpenVault, Close and Release must neither allocate nor reset the counter.
 	//
-	// Reserve(0) must succeed with a rejecting gate even when the encryption
-	// budget is exhausted. Zero reserves no new encryptions; reading, authorized
-	// deletion, and namespace creation do not require them.
+	// This call performs only short, synchronized in-process accounting while an
+	// engine transaction is active: no disk/network I/O, replenishment, storage
+	// reentry, or authorization recheck. Already admitted work may finish.
+	// Successful consumption is never refunded after failed encryption, rollback,
+	// write failure, or Close. Opening and reading consume nothing; exhaustion
+	// does not deny authorized reads, deletes, or namespace creation.
 	//
-	// One request is bounded by 2^24. Global lifetime accounting across leases,
-	// files, reopens and restores is the provider's responsibility; this partial
-	// integration establishes no production accounting guarantee.
+	// Sound actual-key accounting is the provider's responsibility. This package
+	// supplies no production durable accounting across restarts, copies or
+	// restores.
 	// See docs/architecture/managed-storage-current-system.md,
-	// "Core concepts" and "Encryption allowance walkthrough".
-	Reserve(n uint32) (spend func() error, err error)
+	// "Core concepts" and "Encryption usage walkthrough".
+	ConsumeEncryption() error
 	Release() error
 }

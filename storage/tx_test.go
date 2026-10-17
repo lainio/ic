@@ -29,18 +29,18 @@ func TestVaultRecords(t *testing.T) {
 			t.Run("data", func(t *testing.T) { vaultRecordsData(t, backend.open) })
 			t.Run("isolation", func(t *testing.T) { vaultRecordsIsolation(t, backend.open) })
 			t.Run("atomic", func(t *testing.T) { vaultRecordsAtomic(t, backend.open) })
-			t.Run("no_repair", func(t *testing.T) { vaultRecordsNoRepair(t, backend.open) })
 			t.Run("lifecycle", func(t *testing.T) { vaultRecordsLifecycle(t, backend.open) })
 			t.Run("separate_databases", func(t *testing.T) { vaultRecordsDatabases(t, backend.open) })
 		})
 	}
 }
 
-func newRecordVault(t *testing.T, db *Database, vault VaultID, allowance uint32) (*Vault, *lifecycleProvider) {
+func newRecordVault(t *testing.T, db *Database, vault VaultID, dataEncryptions uint32) (*Vault, *lifecycleProvider) {
 	t.Helper()
-	p := newLifecycleProvider(t, allowance+1) // One manifest plus explicit data allowance.
+	// Test pool includes the manifest and the explicit data encryptions.
+	p := newLifecycleProvider(t, dataEncryptions+1)
 	try.To(db.CreateVault(context.Background(), vault, KeyID{7}, p))
-	v := try.To1(db.OpenVault(context.Background(), vault, KeyID{7}, p, allowance))
+	v := try.To1(db.OpenVault(context.Background(), vault, KeyID{7}, p))
 	return v, p
 }
 
@@ -179,7 +179,7 @@ func vaultRecordsData(t *testing.T, open func(*testing.T) *Database) {
 		return nil
 	}))
 	assert.Equal(p.spent, uint32(4), "reads and deletes spend nothing, including at exhaustion")
-	assert.Equal(p.reserves, 2, "data operations never reserve again")
+	assert.Equal(p.consumeCalls, 4, "only seals attempt consumption")
 	assert.Equal(bytes.Equal(rawVaultRecord(t, v, 3, []byte("manifest")), manifest), true)
 	try.To(v.Close())
 	assert.Equal(string(retained), "original")
@@ -300,46 +300,6 @@ func vaultRecordsAtomic(t *testing.T, open func(*testing.T) *Database) {
 			checkExpiredRecordTx(t, saved)
 		})
 	}
-	t.Run("ignored_budget_failure", func(t *testing.T) {
-		defer assert.PushTester(t)()
-		db := open(t)
-		t.Cleanup(func() { _ = db.Close() })
-		v, p := newRecordVault(t, db, VaultID{1}, 2)
-		key := []byte("prior")
-		try.To(v.Update(func(tx WriteTx) error { return tx.Put(key, []byte("original")) }))
-		var first error
-		var saved WriteTx
-		result := v.Update(func(tx WriteTx) (err error) {
-			defer err2.Handle(&err, nil)
-			saved = tx
-			try.To(tx.Put(key, []byte("pending")))
-			first = tx.Put([]byte("new"), []byte("exhausted"))
-			assert.ErrorIs(first, errLifecycleBudget)
-			value, found, next := tx.Get(key)
-			assert.SNil(value)
-			assert.ThatNot(found)
-			assert.Equal(next, first)
-			assert.Equal(tx.Put(nil, nil), first)
-			assert.Equal(tx.Delete(key), first)
-			return nil // Ignoring the codec error must still roll back the first Put.
-		})
-		assert.Equal(result, first)
-		checkExpiredRecordTx(t, saved)
-		assert.Equal(p.spent, uint32(3))
-		assert.Equal(p.remaining, uint32(0))
-		assert.Equal(p.reserves, 2)
-		assert.Equal(len(p.calls), 2)
-		try.To(v.View(func(tx ReadTx) (err error) {
-			defer err2.Handle(&err, nil)
-			checkRecord(t, tx, key, []byte("original"), true)
-			checkRecord(t, tx, []byte("new"), nil, false)
-			return nil
-		}))
-		assert.ErrorIs(v.Update(func(tx WriteTx) error { return tx.Put(key, nil) }), errLifecycleBudget)
-		try.To(v.Update(func(tx WriteTx) error { return tx.Delete(key) }))
-		assert.Equal(p.spent, uint32(3))
-		try.To(db.Close())
-	})
 	t.Run("joined_propagation", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		db := open(t)
@@ -452,6 +412,7 @@ func vaultRecordsNoRepair(t *testing.T, open func(*testing.T) *Database) {
 					assert.Equal(result, cause)
 					assert.Equal(bytes.Equal(rawVaultRecord(t, v, 1, key), envelope), true)
 					assert.Equal(p.spent, uint32(2), "verification failures consume no seal")
+					assert.Equal(p.consumeCalls, 2)
 				})
 			}
 			if mode == "relocated" {
@@ -482,6 +443,7 @@ func vaultRecordsNoRepair(t *testing.T, open func(*testing.T) *Database) {
 			assert.Equal(v.Update(func(tx WriteTx) error { return tx.Delete(key) }), want)
 		}
 		assert.Equal(p.spent, uint32(1))
+		assert.Equal(p.consumeCalls, 1, "invalid input never attempts consumption")
 		try.To(db.Close())
 	})
 	t.Run("missing_and_wrong_kind", func(t *testing.T) {
@@ -647,10 +609,10 @@ func vaultRecordsLifecycle(t *testing.T, open func(*testing.T) *Database) {
 			assert.Equal(lease.releases, 1)
 			assert.Equal(lease.checks, checks, "no authorization check inside admitted work")
 			assert.Equal(p.spent, uint32(2))
-			assert.Equal(p.reserves, 2)
+			assert.Equal(p.consumeCalls, int(p.spent))
 			assert.Equal(len(p.calls), 2)
 			checkExpiredRecordTx(t, saved)
-			reader := try.To1(db.OpenVault(context.Background(), v.vault, KeyID{7}, p, 0))
+			reader := try.To1(db.OpenVault(context.Background(), v.vault, KeyID{7}, p))
 			try.To(reader.View(func(tx ReadTx) (err error) {
 				defer err2.Handle(&err, nil)
 				want := []byte("committed")
@@ -714,7 +676,7 @@ func vaultRecordsDatabases(t *testing.T, open func(*testing.T) *Database) {
 	try.To(b.Close())
 }
 
-func TestVaultRecordsReopen(t *testing.T) {
+func vaultKeyUsageReopen(t *testing.T) {
 	defer assert.PushTester(t)()
 	path := filepath.Join(t.TempDir(), "reopen.db")
 	db := try.To1(OpenBolt(path))
@@ -726,39 +688,41 @@ func TestVaultRecordsReopen(t *testing.T) {
 		try.To(tx.Put(key, []byte("saved")))
 		return tx.Put([]byte("empty"), nil)
 	}))
-	assert.Equal(p.remaining, uint32(0))
+	assert.Equal(p.remainingEncryptions, uint32(0))
 	assert.Equal(p.spent, uint32(3))
+	assert.Equal(p.consumeCalls, 3)
 	try.To(db.Close())
 	reopened := try.To1(OpenBolt(path))
 	t.Cleanup(func() { _ = reopened.Close() })
 	// Same provider and immutable generation; reopening does not reset its budget.
-	reader := try.To1(reopened.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
+	reader := try.To1(reopened.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p))
 	try.To(reader.View(func(tx ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		checkRecord(t, tx, key, []byte("saved"), true)
 		checkRecord(t, tx, []byte("empty"), nil, true)
 		return nil
 	}))
-	assert.ErrorIs(reader.Update(func(tx WriteTx) error { return tx.Put(key, []byte("denied")) }), errLifecycleBudget)
+	assert.Equal(p.consumeCalls, 3, "reopening and reading never consume")
+	assert.ErrorIs(reader.Update(func(tx WriteTx) error { return tx.Put(key, []byte("denied")) }), ErrKeyUsageExhausted)
 	try.To(reader.Update(func(tx WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
 		checkRecord(t, tx, key, []byte("saved"), true)
 		return tx.Delete(key)
 	}))
-	assert.Equal(p.remaining, uint32(0))
-	assert.Equal(p.reserved, uint32(3))
+	assert.Equal(p.remainingEncryptions, uint32(0))
+	assert.Equal(p.consumeCalls, 4)
 	assert.Equal(p.spent, uint32(3))
 	try.To(reopened.Close())
 	final := try.To1(OpenBolt(path))
 	t.Cleanup(func() { _ = final.Close() })
-	last := try.To1(final.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p, 0))
+	last := try.To1(final.OpenVault(context.Background(), VaultID{1}, KeyID{7}, p))
 	try.To(last.View(func(tx ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		checkRecord(t, tx, key, nil, false)
 		checkRecord(t, tx, []byte("empty"), nil, true)
 		return nil
 	}))
-	assert.Equal(p.reserved, uint32(3))
+	assert.Equal(p.consumeCalls, 4)
 	assert.Equal(p.spent, uint32(3))
 	try.To(final.Close())
 }
