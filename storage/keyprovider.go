@@ -44,6 +44,8 @@ type Lease interface {
 	// One request is bounded by 2^24. Global lifetime accounting across leases,
 	// files, reopens and restores is the provider's responsibility; this partial
 	// integration establishes no production accounting guarantee.
+	// See docs/architecture/managed-storage-current-system.md,
+	// "Core concepts" and "Encryption allowance walkthrough".
 	Reserve(n uint32) (spend func() error, err error)
 	Release() error
 }

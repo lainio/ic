@@ -24,6 +24,8 @@ func ExampleVault() {
 	// version. These IDs are not secrets, and the key ID is not a cipher selector.
 	// Its finite accounting is a test fixture, not a production guarantee;
 	// Check and Release provide no revocation service or production key custody.
+	// See docs/architecture/managed-storage-current-system.md,
+	// "Core concepts" and "Encryption allowance walkthrough".
 	p := &consumerProvider{
 		vault:     storage.VaultID{1}, // ID of the vault this provider serves.
 		id:        storage.KeyID{7},   // ID of the key version.
