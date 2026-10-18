@@ -77,3 +77,34 @@ func ExamplePath_Prove() {
 	// wrong-link signature verifies: true
 	// wrong-link path rejected: true
 }
+
+// ExamplePath_ProveFromRoot checks a caller-selected fixture root. It does not
+// provision a production root, establish all V19 introduction rules, change
+// Known, or prove that the presenter controls the leaf's private key.
+func ExamplePath_ProveFromRoot() {
+	defer err2.Catch(err2.Stdout)
+
+	root, otherRoot, alice := key.New(), key.New(), key.New()
+	expectedRoot := try.T1(root.CBORPublicKey())(
+		"reading the caller-selected fixture root public key",
+	)
+	aliceInfo := key.InfoFromHandle(alice)
+
+	path := intro.New(key.InfoFromHandle(root)).Introduce(root, aliceInfo)
+	otherPath := intro.New(key.InfoFromHandle(otherRoot)).Introduce(
+		otherRoot, aliceInfo,
+	)
+
+	expectedErr := path.ProveFromRoot(expectedRoot)
+	structuralErr := otherPath.Prove()
+	otherErr := otherPath.ProveFromRoot(expectedRoot)
+	otherRejected := errors.Is(otherErr, intro.ErrWrongRoot)
+
+	fmt.Println("expected-root path passes:", expectedErr == nil)
+	fmt.Println("other-root path passes structural checks:", structuralErr == nil)
+	fmt.Println("other-root path rejected:", otherRejected)
+	// Output:
+	// expected-root path passes: true
+	// other-root path passes structural checks: true
+	// other-root path rejected: true
+}

@@ -228,6 +228,9 @@ var (
 	ErrBrokenPath         = errors.New("Broken path")
 	ErrCycleOrDuplicate   = errors.New("Cycle or dublicate")
 	ErrBadSignature       = errors.New("Bad signature")
+	ErrWrongRoot          = errors.New(
+		"introduction path does not start at the expected root",
+	)
 )
 
 // ProveWithGetBKID performs Prove's checks using getBKID for backup keys.
@@ -292,6 +295,20 @@ func (p Path) Prove() (err error) {
 	defer err2.Handle(&err, nil)
 
 	return p.ProveWithGetBKID(emptyBKImpl)
+}
+
+// ProveFromRoot checks the first entry's public-key bytes against expectedRoot
+// before applying Prove. The caller must independently establish a valid
+// expected root key; this comparison does not validate key encodings.
+func (p Path) ProveFromRoot(expectedRoot key.Public) (err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err)
+
+	assert.SLonger(p, 0, ErrWrongAnchor)
+	assert.SLonger(expectedRoot, 0, ErrWrongRoot)
+	assert.That(p[0].Public().Equal(expectedRoot), ErrWrongRoot)
+
+	return p.Prove()
 }
 
 func (p Path) Clone() Path {
