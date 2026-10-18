@@ -230,12 +230,18 @@ var (
 	ErrBadSignature       = errors.New("Bad signature")
 )
 
+// ProveWithGetBKID performs Prove's checks using getBKID for backup keys.
 func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
+	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err)
 
-	assert.Equal(p.FirstEdge().Body.Version, EdgeVersion, ErrUnsupportedVersion)
-	assert.Equal(p.FirstEdge().Body.Prev, AnchorDigest(), ErrWrongAnchor)
 	assert.SLonger(p, 0, ErrWrongAnchor)
+	assert.Equal(
+		p.FirstEdge().Body.Version,
+		EdgeVersion,
+		ErrUnsupportedVersion,
+	)
+	assert.Equal(p.FirstEdge().Body.Prev, AnchorDigest(), ErrWrongAnchor)
 
 	if p.Len() == 1 {
 		return nil // a root edge is consider valid, see the previous asserts
@@ -243,16 +249,23 @@ func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
 
 	// start with the root key
 	parentsPubKey := p.FirstEdge().Public()
-	prev := parentsPubKey.Hash()
+	previousPublicKeyHash := parentsPubKey.Hash()
 	seen := map[key.Hash]bool{}
 
-	for _, edge := range p[1:] {
+	for i, edge := range p[1:] {
 		assert.Equal(edge.Body.Version, EdgeVersion, ErrUnsupportedVersion)
 
 		edgeIDK := edge.Public()
 		edgeDigest := edgeIDK.Hash()
-		assert.NotEqual(edgeDigest, prev, ErrBrokenPath)            // tested
+		assert.NotEqual(edgeDigest, previousPublicKeyHash, ErrBrokenPath)
 		assert.MKeyNotExists(seen, edgeDigest, ErrCycleOrDuplicate) // tested
+
+		// p[i] precedes edge in p[1:]; include its signature in the hash.
+		expectedSignedEdgeHash := key.HashTagged(
+			"v1/signed-hash",
+			p[i].Bytes(),
+		)
+		assert.Equal(edge.Body.Prev, expectedSignedEdgeHash, ErrBrokenPath)
 
 		if edge.Body.Options.BackupKeyIndex != 0 {
 			parentsPubKey = getBKID(edge.Body.Options.BackupKeyIndex)
@@ -261,8 +274,8 @@ func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
 
 		// the next edge is signed with this edge's pub key
 		parentsPubKey = edgeIDK
-		prev = parentsPubKey.Hash()
-		seen[prev] = true
+		previousPublicKeyHash = parentsPubKey.Hash()
+		seen[previousPublicKeyHash] = true
 	}
 	return nil
 }
@@ -272,7 +285,9 @@ func emptyBKImpl(int) key.Public {
 	return nil
 }
 
-// Prove verifies the whole path, from root to the leaf.
+// Prove checks versions, the anchor digest, signed predecessor links, existing
+// repeated-key constraints, and non-root signatures from root to leaf. It does
+// not independently select or authenticate the intended root.
 func (p Path) Prove() (err error) {
 	defer err2.Handle(&err, nil)
 
