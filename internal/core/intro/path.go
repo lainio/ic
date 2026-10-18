@@ -253,7 +253,8 @@ func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
 	// start with the root key
 	parentsPubKey := p.FirstEdge().Public()
 	previousPublicKeyHash := parentsPubKey.Hash()
-	seen := map[key.Hash]bool{}
+	// Include the root so descendants cannot introduce it again.
+	seen := map[key.Hash]bool{previousPublicKeyHash: true}
 
 	for i, edge := range p[1:] {
 		assert.Equal(edge.Body.Version, EdgeVersion, ErrUnsupportedVersion)

@@ -108,3 +108,34 @@ func ExamplePath_ProveFromRoot() {
 	// other-root path passes structural checks: true
 	// other-root path rejected: true
 }
+
+// ExamplePath_ProveFromRoot_cycle shows that valid signatures and correct root
+// selection do not permit introducing the root again.
+func ExamplePath_ProveFromRoot_cycle() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice := key.New(), key.New()
+	rootInfo, aliceInfo := key.InfoFromHandle(root), key.InfoFromHandle(alice)
+	expectedRoot := try.T1(root.CBORPublicKey())(
+		"reading the independently selected root public key",
+	)
+	alicePublic := try.T1(alice.CBORPublicKey())("reading Alice public key")
+
+	alicePath := intro.New(rootInfo).Introduce(root, aliceInfo)
+	path := alicePath.Introduce(alice, rootInfo)
+
+	aliceVerified := path[1].VerifySignature(expectedRoot)
+	rootVerified := path[2].VerifySignature(alicePublic)
+	startsAtExpectedRoot := path.FirstEdge().Public().Equal(expectedRoot)
+	returnRejected := errors.Is(
+		path.ProveFromRoot(expectedRoot), intro.ErrCycleOrDuplicate,
+	)
+
+	fmt.Println("signatures verified:", aliceVerified && rootVerified)
+	fmt.Println("starts at expected root:", startsAtExpectedRoot)
+	fmt.Println("return to root rejected:", returnRejected)
+	// Output:
+	// signatures verified: true
+	// starts at expected root: true
+	// return to root rejected: true
+}
