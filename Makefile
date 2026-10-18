@@ -5,7 +5,7 @@ PKG2 := github.com/lainio/ic/node
 PKG3 := github.com/lainio/ic/identity
 PKG4 := github.com/lainio/ic/hop
 PKG5 := github.com/lainio/ic/key
-PKG6 := github.com/lainio/ic/internal/core/intro
+PKG6 := github.com/lainio/ic/internal/core/...
 PKG7 := github.com/lainio/ic/storage/...
 PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4) $(PKG5) $(PKG6) $(PKG7)
 
@@ -57,6 +57,9 @@ test5:
 
 test6:
 	$(GO) test $(TEST_ARGS) $(PKG6)
+
+test6r:
+	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG6)
 
 test7:
 	$(GO) test $(TEST_ARGS) $(PKG7)
