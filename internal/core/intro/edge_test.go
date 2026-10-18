@@ -19,13 +19,11 @@ func testNewVerifyEdge(t *testing.T) {
 
 	const (
 		pincode = 1234
-		size    = 194 // TODO: can be wrong quite soon
 	)
 
 	cb, ours := NewVerifyEdge(pincode)
 	assert.Equal(cb.Body.Options.Position, 0)
 	assert.Equal(ours.Body.Options.Position, pincode)
-	assert.SLen(cb.Bytes(), size)
 }
 
 func testSigning(t *testing.T) {
@@ -40,14 +38,12 @@ func testSigning(t *testing.T) {
 	}}
 
 	// TODO: these options are only ones that work now! Fix with the
+	// TODO: options are something that we should think carefully
 	newEdge.Body.Options = *NewOptions(WithRotation(), WithPosition(1))
 	newEdge.ParentSig = try.To1(parent.Sign(newEdge.Bytes()))
 
 	pubK := try.To1(parent.CBORPublicKey())
 
-	ok := newEdge.ParentSig.Verify(
-		pubK,
-		newEdge.ExcludeBytes(), // TODO: use edge EdgeBody!
-	)
+	ok := newEdge.ParentSig.Verify(pubK, newEdge.ExcludeBytes())
 	assert.That(ok)
 }

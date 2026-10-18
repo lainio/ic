@@ -107,8 +107,6 @@ func Hops(lhs, rhs Path) (hop.Distance, hop.Distance) {
 // New constructs a new path ROOT.
 // This happens only once for whole introduction tree.
 // The rest of the paths are created through [Path.Intoduce] function.
-// TODO: refactoring idea or questions who owns the root key and is able to
-// onboard level 2 enties to the tree.
 func New(keyInfo key.Info, flags ...Opts) Path {
 	path := Path(make([]Edge, 1, 12))
 	path[0] = Edge{Body: EdgeBody{
@@ -190,7 +188,7 @@ func (p Path) AbsLen() hop.Distance {
 }
 
 func (p Path) Len() hop.Distance {
-	// TODO: the Anchor is calculated now
+	// the Anchor is included into the length now
 	return hop.Distance(len(p))
 }
 
@@ -240,7 +238,7 @@ func (p Path) ProveWithGetBKID(getBKID getBackupKey) (err error) {
 	assert.SLonger(p, 0, ErrWrongAnchor)
 
 	if p.Len() == 1 {
-		return nil // root edge is valid, see the previous asserts
+		return nil // a root edge is consider valid, see the previous asserts
 	}
 
 	// start with the root key

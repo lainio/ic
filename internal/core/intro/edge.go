@@ -59,15 +59,7 @@ func (e Edge) ExcludeBytes() []byte {
 }
 
 func (e Edge) excludeSign() Edge {
-	newEdge := Edge{Body: EdgeBody{
-		Version: EdgeVersion,
-		Prev:    e.Body.Prev,
-		Child:   e.Body.Child,
-		Options: Options{
-			Position: e.Body.Options.Position,
-			Rotation: e.Body.Options.Rotation,
-		},
-	}}
+	newEdge := Edge{Body: e.Body}
 	return newEdge
 }
 
