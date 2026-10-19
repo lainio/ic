@@ -240,3 +240,48 @@ func ExampleInbox_ReceivePath() {
 	// forged path rejected by proof: true
 	// genuine path passes proof: true
 }
+
+// ExampleInbox_conflictingParents shows that individual proofs do not resolve
+// contradictory parent claims. It neither selects a winner nor updates Known.
+func ExampleInbox_conflictingParents() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice, bob := key.New(), key.New(), key.New()
+	expectedRoot := try.T1(root.CBORPublicKey())(
+		"reading the independently selected fixture root public key",
+	)
+	aliceInfo := key.InfoFromHandle(alice)
+
+	rootPath := intro.New(key.InfoFromHandle(root))
+	direct := rootPath.Introduce(root, aliceInfo)
+	bobPath := rootPath.Introduce(root, key.InfoFromHandle(bob))
+	indirect := bobPath.Introduce(bob, aliceInfo)
+
+	var inbox intro.Inbox
+	try.To(inbox.ReceivePath(direct.Bytes()))
+	try.To(inbox.ReceivePath(indirect.Bytes()))
+	received := inbox.Paths()
+
+	assert.SLen(received, 2)
+	first, second := received[0], received[1]
+	assert.SLen(first, 2)
+	assert.SLen(second, 3)
+	firstErr := first.ProveFromRoot(expectedRoot)
+	secondErr := second.ProveFromRoot(expectedRoot)
+	firstChild := first[len(first)-1].Public()
+	secondChild := second[len(second)-1].Public()
+	firstParent := first[len(first)-2].Public()
+	secondParent := second[len(second)-2].Public()
+	sameChild := bytes.Equal(firstChild, secondChild)
+	differentParents := !bytes.Equal(firstParent, secondParent)
+
+	fmt.Println("received paths:", len(received))
+	fmt.Println("both path proofs pass:", firstErr == nil && secondErr == nil)
+	fmt.Println("same child:", sameChild)
+	fmt.Println("different parents:", differentParents)
+	// Output:
+	// received paths: 2
+	// both path proofs pass: true
+	// same child: true
+	// different parents: true
+}
