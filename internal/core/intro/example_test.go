@@ -1,12 +1,15 @@
 package intro_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 
 	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/core/intro"
+	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/key"
 )
 
@@ -138,4 +141,42 @@ func ExamplePath_ProveFromRoot_cycle() {
 	// signatures verified: true
 	// starts at expected root: true
 	// return to root rejected: true
+}
+
+// ExamplePath_canonicalEncoding separates wire representation from path proof.
+// Canonical here means the bytes reproduced by the current typed encoder.
+func ExamplePath_canonicalEncoding() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice := key.New(), key.New()
+	expectedRoot := try.T1(root.CBORPublicKey())(
+		"reading the independently selected root public key",
+	)
+	path := intro.New(key.InfoFromHandle(root)).Introduce(
+		root, key.InfoFromHandle(alice),
+	)
+	assert.SLen(path, 2)
+	encoded := path.Bytes()
+	assert.SLonger(encoded, 0)
+	assert.Equal(encoded[0], byte(0x82))
+
+	// Both 0x82 and 0x98, 0x02 describe two entries; the latter is longer.
+	// No signed content or model state changes: no Received/Known transition.
+	alternate := append([]byte{0x98, 0x02}, encoded[1:]...)
+	var decoded, decodedAlternate intro.Path
+	try.To(wire.Unmarshal(&decoded, encoded))
+	try.To(wire.Unmarshal(&decodedAlternate, alternate))
+
+	samePath := bytes.Equal(decoded.Bytes(), decodedAlternate.Bytes())
+	proofErr := decodedAlternate.ProveFromRoot(expectedRoot)
+	canonicalErr := wire.UnmarshalCanonical(new(intro.Path), alternate)
+	rejected := errors.Is(canonicalErr, wire.ErrNonCanonicalCBOR)
+
+	fmt.Println("same path after decoding:", samePath)
+	fmt.Println("path proof still passes:", proofErr == nil)
+	fmt.Println("noncanonical encoding rejected:", rejected)
+	// Output:
+	// same path after decoding: true
+	// path proof still passes: true
+	// noncanonical encoding rejected: true
 }

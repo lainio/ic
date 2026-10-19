@@ -23,7 +23,7 @@ The demo adds no key custody or private-key erasure guarantee.
 
 Output reports the case, fixture path label, descendant signature checks,
 expected-root comparison, and the result of `ProveFromRoot`.
-For `bad-link`:
+For `bad-link`, stdout only:
 
 ~~~text
 case: bad-link
