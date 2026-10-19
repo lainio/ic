@@ -207,3 +207,36 @@ func ExampleParsePath() {
 	// noncanonical input rejected: true
 	// rejected parse returns no path: true
 }
+
+// ExampleInbox_ReceivePath stores claims on receipt, then separately proves
+// returned copies. Neither operation promotes evidence to Known.
+func ExampleInbox_ReceivePath() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice := key.New(), key.New()
+	expectedRoot := try.T1(root.CBORPublicKey())(
+		"reading the independently selected fixture root public key",
+	)
+	genuine := intro.New(key.InfoFromHandle(root)).Introduce(
+		root, key.InfoFromHandle(alice),
+	)
+	forged := try.To1(intro.ParsePath(genuine.Bytes()))
+	forged[1].Body.Options.Position++
+
+	var inbox intro.Inbox
+	try.To(inbox.ReceivePath(forged.Bytes()))
+	try.To(inbox.ReceivePath(genuine.Bytes()))
+	received := inbox.Paths()
+
+	forgedErr := received[0].ProveFromRoot(expectedRoot)
+	genuineErr := received[1].ProveFromRoot(expectedRoot)
+
+	fmt.Println("received paths:", len(received))
+	fmt.Println("forged path rejected by proof:",
+		errors.Is(forgedErr, intro.ErrBadSignature))
+	fmt.Println("genuine path passes proof:", genuineErr == nil)
+	// Output:
+	// received paths: 2
+	// forged path rejected by proof: true
+	// genuine path passes proof: true
+}
