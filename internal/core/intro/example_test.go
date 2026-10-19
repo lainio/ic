@@ -180,3 +180,30 @@ func ExamplePath_canonicalEncoding() {
 	// path proof still passes: true
 	// noncanonical encoding rejected: true
 }
+
+// ExampleParsePath shows strict decoding; parsing does not establish valid
+// evidence. Proof remains a separate operation.
+func ExampleParsePath() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice := key.New(), key.New()
+	path := intro.New(key.InfoFromHandle(root)).Introduce(
+		root, key.InfoFromHandle(alice),
+	)
+	encoded := path.Bytes()
+	assert.SLonger(encoded, 0)
+	assert.Equal(encoded[0], byte(0x82))
+	alternate := append([]byte{0x98, 0x02}, encoded[1:]...)
+
+	decoded := try.To1(intro.ParsePath(encoded))
+	rejected, err := intro.ParsePath(alternate)
+
+	fmt.Println("canonical input parsed:", len(decoded) == 2)
+	fmt.Println("noncanonical input rejected:",
+		errors.Is(err, wire.ErrNonCanonicalCBOR))
+	fmt.Println("rejected parse returns no path:", rejected == nil)
+	// Output:
+	// canonical input parsed: true
+	// noncanonical input rejected: true
+	// rejected parse returns no path: true
+}

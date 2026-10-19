@@ -87,7 +87,9 @@ func runDemo(cmd *cobra.Command, args []string) (err error) {
 		)
 	}
 
-	decoded := coreintro.NewPathFromData(path.Bytes())
+	decoded := try.T1(coreintro.ParsePath(path.Bytes()))(
+		"parsing fixture path",
+	)
 	signaturesValid := true
 	for i, edge := range decoded[1:] {
 		if !edge.VerifySignature(decoded[i].Public()) {

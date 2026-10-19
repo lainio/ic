@@ -128,6 +128,20 @@ func NewPathFromData(d []byte) Path {
 	return wire.FromData[Path](d)
 }
 
+// ParsePath decodes data in the representation reproduced by the current typed
+// encoder. Every returned error is accompanied by a nil path.
+// Success means decoding only, not authenticated evidence or a V19 acceptance
+// decision. Empty paths can decode successfully; proof remains a separate
+// operation through [Path.ProveFromRoot].
+func ParsePath(data []byte) (path Path, err error) {
+	defer err2.Handle(&err)
+
+	var decoded Path
+	try.To(wire.UnmarshalCanonical(&decoded, data))
+
+	return decoded, nil
+}
+
 func (p Path) Bytes() []byte {
 	return wire.TryMarshal(p)
 }
