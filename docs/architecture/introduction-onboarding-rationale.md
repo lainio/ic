@@ -4,7 +4,9 @@ Date: 2026-10-19
 
 Status: product rationale captured from the owner's design discussion.
 Explicit, parent-bound acceptance is the agreed design direction.
-This note neither changes V19 nor claims that acceptance is implemented.
+Detached acceptance signature helpers are implemented.
+One-time enrollment and a human-consent ceremony are not implemented.
+This note does not change V19.
 
 ## User goal
 
@@ -62,13 +64,37 @@ mechanism is authorized by this note.
 
 ## Design consequence
 
-Keep explicit acceptance as the next bounded design step.
-Let this user rationale guide its example and eventual CLI interaction.
+The detached helpers implement the bounded signature step below.
+Let this user rationale guide the example and eventual CLI interaction.
 Do not reopen the entire architecture or add deterrence machinery merely
 to record the hypothesis.
 
 **Deliberate admission once; convenient participation afterward.
 Introduction is not trust, and low expected incentive is not prevention.**
+
+## Detached acceptance helpers
+
+`Path.SignAcceptance(child)` produces a detached `key.Signature`;
+`Path.VerifyAcceptance(signature)` checks it with the final child's public key.
+Both require at least two path entries and a nonempty child public key.
+Signing requires a matching handle; verification requires a signature.
+Neither method mutates the path.
+
+The development purpose tag is exactly `intro-acceptance/v1`.
+`key.HashTagged` binds the whole canonical `Path.Bytes()`, including parent
+signatures; its digest goes to the existing signing and verification helpers.
+The experimental `test/intro-acceptance/v1` signatures are incompatible.
+Acceptance is never inserted into an edge or parent signature.
+Exact copies verify repeatedly; changed or re-signed bytes need fresh acceptance.
+
+Callers separately prove the path, select the root and parent, and establish
+human consent.
+These helpers change no modeled state, implement neither `Introduce` nor
+`VerifyReceived`, and never promote evidence into `Known`.
+One-time enrollment and global parent uniqueness remain unresolved;
+a signature cannot replace `GlobalHasParent`.
+Only this helper contract is authorized.
+The product rationale alone authorizes no registry or further protocol machinery.
 
 ## Source locators
 

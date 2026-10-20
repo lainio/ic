@@ -23,6 +23,8 @@
 - Use `gofmt` and aim for 80-column, meaningfully wrapped code.
   Use the already installed `golines` only on touched files.
   Never format the whole repository for a local change.
+- Run the established `make lint` target before and after changes.
+  Do not loosen the lint configuration or exclusions to make it pass.
 - Use inline code, semantic line breaks, and 80-column prose in Markdown.
   Use only tilde fences.
   Avoid unrelated formatting and legacy cleanup.

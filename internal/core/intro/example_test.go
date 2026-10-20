@@ -343,3 +343,38 @@ func ExamplePath_parentAcceptance() {
 	// Alice's acceptance matches R -> Alice: true
 	// same acceptance matches R -> Bob -> Alice: false
 }
+
+// ExamplePath_SignAcceptance keeps proof and parent choice with the caller.
+// The detached signature does not enroll Alice or change Known.
+func ExamplePath_SignAcceptance() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice, bob := key.New(), key.New(), key.New()
+	expectedRoot := key.Public(try.To1(root.CBORPublicKey()))
+	aliceInfo := key.InfoFromHandle(alice)
+
+	rootPath := intro.New(key.InfoFromHandle(root))
+	direct := rootPath.Introduce(root, aliceInfo)
+	bobPath := rootPath.Introduce(root, key.InfoFromHandle(bob))
+	indirect := bobPath.Introduce(bob, aliceInfo)
+	try.To(direct.ProveFromRoot(expectedRoot))
+	try.To(indirect.ProveFromRoot(expectedRoot))
+
+	// Select the direct proposal and its proposed parent before signing.
+	offered := direct
+	expectedParent := expectedRoot
+	assert.That(offered.LastEdge().Public().Equal(aliceInfo.Public))
+	assert.That(offered.SecondLastEdge().Public().Equal(expectedParent))
+
+	acceptance := try.To1(offered.SignAcceptance(alice))
+	directErr := direct.VerifyAcceptance(acceptance)
+	indirectErr := indirect.VerifyAcceptance(acceptance)
+	try.To(directErr)
+	assert.ErrorIs(indirectErr, intro.ErrBadAcceptance)
+
+	fmt.Println("Alice's acceptance verifies:", directErr == nil)
+	fmt.Println("acceptance transfers to other parent:", indirectErr == nil)
+	// Output:
+	// Alice's acceptance verifies: true
+	// acceptance transfers to other parent: false
+}
