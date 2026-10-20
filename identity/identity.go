@@ -93,7 +93,7 @@ func NewFromData(d []byte, kh key.Handle) (i Identity) {
 }
 
 func (i Identity) Bytes() []byte {
-	assert.That(i.Hand.Valid())
+	assert.That(i.Valid())
 
 	return i.Node.Bytes()
 }

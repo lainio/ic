@@ -41,7 +41,7 @@ func (d DigestV2) Build() (r RefDigestV2) {
 	return
 }
 
-type DigestV2 string
+type DigestV2 string //nolint
 
 type RefRootInfo struct {
 	PKStringIDK string

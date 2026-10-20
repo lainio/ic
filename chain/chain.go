@@ -167,7 +167,7 @@ func (c Chain) Len() hop.Distance {
 func (c Chain) KeyRotationsLen() (count hop.Distance) {
 	for _, b := range c.Blocks {
 		if b.Rotation {
-			count += 1
+			count++
 		}
 	}
 	return

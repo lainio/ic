@@ -49,7 +49,7 @@ func openEnvelope(ke []byte, id [16]byte, context []byte, token [32]byte,
 	aead := try.To1(newEnvelopeAEAD(ke))
 	header, body := try.To2(parseEnvelope(envelope, id))
 	aad := try.To1(encodeAAD(header, context, token))
-	defer err2.Handle(&err, func(err error) error {
+	defer err2.Handle(&err, func(_ error) error {
 		return errAuthentication
 	})
 	payload = try.To1(aead.Open(nil, nil, body, aad))

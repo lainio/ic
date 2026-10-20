@@ -74,8 +74,8 @@ func (d Digest) Digest() DigestV2 {
 
 func (d Digest) Equal(rhs Digest) bool {
 	data := d.Bytes()
-	dataRhs := rhs.Bytes()
-	return bytes.Equal(data, dataRhs)
+	dataRHS := rhs.Bytes()
+	return bytes.Equal(data, dataRHS)
 }
 
 func (d Digest) EmptyRoot() bool {

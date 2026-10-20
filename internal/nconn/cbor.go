@@ -10,12 +10,12 @@ import (
 // CBOREncoder is a CBOR Encoder implementation for EncodedConn.
 type CBOREncoder struct{}
 
-const CBOR_DECODER = "cbor" //nolint:stylecheck
+const CBOR_DECODER = "cbor" //nolint:revive
 
 var ourCodec = &CBOREncoder{}
 
 // Encode
-func (je *CBOREncoder) Encode(subject string, v any) ([]byte, error) {
+func (je *CBOREncoder) Encode(_ string, v any) ([]byte, error) {
 	var buf bytes.Buffer
 	enc := cbor.NewEncoder(&buf)
 
@@ -27,7 +27,7 @@ func (je *CBOREncoder) Encode(subject string, v any) ([]byte, error) {
 }
 
 // Decode
-func (je *CBOREncoder) Decode(subject string, data []byte, vPtr any) (err error) {
+func (je *CBOREncoder) Decode(_ string, data []byte, vPtr any) (err error) {
 	switch arg := vPtr.(type) {
 	case *string:
 		// TODO: CBOR is binary protocol, study sthis an remove it?

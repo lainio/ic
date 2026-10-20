@@ -123,7 +123,7 @@ func TestVaultLifecycle(t *testing.T) {
 		name string
 		open func(*testing.T) *Database
 	}{
-		{"memory", func(t *testing.T) *Database { return NewMemory() }},
+		{"memory", func(_ *testing.T) *Database { return NewMemory() }},
 		{"bbolt", func(t *testing.T) *Database {
 			return try.To1(OpenBolt(filepath.Join(t.TempDir(), "lifecycle.db")))
 		}},
@@ -355,7 +355,7 @@ func lifecycleFailures(t *testing.T, open func(*testing.T) *Database) {
 			}
 		})
 	}
-	t.Run("cancelled_context_and_nil_provider", func(t *testing.T) {
+	t.Run("canceled_context_and_nil_provider", func(t *testing.T) {
 		defer assert.PushTester(t)()
 		db := open(t)
 		t.Cleanup(func() { _ = db.Close() })
@@ -631,7 +631,7 @@ func lifecycleUnwinding(t *testing.T, open func(*testing.T) *Database) {
 	go func() {
 		defer close(workerDone)
 		defer func() { panicResult <- recover() }()
-		_ = v.withScope(func(s *record.Scope) error {
+		_ = v.withScope(func(_ *record.Scope) error {
 			defer assert.PushAsserter(assert.Plain)()
 			close(entered)
 			<-resume
@@ -732,7 +732,7 @@ func lifecyclePending(t *testing.T, open func(*testing.T) *Database) {
 		assert.Equal(p.remainingEncryptions, uint32(1))
 		assert.Equal(p.spent, uint32(1))
 		assert.Equal(p.consumeCalls, 1)
-		assert.Equal(len(p.leases), 1, "cancelled Acquire returns no lease")
+		assert.Equal(len(p.leases), 1, "canceled Acquire returns no lease")
 		assert.Equal(p.leases[0].releases, 1)
 		try.To(db.Close())
 	})

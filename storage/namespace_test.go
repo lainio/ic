@@ -24,7 +24,7 @@ func TestVaultNamespaces(t *testing.T) {
 		name string
 		open func(*testing.T) *Database
 	}{
-		{"memory", func(t *testing.T) *Database { return NewMemory() }},
+		{"memory", func(_ *testing.T) *Database { return NewMemory() }},
 		{"bbolt", func(t *testing.T) *Database {
 			return try.To1(OpenBolt(filepath.Join(t.TempDir(), "namespaces.db")))
 		}},

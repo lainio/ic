@@ -183,8 +183,8 @@ func NewFromInfo(info Info) Handle {
 
 func RandInfo(n int) Info {
 	return Info{
-		ID:     RandSlice(32),
-		Public: RandSlice(32),
+		ID:     RandSlice(n),
+		Public: RandSlice(n),
 	}
 }
 

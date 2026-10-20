@@ -353,7 +353,7 @@ func runNamespaceContract(t *testing.T, open func(*testing.T) Engine) {
 		db := open(t)
 		seedNamespaces(t, db)
 		var retained [][2][]byte
-		inspect := func(tx ReadTx) error {
+		inspect := func(tx ReadTx) error { //nolint:unparam
 			rootCount := 0
 			try.To(tx.Each(func(key, value []byte) error {
 				rootCount++
@@ -430,7 +430,7 @@ func runNamespaceContract(t *testing.T, open func(*testing.T) Engine) {
 				if nestedFailure {
 					want = ErrEmptyKey
 				}
-				inspect := func(tx ReadTx) error {
+				inspect := func(tx ReadTx) error { //nolint:unparam
 					left := try.To1(tx.Child([]byte("left")))
 					right := try.To1(tx.Child([]byte("right")))
 					calls := 0

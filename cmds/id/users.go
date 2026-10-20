@@ -92,9 +92,8 @@ func printChains(identity *identity.Identity) {
 		if identity.IsRoot() &&
 			identity.GetIDK().Public.Equal(ic.FirstBlock().Invitee.Public) {
 			continue
-		} else {
-			pkStr := ic.FirstBlock().Invitee.PKString()
-			fmt.Println("- Invitee Root PK", pkStr, ic.Len()-1)
 		}
+		pkStr := ic.FirstBlock().Invitee.PKString()
+		fmt.Println("- Invitee Root PK", pkStr, ic.Len()-1)
 	}
 }

@@ -15,9 +15,8 @@ func NewNotConnected() Distance {
 func (d Distance) String() string {
 	if d == NotConnected {
 		return "NotConnected"
-	} else {
-		return fmt.Sprintf("Distance:%d", d)
 	}
+	return fmt.Sprintf("Distance:%d", d)
 }
 
 // PickShorter selects shorter of two Distance and tells if swap was needed.

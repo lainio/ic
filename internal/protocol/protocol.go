@@ -1,3 +1,4 @@
+//nolint:staticcheck
 package protocol
 
 import (
@@ -22,7 +23,7 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-var (
+var ( //nolint:staticcheck
 	SenderUser enclave.User
 	RcvrUser   enclave.User
 
@@ -559,7 +560,7 @@ type Handshake struct {
 	Endpoint string
 }
 
-type ProtocolType string
+type ProtocolType string //nolint:revive
 
 const (
 	ProtocolTypePW         ProtocolType = "pairwise"
@@ -597,7 +598,7 @@ const (
 	rcvr
 )
 
-var IdInviteCmdData = struct {
+var IdInviteCmdData = struct { //nolint:revive
 	SenderUserID uint32
 	RcvrUserID   uint32
 	PinCode      int

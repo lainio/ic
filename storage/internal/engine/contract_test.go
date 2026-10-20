@@ -336,7 +336,7 @@ func checkRecord(t *testing.T, tx ReadTx, key, want string, present bool) {
 	assert.Equal(string(value), want)
 }
 
-func checkPair(t *testing.T, db Engine, one, two string) {
+func checkPair(t *testing.T, db Engine, one, two string) { //nolint:unparam
 	t.Helper()
 	try.To(db.View(func(tx ReadTx) error {
 		checkRecord(t, tx, "one", one, true)

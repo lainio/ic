@@ -38,7 +38,7 @@ var pwFindCmd = &cobra.Command{
 	Long:    pwFindDoc,
 	Example: pwFindExample,
 	Args:    cobra.ExactArgs(1),
-	RunE: func(c *cobra.Command, args []string) (err error) {
+	RunE: func(_ *cobra.Command, args []string) (err error) {
 		defer assert.PushAsserter(assert.Plain)()
 		defer err2.Handle(&err, nil)
 

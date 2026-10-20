@@ -20,7 +20,7 @@ func TestVaultRecords(t *testing.T) {
 		name string
 		open func(*testing.T) *Database
 	}{
-		{"memory", func(t *testing.T) *Database { return NewMemory() }},
+		{"memory", func(_ *testing.T) *Database { return NewMemory() }},
 		{"bbolt", func(t *testing.T) *Database {
 			return try.To1(OpenBolt(filepath.Join(t.TempDir(), "records.db")))
 		}},
@@ -361,7 +361,7 @@ func vaultRecordsAtomic(t *testing.T, open func(*testing.T) *Database) {
 			}
 			checkExpiredRecordTx(t, saved)
 		}
-		try.To(v.View(func(tx ReadTx) error { return nil }))
+		try.To(v.View(func(_ ReadTx) error { return nil }))
 		assert.Equal(p.spent, uint32(1))
 		try.To(db.Close())
 	})

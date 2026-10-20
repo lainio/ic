@@ -235,7 +235,7 @@ func (n Node) CommonChains(their Node) []chain.Pair {
 func (n Node) WoT(digest *digest.Digest) *WoTInfo {
 	var (
 		best    *WoTInfo
-		bestHop hop.Distance = hop.NewNotConnected()
+		bestHop = hop.NewNotConnected()
 	)
 
 	for i, d := range digest.Roots {

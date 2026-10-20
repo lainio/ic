@@ -209,15 +209,15 @@ func (p Path) Len() hop.Distance {
 func (p Path) KeyRotationsLen() (count hop.Distance) {
 	for _, b := range p {
 		if b.Body.Options.Rotation {
-			count += 1
+			count++
 		}
 	}
 	return
 }
 
 // isLeaf
-func (c Path) _(parentsKey key.Handle) bool {
-	return bytes.Equal(c.LeafPubKey(), try.To1(parentsKey.CBORPublicKey()))
+func (p Path) _(parentsKey key.Handle) bool {
+	return bytes.Equal(p.LeafPubKey(), try.To1(parentsKey.CBORPublicKey()))
 }
 
 func (p Path) LeafPubKey() key.Public {
@@ -237,11 +237,11 @@ func (p Path) leafHash() key.Hash {
 type getBackupKey func(int) key.Public
 
 var (
-	ErrUnsupportedVersion = errors.New("Unsupported edge version")
-	ErrWrongAnchor        = errors.New("Wrong anchor")
-	ErrBrokenPath         = errors.New("Broken path")
-	ErrCycleOrDuplicate   = errors.New("Cycle or dublicate")
-	ErrBadSignature       = errors.New("Bad signature")
+	ErrUnsupportedVersion = errors.New("unsupported edge version")
+	ErrWrongAnchor        = errors.New("wrong anchor")
+	ErrBrokenPath         = errors.New("broken path")
+	ErrCycleOrDuplicate   = errors.New("cycle or dublicate")
+	ErrBadSignature       = errors.New("bad signature")
 	ErrWrongRoot          = errors.New(
 		"introduction path does not start at the expected root",
 	)
@@ -384,15 +384,22 @@ func (p Path) Challenge(pinCode int, f func(d []byte) key.Signature) bool {
 	return signature.Verify(pubKey, sigEdge.Bytes())
 }
 
+// FirstEdge returns the first edge of the path.
+// The path cannot be empty.
 func (p Path) FirstEdge() Edge {
+	assert.SNotEmpty(p)
 	return p[0]
 }
 
+// LastEdge returns the last edge of the path.
+// The path cannot be empty.
 func (p Path) LastEdge() Edge {
 	assert.SNotEmpty(p)
 	return p[len(p)-1]
 }
 
+// SecondLastEdge returns the entry immediately before the last one.
+// The path must contain at least two entries.
 func (p Path) SecondLastEdge() Edge {
 	assert.SLonger(p, 1)
 	return p[len(p)-2]

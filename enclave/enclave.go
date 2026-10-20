@@ -744,7 +744,7 @@ func (u *User) SetIdentity(id *identity.Identity) {
 
 func (u *User) EqualPK(pk string) bool {
 	assert.Len(pk, key.PKLen)
-	return u.RoleInfo.KeyInfo.PKString() == pk
+	return u.KeyInfo.PKString() == pk
 }
 
 func uint32ToBytes(v uint32) []byte {
