@@ -17,6 +17,7 @@ func init() {
 		Short: "Introduction path checks",
 	}
 	introCmd.AddCommand(newDemoCommand())
+	introCmd.AddCommand(newAcceptanceDemoCommand())
 	cmds.RootCmd().AddCommand(introCmd)
 }
 
