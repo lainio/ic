@@ -285,3 +285,61 @@ func ExampleInbox_conflictingParents() {
 	// same child: true
 	// different parents: true
 }
+
+// ExamplePath_parentAcceptance is a detached acceptance experiment, not
+// one-time enrollment, a human-consent ceremony, or promotion into Known.
+func ExamplePath_parentAcceptance() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice, bob := key.New(), key.New(), key.New()
+	expectedRoot := try.T1(root.CBORPublicKey())(
+		"reading the independently selected fixture root public key",
+	)
+	aliceInfo := key.InfoFromHandle(alice)
+
+	rootPath := intro.New(key.InfoFromHandle(root))
+	direct := rootPath.Introduce(root, aliceInfo)
+	bobPath := rootPath.Introduce(root, key.InfoFromHandle(bob))
+	indirect := bobPath.Introduce(bob, aliceInfo)
+	directBytes, indirectBytes := direct.Bytes(), indirect.Bytes()
+	direct = try.To1(intro.ParsePath(directBytes))
+	indirect = try.To1(intro.ParsePath(indirectBytes))
+	assert.SLen(direct, 2)
+	assert.SLen(indirect, 3)
+	directErr := direct.ProveFromRoot(expectedRoot)
+	indirectErr := indirect.ProveFromRoot(expectedRoot)
+	assert.NoError(directErr)
+	assert.NoError(indirectErr)
+
+	// Choose the direct proposal and its parent explicitly in this fixture.
+	offered := direct
+	assert.DeepEqual(offered[len(offered)-1].Body.Child, aliceInfo)
+	assert.That(offered[len(offered)-2].Public().Equal(expectedRoot))
+
+	// Experimental transcript; not a production protocol identifier.
+	digest := key.HashTagged("test/intro-acceptance/v1", offered.Bytes())
+	acceptance := key.Signature(try.To1(alice.Sign(digest[:])))
+
+	directDigest := key.HashTagged("test/intro-acceptance/v1", direct.Bytes())
+	directVerified := acceptance.Verify(
+		direct[len(direct)-1].Public(), directDigest[:],
+	)
+	indirectDigest := key.HashTagged(
+		"test/intro-acceptance/v1",
+		indirect.Bytes(),
+	)
+	indirectVerified := acceptance.Verify(
+		indirect[len(indirect)-1].Public(), indirectDigest[:],
+	)
+	assert.DeepEqual(direct.Bytes(), directBytes)
+	assert.DeepEqual(indirect.Bytes(), indirectBytes)
+
+	fmt.Println("both proposal proofs pass:",
+		directErr == nil && indirectErr == nil)
+	fmt.Println("Alice's acceptance matches R -> Alice:", directVerified)
+	fmt.Println("same acceptance matches R -> Bob -> Alice:", indirectVerified)
+	// Output:
+	// both proposal proofs pass: true
+	// Alice's acceptance matches R -> Alice: true
+	// same acceptance matches R -> Bob -> Alice: false
+}
