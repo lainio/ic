@@ -27,13 +27,13 @@ func TestAcceptanceBinding(t *testing.T) {
 	assert.SLen(indirect, 3)
 	assert.NoError(direct.ProveFromRoot(expectedRoot))
 	assert.NoError(indirect.ProveFromRoot(expectedRoot))
-	assert.DeepEqual(indirect[len(indirect)-1].Body.Child, aliceInfo)
-	assert.DeepEqual(indirect[len(indirect)-2].Public(), bobInfo.Public)
+	assert.DeepEqual(indirect.LastEdge().Body.Child, aliceInfo)
+	assert.DeepEqual(indirect.SecondLastEdge().Public(), bobInfo.Public)
 	assert.ThatNot(expectedRoot.Equal(bobInfo.Public))
 
 	offered := direct
-	assert.DeepEqual(offered[len(offered)-1].Body.Child, aliceInfo)
-	assert.DeepEqual(offered[len(offered)-2].Public(), expectedRoot)
+	assert.DeepEqual(offered.LastEdge().Body.Child, aliceInfo)
+	assert.DeepEqual(offered.SecondLastEdge().Public(), expectedRoot)
 
 	// Experimental transcript; bind the entire signed representation.
 	acceptanceDigest := func(proposal intro.Path) key.Hash {
@@ -47,7 +47,7 @@ func TestAcceptanceBinding(t *testing.T) {
 
 		digest := acceptanceDigest(direct)
 		assert.That(
-			acceptance.Verify(direct[len(direct)-1].Public(), digest[:]),
+			acceptance.Verify(direct.LastEdge().Public(), digest[:]),
 		)
 	})
 
@@ -61,7 +61,7 @@ func TestAcceptanceBinding(t *testing.T) {
 
 		digest := acceptanceDigest(copied)
 		assert.That(
-			acceptance.Verify(copied[len(copied)-1].Public(), digest[:]),
+			acceptance.Verify(copied.LastEdge().Public(), digest[:]),
 		)
 		assert.DeepEqual(copied.Bytes(), directBytes)
 	})
@@ -72,7 +72,7 @@ func TestAcceptanceBinding(t *testing.T) {
 		var absent key.Signature
 		digest := acceptanceDigest(direct)
 		assert.ThatNot(
-			absent.Verify(direct[len(direct)-1].Public(), digest[:]),
+			absent.Verify(direct.LastEdge().Public(), digest[:]),
 		)
 	})
 
@@ -84,7 +84,7 @@ func TestAcceptanceBinding(t *testing.T) {
 
 		digest = acceptanceDigest(direct)
 		assert.ThatNot(bobsSignature.Verify(
-			direct[len(direct)-1].Public(), digest[:],
+			direct.LastEdge().Public(), digest[:],
 		))
 	})
 
@@ -94,7 +94,7 @@ func TestAcceptanceBinding(t *testing.T) {
 		assert.NoError(indirect.ProveFromRoot(expectedRoot))
 		digest := acceptanceDigest(indirect)
 		assert.ThatNot(acceptance.Verify(
-			indirect[len(indirect)-1].Public(), digest[:],
+			indirect.LastEdge().Public(), digest[:],
 		))
 	})
 
@@ -126,7 +126,7 @@ func TestAcceptanceBinding(t *testing.T) {
 
 		digest := acceptanceDigest(direct)
 		assert.ThatNot(otherSignature.Verify(
-			direct[len(direct)-1].Public(), digest[:],
+			direct.LastEdge().Public(), digest[:],
 		))
 	})
 
@@ -143,7 +143,7 @@ func TestAcceptanceBinding(t *testing.T) {
 
 			digest = acceptanceDigest(proposal)
 			assert.That(ownAcceptance.Verify(
-				proposal[len(proposal)-1].Public(), digest[:],
+				proposal.LastEdge().Public(), digest[:],
 			))
 			assert.DeepEqual(proposal.Bytes(), before)
 		}

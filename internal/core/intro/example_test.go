@@ -268,10 +268,10 @@ func ExampleInbox_conflictingParents() {
 	assert.SLen(second, 3)
 	firstErr := first.ProveFromRoot(expectedRoot)
 	secondErr := second.ProveFromRoot(expectedRoot)
-	firstChild := first[len(first)-1].Public()
-	secondChild := second[len(second)-1].Public()
-	firstParent := first[len(first)-2].Public()
-	secondParent := second[len(second)-2].Public()
+	firstChild := first.LastEdge().Public()
+	secondChild := second.LastEdge().Public()
+	firstParent := first.SecondLastEdge().Public()
+	secondParent := second.SecondLastEdge().Public()
 	sameChild := bytes.Equal(firstChild, secondChild)
 	differentParents := !bytes.Equal(firstParent, secondParent)
 
@@ -313,8 +313,8 @@ func ExamplePath_parentAcceptance() {
 
 	// Choose the direct proposal and its parent explicitly in this fixture.
 	offered := direct
-	assert.DeepEqual(offered[len(offered)-1].Body.Child, aliceInfo)
-	assert.That(offered[len(offered)-2].Public().Equal(expectedRoot))
+	assert.DeepEqual(offered.LastEdge().Body.Child, aliceInfo)
+	assert.That(offered.SecondLastEdge().Public().Equal(expectedRoot))
 
 	// Experimental transcript; not a production protocol identifier.
 	digest := key.HashTagged("test/intro-acceptance/v1", offered.Bytes())
@@ -322,14 +322,14 @@ func ExamplePath_parentAcceptance() {
 
 	directDigest := key.HashTagged("test/intro-acceptance/v1", direct.Bytes())
 	directVerified := acceptance.Verify(
-		direct[len(direct)-1].Public(), directDigest[:],
+		direct.LastEdge().Public(), directDigest[:],
 	)
 	indirectDigest := key.HashTagged(
 		"test/intro-acceptance/v1",
 		indirect.Bytes(),
 	)
 	indirectVerified := acceptance.Verify(
-		indirect[len(indirect)-1].Public(), indirectDigest[:],
+		indirect.LastEdge().Public(), indirectDigest[:],
 	)
 	assert.DeepEqual(direct.Bytes(), directBytes)
 	assert.DeepEqual(indirect.Bytes(), indirectBytes)

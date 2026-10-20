@@ -62,8 +62,8 @@ func SameRoot(c1, c2 Path) bool {
 
 func SameParent(c1, c2 Path) bool {
 	return EqualEdges(
-		c1.secondLastEdge(),
-		c2.secondLastEdge(),
+		c1.SecondLastEdge(),
+		c2.SecondLastEdge(),
 	)
 }
 
@@ -338,7 +338,7 @@ func (p Path) IsParentFor(child Path) bool {
 
 	return EqualEdges(
 		p.LastEdge(),
-		child.secondLastEdge(),
+		child.SecondLastEdge(),
 	)
 }
 
@@ -389,13 +389,11 @@ func (p Path) FirstEdge() Edge {
 }
 
 func (p Path) LastEdge() Edge {
-	l := len(p)
-	assert.That(l > 0, "Edges is too short")
-	return p[l-1]
+	assert.SNotEmpty(p)
+	return p[len(p)-1]
 }
 
-func (p Path) secondLastEdge() Edge {
-	l := len(p)
-	assert.That(l > 1, "Edges is too short")
-	return p[l-2]
+func (p Path) SecondLastEdge() Edge {
+	assert.SLonger(p, 1)
+	return p[len(p)-2]
 }

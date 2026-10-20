@@ -32,12 +32,12 @@ func TestInboxConflictingParents(t *testing.T) {
 	assert.NoError(direct.ProveFromRoot(expectedRoot))
 	assert.NoError(indirect.ProveFromRoot(expectedRoot))
 
-	directChild := direct[len(direct)-1].Body.Child
-	indirectChild := indirect[len(indirect)-1].Body.Child
+	directChild := direct.LastEdge().Body.Child
+	indirectChild := indirect.LastEdge().Body.Child
 	assert.DeepEqual(directChild, aliceInfo)
 	assert.DeepEqual(indirectChild, aliceInfo)
-	directParent := direct[len(direct)-2].Public()
-	indirectParent := indirect[len(indirect)-2].Public()
+	directParent := direct.SecondLastEdge().Public()
+	indirectParent := indirect.SecondLastEdge().Public()
 	assert.DeepEqual(directParent, expectedRoot)
 	assert.DeepEqual(indirectParent, bobInfo.Public)
 	assert.ThatNot(directParent.Equal(indirectParent))
