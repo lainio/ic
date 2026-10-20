@@ -369,7 +369,8 @@ func ExamplePath_SignAcceptance() {
 	acceptance := try.To1(offered.SignAcceptance(alice))
 	directErr := direct.VerifyAcceptance(acceptance)
 	indirectErr := indirect.VerifyAcceptance(acceptance)
-	try.To(directErr)
+
+	assert.NoError(directErr)
 	assert.ErrorIs(indirectErr, intro.ErrBadAcceptance)
 
 	fmt.Println("Alice's acceptance verifies:", directErr == nil)
