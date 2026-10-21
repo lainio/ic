@@ -19,6 +19,7 @@ func init() {
 	introCmd.AddCommand(newDemoCommand())
 	introCmd.AddCommand(newAcceptanceDemoCommand())
 	introCmd.AddCommand(newChoiceDemoCommand())
+	introCmd.AddCommand(newStoredChoiceDemoCommand())
 	cmds.RootCmd().AddCommand(introCmd)
 }
 

@@ -152,3 +152,62 @@ Only auxiliary signing state changes: no model `Edges`, `Received`, `Known`,
 trust, device, recovery, or pairwise state changes.
 It implements neither V19 `Introduce`/`VerifyReceived` nor the global
 `CanIntroduce` no-existing-parent guard.
+
+## Stored choice across database reopening
+
+~~~sh
+tdc intro stored-choice-demo root root
+tdc intro stored-choice-demo root bob
+~~~
+
+`tdc intro stored-choice-demo FIRST SECOND` takes exactly two selectors:
+`root` is `R -> Alice`; `bob` is `R -> Bob -> Alice`.
+The invocation explicitly chooses either offer first, with no root preference
+or automatic acceptance of incoming evidence.
+Both positions complete both selectors, including repeated choices.
+
+The first request calls `onboarding.SignAfterStoredChoice` and verifies the
+acceptance, then closes the Vault and bbolt database.
+The second request opens the same file and existing Alice/R Vault, independently
+proves its selected path, and calls the same helper with the correct parent.
+It reuses the exact signed proposals, provider, and fixture signing handles.
+
+| Arguments | Second request after reopening | Exit |
+|---|---|---|
+| `root root` | Sign the stored direct proposal and verify | 0 |
+| `bob bob` | Sign the stored indirect proposal and verify | 0 |
+| `root bob` | Refuse with `ErrDifferentAcceptance` before signing | Nonzero |
+| `bob root` | Refuse with `ErrDifferentAcceptance` before signing | Nonzero |
+
+For `root bob`, stdout only:
+
+~~~text
+first proposal: R -> Alice
+first acceptance verifies: true
+database reopened: true
+second proposal: R -> Bob -> Alice
+second path proof passes: true
+second request: refused
+second acceptance verifies: false
+~~~
+
+Exact retries report `completed` and `second acceptance verifies: true`.
+The helper stores a proposal, not a signature cache; retries may sign again.
+Verification against the selected proposal is the observation.
+The root CLI prints refusal diagnostics on stderr; `go run ./cmd/tdc` may also
+report its nonzero exit there. The stdout block is not a full terminal transcript.
+
+Each invocation is disposable: fresh fixture keys, a private temporary bbolt
+file, and a random 32-byte provider secret.
+Both success and refusal close resources, clear that secret, and remove the file.
+There are no database-path, key-file, reset, or arbitrary-evidence options.
+The private provider keeps one synchronized `1 << 24` development encryption
+budget across reopening, independent of the two requests.
+This is a demo policy, not durable lifetime accounting or production key custody.
+
+This demonstrates same-process reopening of an intact file, not process restart
+or production wallet recovery. Other Vaults, restored files, and direct key use
+remain outside the guard. Only auxiliary choice is persisted, not membership.
+It changes no model `Edges`, `Received`, `Known`, trust, device, recovery, or
+pairwise state and adds no V19 action; see the existing
+[stored-choice rationale](../../docs/architecture/introduction-onboarding-rationale.md#stored-choice-application-helper).
