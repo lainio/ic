@@ -103,3 +103,52 @@ It establishes neither human consent nor one-time acceptance/global parent
 uniqueness and selects no tree-position or conflict-resolution policy.
 Only the final child's acceptance is signed, not a new chain of acceptance
 certificates for every ancestor.
+
+## Remembered acceptance choice demo
+
+~~~sh
+tdc intro choice-demo root root
+tdc intro choice-demo root bob
+~~~
+
+`tdc intro choice-demo FIRST SECOND` takes exactly two fixture selectors:
+`root` is `R -> Alice`; `bob` is `R -> Bob -> Alice`.
+Both proposals share R and Alice keys, use default options, and pass individual
+path proof; expected parent keys come independently from the fixture handles.
+Both requests happen in one invocation through one `AcceptanceChoice`.
+The owner's explicit first request chooses either proposal; incoming evidence
+is not automatically accepted and there is no root preference.
+An exact retry reuses the original proposal bytes.
+Completion offers both selectors at both positions, including `root root`.
+
+| Arguments | Second request | Exit |
+|---|---|---|
+| `root root` | Return the cached direct acceptance | 0 |
+| `bob bob` | Return the cached indirect acceptance | 0 |
+| `root bob` | Refuse with `ErrDifferentAcceptance` | Nonzero |
+| `bob root` | Refuse with `ErrDifferentAcceptance` | Nonzero |
+
+For `root bob`, stdout only:
+
+~~~text
+first proposal: R -> Alice
+first acceptance verifies: true
+second proposal: R -> Bob -> Alice
+second path proof passes: true
+second request: refused
+same signature returned: false
+~~~
+
+The root CLI prints the returned refusal diagnostic on stderr and exits nonzero.
+`go run ./cmd/tdc intro choice-demo root bob` also prints `exit status 1` on stderr.
+The stdout block is not a full terminal transcript.
+`same signature returned` requires success and actual byte equality;
+the command does not measure signing-call counts.
+
+Each invocation starts with fresh fixture keys and a fresh in-memory choice.
+This creates no persistent wallet and does not enforce once-only enrollment.
+It adds no reset API, file import, storage, network, or key-custody mechanism.
+Only auxiliary signing state changes: no model `Edges`, `Received`, `Known`,
+trust, device, recovery, or pairwise state changes.
+It implements neither V19 `Introduce`/`VerifyReceived` nor the global
+`CanIntroduce` no-existing-parent guard.
