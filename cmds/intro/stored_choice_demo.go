@@ -31,13 +31,16 @@ Each selector names a generated proposal:
 
 Either proposal may be selected first. Close the Vault and database, reopen the
 same file, then request the exact stored proposal again or a different one.
-Exact retries sign and verify; different proposals return ErrDifferentAcceptance.
+Exact retries verify the saved acceptance without signing again;
+different proposals return ErrDifferentAcceptance.
 The summary goes to stdout; refusals exit nonzero with the cause on stderr.
 Completion offers both selectors at both positions, including repeated choices.
 
 This disposable demo keeps the same process, provider, and fixture keys alive.
 It removes its temporary database and clears the provider secret after use.
-Only auxiliary choice is stored, not an acceptance cache or membership.
+Auxiliary choice and its verified acceptance are stored; neither is membership.
+If signing or saving fails, selection remains pending and an explicit retry may
+sign again. Signing and saving are separate operations, not exactly-once signing.
 This is not process restart or production wallet recovery. Other Vaults,
 restored files, and direct key use can bypass this local guard.
 It changes no Edges, Received, Known, trust, device, recovery, or pairwise state

@@ -174,8 +174,8 @@ It reuses the exact signed proposals, provider, and fixture signing handles.
 
 | Arguments | Second request after reopening | Exit |
 |---|---|---|
-| `root root` | Sign the stored direct proposal and verify | 0 |
-| `bob bob` | Sign the stored indirect proposal and verify | 0 |
+| `root root` | Verify and return the saved direct acceptance | 0 |
+| `bob bob` | Verify and return the saved indirect acceptance | 0 |
 | `root bob` | Refuse with `ErrDifferentAcceptance` before signing | Nonzero |
 | `bob root` | Refuse with `ErrDifferentAcceptance` before signing | Nonzero |
 
@@ -192,8 +192,16 @@ second acceptance verifies: false
 ~~~
 
 Exact retries report `completed` and `second acceptance verifies: true`.
-The helper stores a proposal, not a signature cache; retries may sign again.
-Verification against the selected proposal is the observation.
+The helper commits selection before signing, verifies the signature, and saves
+it in a separate transaction before returning success.
+A completed retry rechecks the offer, expected root/parent, and matching child
+handle, then verifies and returns the saved bytes without signing or encryption.
+A selection without an acceptance is pending: signing or save failure returns
+no signature, and an explicit retry of the same offer may sign again.
+Invalid saved results are refused without signing or automatic repair.
+Signing and saving are not atomic; this does not promise exactly-once signing
+or message delivery. The CLI reports verification against the selected proposal,
+not an unmeasured signing count.
 The root CLI prints refusal diagnostics on stderr; `go run ./cmd/tdc` may also
 report its nonzero exit there. The stdout block is not a full terminal transcript.
 
@@ -207,7 +215,8 @@ This is a demo policy, not durable lifetime accounting or production key custody
 
 This demonstrates same-process reopening of an intact file, not process restart
 or production wallet recovery. Other Vaults, restored files, and direct key use
-remain outside the guard. Only auxiliary choice is persisted, not membership.
+remain outside the guard. Only auxiliary choice and its completed acceptance
+are persisted, not membership, human consent, or ancestor consent.
 It changes no model `Edges`, `Received`, `Known`, trust, device, recovery, or
 pairwise state and adds no V19 action; see the existing
 [stored-choice rationale](../../docs/architecture/introduction-onboarding-rationale.md#stored-choice-application-helper).

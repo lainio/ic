@@ -14,11 +14,16 @@ import (
 )
 
 // SignAfterStoredChoice validates a cloned offer and commits or matches its
-// complete canonical proposal in one Vault.Update before calling the existing
-// checked signer outside the transaction. A different stored proposal returns
-// intro.ErrDifferentAcceptance; empty/corrupt records are not treated as absent.
-// Every returned error preserves its cause and accompanies a nil signature.
-// Signing errors retain the committed choice, even after real signing work.
+// complete canonical proposal in the first Vault.Update. A saved acceptance is
+// verified and returned without Sign, Put, or another encryption. Otherwise,
+// the checked signer runs outside all transactions; its result is verified and
+// saved in a second Update before success. Both paths require a matching child
+// handle and independently chosen root/parent; public-key access still occurs.
+// A different stored proposal returns intro.ErrDifferentAcceptance. Invalid or
+// orphaned acceptances return intro.ErrBadAcceptance without signing or repair;
+// empty records are not absent. Storage/verification errors retain their causes.
+// Every error accompanies a nil signature. Signing or save failure retains the
+// committed choice; explicit retries may sign again if no result was saved.
 //
 // The caller supplies an open, dedicated Vault for one child/root binding and
 // independently establishes expectedRoot and expectedParent. It must serialize
@@ -26,12 +31,14 @@ import (
 // This function borrows the Vault and child handle, closes neither, and stores
 // no handle or provider secret.
 //
-// Each call consults storage; identical retries may sign again. Only the choice
-// is stored: unlike intro.AcceptanceChoice, no acceptance is cached or stored.
-// The private development layout is not a published wallet format. No modeled
-// authority or global parent uniqueness follows. Deletion, copies, restores,
+// Each call consults storage. Selection-only records are legitimate pending
+// choices. Signing and saving are not atomic: this is saved-result reuse, not
+// exactly-once signing or delivery. The private development layout is not a
+// published wallet format. No membership, human/ancestor consent, Known
+// promotion, or global parent uniqueness follows. Deletion, copies, restores,
 // other Vaults/devices, or direct key use can bypass this local restriction.
-// No concurrency, reentrancy, or rollback-resistance guarantee is provided.
+// No concurrency, reentrancy, physical crash safety, cross-process key recovery,
+// or rollback-resistance guarantee is provided.
 func SignAfterStoredChoice(
 	vault *storage.Vault,
 	child key.Handle,
@@ -58,12 +65,15 @@ func SignAfterStoredChoice(
 	assert.That(public.Equal(signerPublic), intro.ErrBadAcceptance)
 	proposal := candidate.Bytes()
 
+	var saved key.Signature
+	var completed bool
 	try.To(vault.Update(func(tx storage.WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
 		defer assert.PushAsserter(assert.Plain)()
 
 		records := try.To1(tx.EnsureChild([]byte("introduction-choice-demo")))
 		stored, found := try.To2(records.Get([]byte("selected-proposal")))
+		saved, completed = try.To2(records.Get([]byte("acceptance")))
 		if found {
 			assert.That(
 				bytes.Equal(stored, proposal),
@@ -71,14 +81,41 @@ func SignAfterStoredChoice(
 			)
 			return nil
 		}
+		assert.ThatNot(completed, intro.ErrBadAcceptance)
 		try.To(records.Put([]byte("selected-proposal"), proposal))
 		return nil
 	}))
 
 	// Update has returned successfully: the selection transaction has ended.
-	// Signing errors keep that choice and discard any partial signature.
+	if completed {
+		try.To(candidate.VerifyAcceptance(saved))
+		return saved, nil
+	}
+
+	// Signing errors keep the choice and discard any partial signature.
 	signed := try.To1(candidate.SignAcceptanceFor(
 		child, expectedRoot, expectedParent,
 	))
+	try.To(candidate.VerifyAcceptance(signed))
+
+	// Save only the verified result, without recreating or replacing state.
+	try.To(vault.Update(func(tx storage.WriteTx) (err error) {
+		defer err2.Handle(&err, nil)
+		defer assert.PushAsserter(assert.Plain)()
+
+		name := []byte("introduction-choice-demo")
+		assert.That(try.To1(tx.HasChild(name)), intro.ErrBadAcceptance)
+		records := try.To1(tx.ChildForUpdate(name))
+		stored, found := try.To2(records.Get([]byte("selected-proposal")))
+		assert.That(found, intro.ErrBadAcceptance)
+		assert.That(
+			bytes.Equal(stored, proposal),
+			intro.ErrDifferentAcceptance,
+		)
+		_, found = try.To2(records.Get([]byte("acceptance")))
+		assert.ThatNot(found, intro.ErrBadAcceptance)
+		try.To(records.Put([]byte("acceptance"), signed))
+		return nil
+	}))
 	return signed, nil
 }

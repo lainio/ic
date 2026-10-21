@@ -156,21 +156,48 @@ Use is owner-serialized, including reentrant access, with an intact Vault.
 The function borrows the Vault and signing handle, closes neither, and
 stores no key handle or provider secret.
 
-After cloning, it checks shape, proof, expected parent, and matching child.
-One `Vault.Update` reads the choice, stores an absent proposal, or matches
-complete canonical proposal bytes.
-Different proposals return `intro.ErrDifferentAcceptance`.
-Empty/corrupt records cannot be replaced as absent; read errors propagate.
-Only after successful `Update` does `SignAcceptanceFor` run outside the transaction.
-All errors retain their cause and return no signature;
-signing failure retains selection even if the signer produced bytes.
-Every call consults storage; identical retries may sign again.
-Unlike `intro.AcceptanceChoice`, no signature is cached or stored.
+This scoped extension authorizes retaining one verified detached acceptance
+alongside the selected proposal, so a completed request can return its saved
+result after response loss or reopening.
+The private `introduction-choice-demo` namespace keeps `selected-proposal`
+and adds `acceptance`; this is not a published wallet schema.
+Existing selection-only records remain pending choices, without migration.
+Proposal bytes, the acceptance purpose tag, and cryptographic format stay fixed.
+The separate in-memory `intro.AcceptanceChoice` contract stays unchanged.
 
-Only auxiliary local signing choice is persisted.
+Every call clones the offer and checks shape, proof under the independently
+chosen root, expected parent, and matching child handle, including saved retries.
+The first `Vault.Update` reads both records consistently and compares complete
+canonical proposal bytes. It selects only when both records are absent.
+Different or empty selected proposals return `intro.ErrDifferentAcceptance`.
+An acceptance without a selection returns `intro.ErrBadAcceptance`.
+Present empty values are not absent; storage read errors retain their causes.
+After the transaction, an existing acceptance must pass `VerifyAcceptance`
+before return. Invalid/empty acceptances are refused without signing or repair.
+A valid saved result returns its exact bytes without `Sign`, `Put`, or another
+encryption. Public-key access still occurs during preflight.
+
+For a pending choice, `SignAcceptanceFor` runs outside all transactions.
+Its successful signature must pass `VerifyAcceptance` before a second
+`Vault.Update` saves only the acceptance.
+That transaction requires the selection still to exist and match, and no
+acceptance to have appeared. A different selection retains
+`intro.ErrDifferentAcceptance`; missing selection or unexpected result presence
+returns `intro.ErrBadAcceptance`. Lost state is not recreated or overwritten.
+All errors retain their causes and return no signature; partial signer output
+is neither saved nor returned. Signing or save failure retains the earlier
+committed choice, and an explicit retry of that proposal may sign again if no
+acceptance was saved. Signing and saving are separate, non-atomic operations:
+interruption between them can require another signing call for the same offer.
+This is saved-result reuse, not exactly-once signing, enrollment, or delivery.
+There is no message delivery implementation in this extension.
+
+Only auxiliary local signing choice and its completed result are persisted.
+Neither signifies membership, human consent, or ancestor consent.
 No `Edges`, `Received`, `Known`, trust, PW, device, or recovery authority is created.
 This implements neither V19 `Introduce` nor `VerifyReceived` and supplies
-no global `GlobalHasParent` predicate. [S1, S2, S3]
+no global `GlobalHasParent` predicate; its no-existing-parent guard remains
+unchanged. Reverification does not promote evidence into `Known`. [S1, S2, S3]
 Deletion, copying, restoration, rollback, another Vault/device, or external
 key use can bypass the restriction.
 Same-process reopen tests establish neither process-restart key custody,

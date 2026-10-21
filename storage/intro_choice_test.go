@@ -22,10 +22,10 @@ import (
 // ExampleVault_choiceBeforeSigning uses onboarding.SignAfterStoredChoice with
 // one dedicated Vault for Alice and R.
 // The owner selects an offer; receiving a claim never enrolls it automatically.
-// The helper persists auxiliary local signing choice in a private development
-// layout, not a public wallet schema. It changes no Edges, Received, Known,
-// trust, PW, device, or recovery state and supplies no GlobalHasParent predicate
-// or uniqueness proof for another participant.
+// The helper persists auxiliary local choice and its verified acceptance in a
+// private development layout, not a public wallet schema. It changes no Edges,
+// Received, Known, trust, PW, device, or recovery state and supplies no
+// GlobalHasParent predicate or uniqueness proof for another participant.
 //
 // Assume one cooperating caller and an intact, non-rolled-back Vault. Reopening
 // here keeps the same process, keys, and provider alive; it tests no process
@@ -85,7 +85,7 @@ func ExampleVault_choiceBeforeSigning() {
 	assert.SNil(rejected)
 	refused := errors.Is(err, intro.ErrDifferentAcceptance) && rejected == nil
 
-	// Retry the original proposal without rebuilding its signed parent edge.
+	// Retry the original proposal and verify its saved acceptance.
 	retry := try.To1(onboarding.SignAfterStoredChoice(
 		reopenedVault, alice, expectedRoot, expectedRoot, a,
 	))
@@ -99,12 +99,12 @@ func ExampleVault_choiceBeforeSigning() {
 	try.To1(fmt.Println("selected proposal survives reopen:", preserved))
 	try.To1(fmt.Println("different proposal refused after reopen:", refused))
 	try.To1(fmt.Println(
-		"selected proposal signs after reopen:", verifyErr == nil,
+		"selected acceptance verifies after reopen:", verifyErr == nil,
 	))
 	// Output:
 	// selected proposal survives reopen: true
 	// different proposal refused after reopen: true
-	// selected proposal signs after reopen: true
+	// selected acceptance verifies after reopen: true
 }
 
 func TestVaultChoiceBeforeSigningFailure(t *testing.T) {
