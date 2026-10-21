@@ -74,11 +74,20 @@ Introduction is not trust, and low expected incentive is not prevention.**
 
 ## Detached acceptance helpers
 
-`Path.SignAcceptance(child)` produces a detached `key.Signature`;
+The low-level `Path.SignAcceptance(child)` produces a detached `key.Signature`;
 `Path.VerifyAcceptance(signature)` checks it with the final child's public key.
 Both require at least two path entries and a nonempty child public key.
 Signing requires a matching handle; verification requires a signature.
 Neither method mutates the path.
+
+`Path.SignAcceptanceFor(child, expectedRoot, expectedParent)` is the opt-in
+checked workflow: it proves the offered path, matches its immediate parent
+by public-key bytes, then delegates to the matching child's signer.
+The caller independently establishes both expected keys and controls the key;
+the chosen parent may be a descendant of the root.
+Success means those checks passed and the child signed, not human approval,
+device authority, ancestor consent, or first acceptance.
+Inputs remain unchanged, no state is recorded, and errors return no signature.
 
 The development purpose tag is exactly `intro-acceptance/v1`.
 `key.HashTagged` binds the whole canonical `Path.Bytes()`, including parent
@@ -87,8 +96,9 @@ The experimental `test/intro-acceptance/v1` signatures are incompatible.
 Acceptance is never inserted into an edge or parent signature.
 Exact copies verify repeatedly; changed or re-signed bytes need fresh acceptance.
 
-Callers separately prove the path, select the root and parent, and establish
-human consent.
+Low-level signing leaves path proof and parent checking to callers.
+Callers of either workflow select the expected root and parent and establish
+human consent separately.
 These helpers change no modeled state, implement neither `Introduce` nor
 `VerifyReceived`, and never promote evidence into `Known`.
 One-time enrollment and global parent uniqueness remain unresolved;

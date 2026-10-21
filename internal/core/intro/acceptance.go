@@ -15,12 +15,50 @@ const acceptancePurpose = "intro-acceptance/v1"
 // or a signature that does not verify for the offered path's final child.
 var ErrBadAcceptance = errors.New("invalid introduction acceptance")
 
+// ErrWrongParent reports an empty expected parent or an offered immediate
+// parent whose public-key bytes do not match the caller's choice.
+var ErrWrongParent = errors.New(
+	"introduction path does not name the expected parent",
+)
+
+// SignAcceptanceFor proves the offered path under expectedRoot and checks its
+// immediate parent against nonempty expectedParent before calling
+// SignAcceptance.
+// The caller must independently establish both expected keys and control the
+// child's signing key; an intended parent may be a descendant of the root.
+//
+// Success means the existing path proof passed, the immediate parent matched,
+// and the matching child handle signed. It establishes neither human approval,
+// device authority, ancestor consent, first acceptance, nor global parent
+// uniqueness. No state is recorded; the path and expected keys are unchanged.
+// Every returned error accompanies a nil signature and retains its error chain.
+func (p Path) SignAcceptanceFor(
+	child key.Handle,
+	expectedRoot, expectedParent key.Public,
+) (acceptance key.Signature, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err)
+
+	assert.SLonger(p, 1, ErrBadAcceptance)
+	try.To(p.ProveFromRoot(expectedRoot))
+
+	assert.SNotEmpty(expectedParent, ErrWrongParent)
+	assert.That(
+		p.SecondLastEdge().Public().Equal(expectedParent),
+		ErrWrongParent,
+	)
+
+	signed := try.To1(p.SignAcceptance(child))
+	return signed, nil
+}
+
 // SignAcceptance signs the complete canonical path, including parent
 // signatures, with its final child's matching handle. The signature is detached;
 // the path is unchanged. Every returned error is accompanied by a nil signature.
 // Key-access and signing errors retain their underlying error chains.
 //
 // The caller separately proves the path and selects its root and parent.
+// Use SignAcceptanceFor to check the path and chosen parent before signing.
 // Signing establishes neither human consent nor first acceptance, enrolls no
 // node, and does not change Known.
 func (p Path) SignAcceptance(child key.Handle) (

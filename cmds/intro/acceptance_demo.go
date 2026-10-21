@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/lainio/err2"
-	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	coreintro "github.com/lainio/ic/internal/core/intro"
 	"github.com/lainio/ic/key"
@@ -63,13 +62,11 @@ func runAcceptanceDemo(cmd *cobra.Command, args []string) (err error) {
 	var acceptance key.Signature
 	switch args[0] {
 	case "valid", "transferred":
-		try.T(direct.ProveFromRoot(expectedRoot))("checking offered path")
-		assert.That(direct.LastEdge().Public().Equal(aliceInfo.Public),
-			"offered final child must be Alice")
-		assert.That(direct.SecondLastEdge().Public().Equal(expectedRoot),
-			"offered parent must be R")
+		expectedParent := expectedRoot // Alice selects R for this offer.
 
-		acceptance = try.T1(direct.SignAcceptance(alice))(
+		acceptance = try.T1(direct.SignAcceptanceFor(
+			alice, expectedRoot, expectedParent,
+		))(
 			"signing Alice's acceptance of the direct proposal",
 		)
 	case "bad-link":

@@ -379,3 +379,42 @@ func ExamplePath_SignAcceptance() {
 	// Alice's acceptance verifies: true
 	// acceptance transfers to other parent: false
 }
+
+// ExamplePath_SignAcceptanceFor checks Alice's chosen parent before signing.
+// A valid path proof alone does not establish that parent choice.
+func ExamplePath_SignAcceptanceFor() {
+	defer err2.Catch(err2.Stdout)
+
+	root, alice, bob := key.New(), key.New(), key.New()
+	expectedRoot := key.Public(try.To1(root.CBORPublicKey()))
+	expectedParent := expectedRoot // Alice selects R in this scenario.
+	aliceInfo := key.InfoFromHandle(alice)
+
+	rootPath := intro.New(key.InfoFromHandle(root))
+	direct := rootPath.Introduce(root, aliceInfo)
+	bobPath := rootPath.Introduce(root, key.InfoFromHandle(bob))
+	indirect := bobPath.Introduce(bob, aliceInfo)
+	assert.NoError(direct.ProveFromRoot(expectedRoot))
+	assert.NoError(indirect.ProveFromRoot(expectedRoot))
+
+	acceptance := try.To1(direct.SignAcceptanceFor(
+		alice, expectedRoot, expectedParent,
+	))
+	directErr := direct.VerifyAcceptance(acceptance)
+	assert.NoError(directErr)
+
+	rejected, err := indirect.SignAcceptanceFor(
+		alice, expectedRoot, expectedParent,
+	)
+	assert.ErrorIs(err, intro.ErrWrongParent)
+	assert.SNil(rejected)
+
+	fmt.Println("chosen-parent acceptance verifies:", directErr == nil)
+	fmt.Println("other-parent proposal rejected:",
+		errors.Is(err, intro.ErrWrongParent))
+	fmt.Println("rejected proposal returns no signature:", rejected == nil)
+	// Output:
+	// chosen-parent acceptance verifies: true
+	// other-parent proposal rejected: true
+	// rejected proposal returns no signature: true
+}
