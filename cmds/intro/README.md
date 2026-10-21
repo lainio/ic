@@ -1,5 +1,109 @@
 # Introduction path and acceptance demos
 
+## Two-terminal Root -> Alice exchange
+
+This disposable developer demo uses two CLI processes with separate fresh
+signing handles and an external local Core NATS broker.
+The broker is a third process/service, not a third IntroTree participant.
+If already installed, the owner can start it in another pane:
+
+~~~sh
+nats-server -a 127.0.0.1 -p 4222
+~~~
+
+In Root's terminal:
+
+~~~sh
+go run ./cmd/tdc intro exchange-demo root --session demo1
+~~~
+
+Root subscribes to both subjects and flushes them before printing its actual
+full CBOR public-key bytes as hex and `ready for Alice`.
+Copy that entire public hex value into Alice's command, replacing
+`ROOT_PUBLIC_KEY_HEX`:
+
+~~~sh
+go run ./cmd/tdc intro exchange-demo accept --session demo1 --root ROOT_PUBLIC_KEY_HEX
+~~~
+
+With a built executable, the same commands are
+`tdc intro exchange-demo root --session demo1` and
+`tdc intro exchange-demo accept --session demo1 --root ROOT_PUBLIC_KEY_HEX`.
+This manual public-value copy independently selects Alice's expected root
+and parent; it is not production provisioning or discovery.
+The `accept` invocation authorizes this one direct-root offer, with no
+interactive human consent ceremony.
+
+Alice requests an offer with canonical CBOR `key.Info` containing only her
+public key. Storage IDs are not authority and are omitted: the pinned demo
+backend's `ID()` wraps private-key material, so neither role sends it.
+Root signs and retains one exact `R -> Alice` proposal.
+Alice parses it, checks the direct shape, and uses
+`onboarding.SignAfterStoredChoice` to check the pinned root/parent/child,
+commit choice, sign, verify, and save the detached acceptance.
+She verifies locally, then sends only that signature back.
+Root runs `VerifyAcceptance` against its retained proposal and replies with
+`acceptance-verified` only after that check succeeds.
+
+Successful stdout summaries (not complete terminal transcripts):
+
+~~~text
+root public key (hex): <actual full public-key hex, different each run>
+ready for Alice
+proposal sent: R -> Alice
+Alice's acceptance verifies: true
+~~~
+
+~~~text
+proposal received: R -> Alice
+choice and acceptance saved: true
+local acceptance verifies: true
+issuer reported acceptance verified: true
+~~~
+
+Both roles require `--session`: 1..64 ASCII letters, digits, `_` or `-`.
+It scopes exactly `ic.intro-demo.<session>.offer` and
+`ic.intro-demo.<session>.acceptance`; it is no identity, authorization,
+shared secret, or enrollment record. Use a fresh session for each run.
+Both accept `--nats-url` (default `nats://127.0.0.1:4222`) and positive
+`--timeout` (default `2m`, total invocation deadline).
+Only one plain loopback endpoint is allowed; `localhost` resolves here to
+`127.0.0.1`, and literal IPv4/IPv6 loopback addresses are supported.
+No credentials, public server, reconnect, resend, or concurrent clients.
+The private payload limit is 64 KiB, also bounding error diagnostics.
+Application rejections use an empty body and one private error header;
+diagnostic text does not preserve Go error identity across processes.
+Rejections, missing responders, timeouts, and output errors exit nonzero;
+the root CLI prints diagnostics on stderr (`go run` may add its exit status).
+
+Alice owns and removes a private temporary bbolt Vault/database, clears the
+existing provider's secret, and keeps her key handle only for this invocation.
+Choice and acceptance are auxiliary saved evidence, not membership.
+NATS is only byte transport: no end-to-end confidentiality, anti-replay
+protocol, production admission, restart recovery, global one-parent
+enforcement, rotation, or ancestor policy is claimed.
+The acknowledgement is an unsigned peer report, not independent authority,
+a signed certificate, or an authenticated acknowledgement protocol.
+The meaningful observation is Root's actual signature check; flushing a
+message is no proof that its peer verified it.
+The authority bridge to V19 `Edges`/`Known` remains unresolved.
+This adds no V19 transition, enrollment, trust, or pairwise connection.
+
+Ordinary tests are broker-free. Explicit integration validation, with an
+owner-provided permitted local broker already running:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^TestExchangeDemoNATS$' -v ./cmds/intro -args -intro-demo-nats-url nats://127.0.0.1:4222
+~~~
+
+Without the flag that test explicitly skips; with it, broker absence or
+timeout fails. It runs independent NATS clients in one test process, including
+wrong-root and invalid-acceptance rejection. This is integration evidence,
+not evidence that the two manual CLI processes above have been executed.
+Read the Root runner, Alice runner, and tests after this walkthrough.
+
+## Generated path fixtures
+
 Run a generated fixture through the existing `tdc` executable:
 
 ~~~sh
