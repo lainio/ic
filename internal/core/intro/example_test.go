@@ -419,9 +419,9 @@ func ExamplePath_SignAcceptanceFor() {
 	// rejected proposal returns no signature: true
 }
 
-// ExamplePath_localAcceptanceChoice uses a test-local wallet-policy prototype:
-// localAcceptanceChoice is private scaffolding, not an intro API.
-func ExamplePath_localAcceptanceChoice() {
+// ExampleAcceptanceChoice_Accept remembers one exact proposal in memory.
+// This signing aid does not establish one-time enrollment or change Known.
+func ExampleAcceptanceChoice_Accept() {
 	defer err2.Catch(err2.Stdout)
 
 	root, alice, bob := key.New(), key.New(), key.New()
@@ -435,27 +435,28 @@ func ExamplePath_localAcceptanceChoice() {
 	assert.NoError(direct.ProveFromRoot(expectedRoot))
 	assert.NoError(indirect.ProveFromRoot(expectedRoot))
 
-	choice := newLocalAcceptanceChoice(alice, expectedRoot)
-	acceptance := try.To1(choice.accept(direct, expectedRoot))
+	choice := intro.NewAcceptanceChoice(alice, expectedRoot)
+
+	acceptance := try.To1(choice.Accept(direct, expectedRoot))
 	verified := direct.VerifyAcceptance(acceptance)
 	assert.NoError(verified)
 	assert.ErrorIs(
 		indirect.VerifyAcceptance(acceptance), intro.ErrBadAcceptance,
 	)
 
-	retry := try.To1(choice.accept(direct.Clone(), expectedRoot))
+	retry := try.To1(choice.Accept(direct.Clone(), expectedRoot))
 	reused := bytes.Equal(retry, acceptance)
 	assert.That(reused)
 
-	rejected, err := choice.accept(indirect, bobPublic)
-	assert.ErrorIs(err, errDifferentAcceptance)
+	rejected, err := choice.Accept(indirect, bobPublic)
+	assert.ErrorIs(err, intro.ErrDifferentAcceptance)
 	assert.ErrorIsNot(err, intro.ErrWrongParent)
 	assert.SNil(rejected)
 
 	fmt.Println("chosen acceptance verifies:", verified == nil)
 	fmt.Println("same proposal reuses acceptance:", reused)
 	fmt.Println("different proposal rejected:",
-		errors.Is(err, errDifferentAcceptance) && rejected == nil)
+		errors.Is(err, intro.ErrDifferentAcceptance) && rejected == nil)
 	// Output:
 	// chosen acceptance verifies: true
 	// same proposal reuses acceptance: true

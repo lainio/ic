@@ -4,7 +4,7 @@ Date: 2026-10-19
 
 Status: product rationale captured from the owner's design discussion.
 Explicit, parent-bound acceptance is the agreed design direction.
-Detached acceptance signature helpers are implemented.
+Detached acceptance helpers and the scoped local signing aid are implemented.
 One-time enrollment and a human-consent ceremony are not implemented.
 This note does not change V19.
 
@@ -103,13 +103,44 @@ These helpers change no modeled state, implement neither `Introduce` nor
 `VerifyReceived`, and never promote evidence into `Known`.
 One-time enrollment and global parent uniqueness remain unresolved;
 a signature cannot replace `GlobalHasParent`.
-Only this helper contract is authorized.
+Only these helper contracts and the scoped local signing aid below are authorized.
 The product rationale alone authorizes no registry or further protocol machinery.
+
+## Local acceptance choice
+
+`NewAcceptanceChoice(child, expectedRoot)` creates a narrowly scoped,
+auxiliary signing-workflow extension.
+It borrows the handle and copies the independently supplied root without I/O,
+membership, or human consent.
+Use the returned pointer without copying it after use;
+the owner must serialize access, including reentrant callbacks.
+
+`Accept(offered, expectedParent)` checks the path, parent, and matching child,
+then owns the exact proposal before signing.
+Invalid initial attempts reserve nothing.
+Selection compares complete `Path.Bytes()` representations.
+Exact retries recheck the root and parent;
+after success they return independent copies of the cached signature.
+A different proposal is refused, including a re-signed same-parent revision.
+Signing errors return no signature and retain selection;
+only explicit retries can sign again.
+There is no reset/recovery API; recovery policy remains unfinished.
+
+Private state is a remembered proposal and cached signature,
+not `Edges`, `Received`, `Known`, or proof of membership.
+This guard does not implement `¬GlobalHasParent(v)` or establish what other
+wallets/devices signed.
+A fresh instance, restart, restored state, or direct key use bypasses it.
+Global uniqueness and authority remain open.
+No trust, tree-position policy, or automatic `Known` promotion follows.
+No TLA+ action/source changes are authorized, and no full refinement is claimed.
+[S1, S3]
 
 ## Source locators
 
-[S1] Project source `IntroTreeV19.tla`, lines 371-397:
-`CanIntroduce` and `Introduce`.
+[S1] Specification checkout `2cd914be966ad4bdf36b575e2678cad7441fcd75`,
+`models/active/IntroTreeV19.tla`:
+`CanIntroduce`, lines 371-379; `Introduce`, lines 381-397.
 These specify the existing one-parent guard and modeled state changes,
 not Alice's proposed acceptance protocol.
 
@@ -117,6 +148,9 @@ not Alice's proposed acceptance protocol.
 section 3, “Core semantic boundaries”, lines 65-72:
 “Introduction ≠ trust”, “Current ad ≠ historical authentic ad”,
 and “Bootstrap ≠ pairwise reuse”.
+
+[S3] Same specification checkout, `models/active/IntroTreeV19.tla`,
+`VerifyReceived`, lines 413-424: explicit promotion into `Known`.
 
 The user-goal, responsibility, and incentive paragraphs record the owner's
 discussion of 2026-10-19.
