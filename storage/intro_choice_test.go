@@ -14,16 +14,18 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/core/intro"
+	"github.com/lainio/ic/internal/onboarding"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
 
-// ExampleVault_choiceBeforeSigning uses one dedicated Vault for Alice and R.
+// ExampleVault_choiceBeforeSigning uses onboarding.SignAfterStoredChoice with
+// one dedicated Vault for Alice and R.
 // The owner selects an offer; receiving a claim never enrolls it automatically.
-// This first persistence contract is a prototype for owner review, not a public
-// wallet schema. It changes no Edges, Received, Known, trust, PW, device, or
-// recovery state and supplies no GlobalHasParent predicate or uniqueness proof
-// for another participant.
+// The helper persists auxiliary local signing choice in a private development
+// layout, not a public wallet schema. It changes no Edges, Received, Known,
+// trust, PW, device, or recovery state and supplies no GlobalHasParent predicate
+// or uniqueness proof for another participant.
 //
 // Assume one cooperating caller and an intact, non-rolled-back Vault. Reopening
 // here keeps the same process, keys, and provider alive; it tests no process
@@ -59,7 +61,7 @@ func ExampleVault_choiceBeforeSigning() {
 	defer func() { try.Out(vault.Close()).Logf() }()
 
 	// Alice explicitly chooses A with R as her immediate parent.
-	acceptance := try.To1(signAfterStoredChoice(
+	acceptance := try.To1(onboarding.SignAfterStoredChoice(
 		vault, alice, expectedRoot, expectedRoot, a,
 	))
 	try.To(a.VerifyAcceptance(acceptance))
@@ -75,7 +77,7 @@ func ExampleVault_choiceBeforeSigning() {
 	preserved := bytes.Equal(stored, aBytes)
 	assert.That(preserved)
 
-	rejected, err := signAfterStoredChoice(
+	rejected, err := onboarding.SignAfterStoredChoice(
 		reopenedVault, alice, expectedRoot, bobPublic, b,
 	)
 	assert.ErrorIs(err, intro.ErrDifferentAcceptance)
@@ -84,7 +86,7 @@ func ExampleVault_choiceBeforeSigning() {
 	refused := errors.Is(err, intro.ErrDifferentAcceptance) && rejected == nil
 
 	// Retry the original proposal without rebuilding its signed parent edge.
-	retry := try.To1(signAfterStoredChoice(
+	retry := try.To1(onboarding.SignAfterStoredChoice(
 		reopenedVault, alice, expectedRoot, expectedRoot, a,
 	))
 	verifyErr := a.VerifyAcceptance(retry)
@@ -103,55 +105,6 @@ func ExampleVault_choiceBeforeSigning() {
 	// selected proposal survives reopen: true
 	// different proposal refused after reopen: true
 	// selected proposal signs after reopen: true
-}
-
-// Private test scaffolding: persists choice only, not a cached acceptance or
-// membership. Every invocation consults storage; exact retries may sign again.
-func signAfterStoredChoice(
-	vault *storage.Vault, child key.Handle,
-	expectedRoot, expectedParent key.Public, offered intro.Path,
-) (acceptance key.Signature, err error) {
-	defer assert.PushAsserter(assert.Plain)()
-	defer err2.Handle(&err, nil)
-
-	candidate := offered.Clone()
-	assert.SLonger(candidate, 1, intro.ErrBadAcceptance)
-	try.To(candidate.ProveFromRoot(expectedRoot))
-	assert.SNotEmpty(expectedParent, intro.ErrWrongParent)
-	assert.That(
-		candidate.SecondLastEdge().Public().Equal(expectedParent),
-		intro.ErrWrongParent,
-	)
-	assert.INotNil(child, intro.ErrBadAcceptance)
-	public := candidate.LastEdge().Public()
-	assert.SNotEmpty(public, intro.ErrBadAcceptance)
-	signerPublic := try.To1(child.CBORPublicKey())
-	assert.That(public.Equal(signerPublic), intro.ErrBadAcceptance)
-	proposal := candidate.Bytes()
-
-	try.To(vault.Update(func(tx storage.WriteTx) (err error) {
-		defer err2.Handle(&err, nil)
-		defer assert.PushAsserter(assert.Plain)()
-
-		records := try.To1(tx.EnsureChild([]byte("introduction-choice-demo")))
-		stored, found := try.To2(records.Get([]byte("selected-proposal")))
-		if found {
-			assert.That(
-				bytes.Equal(stored, proposal),
-				intro.ErrDifferentAcceptance,
-			)
-			return nil
-		}
-		try.To(records.Put([]byte("selected-proposal"), proposal))
-		return nil
-	}))
-
-	// Update has returned successfully: the selection transaction has ended.
-	// Signing errors keep that choice and discard any partial signature.
-	signed := try.To1(candidate.SignAcceptanceFor(
-		child, expectedRoot, expectedParent,
-	))
-	return signed, nil
 }
 
 func TestVaultChoiceBeforeSigningFailure(t *testing.T) {
@@ -195,7 +148,7 @@ func TestVaultChoiceBeforeSigningFailure(t *testing.T) {
 			return nil
 		},
 	}
-	failed, err := signAfterStoredChoice(
+	failed, err := onboarding.SignAfterStoredChoice(
 		vault, signer, expectedRoot, expectedRoot, a,
 	)
 	assert.ErrorIs(err, cause)
@@ -209,7 +162,7 @@ func TestVaultChoiceBeforeSigningFailure(t *testing.T) {
 	reopenedVault := try.To1(reopened.OpenVault(ctx, p.vault, p.id, p))
 	defer func() { try.Out(reopenedVault.Close()).Logf() }()
 	fresh := &choiceSigningHandle{Handle: alice}
-	rejected, err := signAfterStoredChoice(
+	rejected, err := onboarding.SignAfterStoredChoice(
 		reopenedVault, fresh, expectedRoot, bobPublic, b,
 	)
 	assert.ErrorIs(err, intro.ErrDifferentAcceptance)
@@ -217,7 +170,7 @@ func TestVaultChoiceBeforeSigningFailure(t *testing.T) {
 	assert.SNil(rejected)
 	assert.Equal(fresh.signCalls, 0)
 
-	acceptance := try.To1(signAfterStoredChoice(
+	acceptance := try.To1(onboarding.SignAfterStoredChoice(
 		reopenedVault, fresh, expectedRoot, expectedRoot, a,
 	))
 	assert.Equal(fresh.signCalls, 1)
@@ -276,7 +229,7 @@ func TestVaultChoiceBeforeSigningRejectedSelection(t *testing.T) {
 				p.remainingEncryptions = 0
 				p.mu.Unlock()
 			}
-			failed, err := signAfterStoredChoice(
+			failed, err := onboarding.SignAfterStoredChoice(
 				vault, signer, expectedRoot, tc.parent, a,
 			)
 			if tc.exhaust {
@@ -291,7 +244,7 @@ func TestVaultChoiceBeforeSigningRejectedSelection(t *testing.T) {
 			assert.ThatNot(found)
 			assert.SNil(stored)
 
-			acceptance := try.To1(signAfterStoredChoice(
+			acceptance := try.To1(onboarding.SignAfterStoredChoice(
 				vault, signer, expectedRoot, bobPublic, b,
 			))
 			assert.Equal(signer.signCalls, 1)

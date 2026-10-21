@@ -4,7 +4,8 @@ Date: 2026-10-19
 
 Status: product rationale captured from the owner's design discussion.
 Explicit, parent-bound acceptance is the agreed design direction.
-Detached acceptance helpers and the scoped local signing aid are implemented.
+Detached acceptance helpers, the in-memory choice, and the stored-choice
+application helper are implemented.
 One-time enrollment and a human-consent ceremony are not implemented.
 This note does not change V19.
 
@@ -103,7 +104,7 @@ These helpers change no modeled state, implement neither `Introduce` nor
 `VerifyReceived`, and never promote evidence into `Known`.
 One-time enrollment and global parent uniqueness remain unresolved;
 a signature cannot replace `GlobalHasParent`.
-Only these helper contracts and the scoped local signing aid below are authorized.
+Only these helper contracts and the scoped local signing aids below are authorized.
 The product rationale alone authorizes no registry or further protocol machinery.
 
 ## Local acceptance choice
@@ -135,6 +136,46 @@ Global uniqueness and authority remain open.
 No trust, tree-position policy, or automatic `Known` promotion follows.
 No TLA+ action/source changes are authorized, and no full refinement is claimed.
 [S1, S3]
+
+## Stored choice application helper
+
+`internal/onboarding` composes the existing introduction and storage APIs:
+
+~~~go
+func SignAfterStoredChoice(
+    vault *storage.Vault,
+    child key.Handle,
+    expectedRoot, expectedParent key.Public,
+    offered intro.Path,
+) (acceptance key.Signature, err error)
+~~~
+
+The caller supplies an open, dedicated Vault for one child/root binding and
+independently established expected keys.
+Use is owner-serialized, including reentrant access, with an intact Vault.
+The function borrows the Vault and signing handle, closes neither, and
+stores no key handle or provider secret.
+
+After cloning, it checks shape, proof, expected parent, and matching child.
+One `Vault.Update` reads the choice, stores an absent proposal, or matches
+complete canonical proposal bytes.
+Different proposals return `intro.ErrDifferentAcceptance`.
+Empty/corrupt records cannot be replaced as absent; read errors propagate.
+Only after successful `Update` does `SignAcceptanceFor` run outside the transaction.
+All errors retain their cause and return no signature;
+signing failure retains selection even if the signer produced bytes.
+Every call consults storage; identical retries may sign again.
+Unlike `intro.AcceptanceChoice`, no signature is cached or stored.
+
+Only auxiliary local signing choice is persisted.
+No `Edges`, `Received`, `Known`, trust, PW, device, or recovery authority is created.
+This implements neither V19 `Introduce` nor `VerifyReceived` and supplies
+no global `GlobalHasParent` predicate. [S1, S2, S3]
+Deletion, copying, restoration, rollback, another Vault/device, or external
+key use can bypass the restriction.
+Same-process reopen tests establish neither process-restart key custody,
+physical crash durability, nor globally unique parenthood.
+No concurrency, reentrancy, or rollback-resistance guarantee is added.
 
 ## Source locators
 
