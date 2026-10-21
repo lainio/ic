@@ -53,10 +53,10 @@ func ExampleVault_choiceBeforeSigning() {
 
 	ctx := context.Background()
 	db := try.To1(storage.OpenBolt(path))
-	defer func() { _ = db.Close() }()
+	defer func() { try.Out(db.Close()).Logf() }()
 	try.To(db.CreateVault(ctx, p.vault, p.id, p))
 	vault := try.To1(db.OpenVault(ctx, p.vault, p.id, p))
-	defer func() { _ = vault.Close() }()
+	defer func() { try.Out(vault.Close()).Logf() }()
 
 	// Alice explicitly chooses A with R as her immediate parent.
 	acceptance := try.To1(signAfterStoredChoice(
@@ -67,9 +67,9 @@ func ExampleVault_choiceBeforeSigning() {
 	try.To(db.Close())
 
 	reopened := try.To1(storage.OpenBolt(path))
-	defer func() { _ = reopened.Close() }()
+	defer func() { try.Out(reopened.Close()).Logf() }()
 	reopenedVault := try.To1(reopened.OpenVault(ctx, p.vault, p.id, p))
-	defer func() { _ = reopenedVault.Close() }()
+	defer func() { try.Out(reopenedVault.Close()).Logf() }()
 	stored, found := try.To2(readSelectedProposal(reopenedVault))
 	assert.That(found, "selected proposal missing after reopen")
 	preserved := bytes.Equal(stored, aBytes)
@@ -176,10 +176,10 @@ func TestVaultChoiceBeforeSigningFailure(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "vault.db")
 	ctx := context.Background()
 	db := try.To1(storage.OpenBolt(path))
-	defer func() { _ = db.Close() }()
+	defer func() { try.Out(db.Close()).Logf() }()
 	try.To(db.CreateVault(ctx, p.vault, p.id, p))
 	vault := try.To1(db.OpenVault(ctx, p.vault, p.id, p))
-	defer func() { _ = vault.Close() }()
+	defer func() { try.Out(vault.Close()).Logf() }()
 
 	cause := errors.New("injected error after signing")
 	signer := &choiceSigningHandle{
@@ -205,9 +205,9 @@ func TestVaultChoiceBeforeSigningFailure(t *testing.T) {
 	try.To(db.Close())
 
 	reopened := try.To1(storage.OpenBolt(path))
-	defer func() { _ = reopened.Close() }()
+	defer func() { try.Out(reopened.Close()).Logf() }()
 	reopenedVault := try.To1(reopened.OpenVault(ctx, p.vault, p.id, p))
-	defer func() { _ = reopenedVault.Close() }()
+	defer func() { try.Out(reopenedVault.Close()).Logf() }()
 	fresh := &choiceSigningHandle{Handle: alice}
 	rejected, err := signAfterStoredChoice(
 		reopenedVault, fresh, expectedRoot, bobPublic, b,
@@ -261,10 +261,10 @@ func TestVaultChoiceBeforeSigningRejectedSelection(t *testing.T) {
 			path := filepath.Join(t.TempDir(), "vault.db")
 			ctx := context.Background()
 			db := try.To1(storage.OpenBolt(path))
-			defer func() { _ = db.Close() }()
+			defer func() { try.Out(db.Close()).Logf() }()
 			try.To(db.CreateVault(ctx, p.vault, p.id, p))
 			vault := try.To1(db.OpenVault(ctx, p.vault, p.id, p))
-			defer func() { _ = vault.Close() }()
+			defer func() { try.Out(vault.Close()).Logf() }()
 			signer := &choiceSigningHandle{Handle: alice}
 
 			// Exhaust only this fixture after creating/opening its Vault.
