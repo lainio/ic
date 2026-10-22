@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,7 +26,7 @@ import (
 )
 
 // ExampleVault_ownerStatus observes one dedicated Vault through an unmounted
-// owner handler. Only explicit workflow calls select and complete the choice.
+// protected owner handler. Only explicit workflow calls change the choice.
 func ExampleVault_ownerStatus() {
 	defer err2.Catch(err2.Stdout)
 
@@ -49,9 +50,18 @@ func ExampleVault_ownerStatus() {
 	try.To(db.CreateVault(ctx, p.vault, p.id, p))
 	vault := try.To1(db.OpenVault(ctx, p.vault, p.id, p))
 	defer func() { try.Out(vault.Close()).Logf() }()
-	handler := ownerapi.NewStatusHandler(vault, expectedRoot, expectedChild)
 
-	before := try.To1(readOwnerStatus(handler))
+	// Generate a dedicated status credential separately from the provider secret.
+	token := make([]byte, 32)
+	try.To1(rand.Read(token))
+	handler := try.To1(ownerapi.NewAuthenticatedStatusHandler(
+		vault, expectedRoot, expectedChild, token,
+	))
+	authorization := "Bearer " + hex.EncodeToString(token)
+	withoutToken := requestOwnerStatus(handler)
+	assert.Equal(withoutToken.Code, http.StatusUnauthorized)
+
+	before := try.To1(readOwnerStatus(handler, authorization))
 	assert.Equal(before, "unselected")
 
 	// Inject a signing error after selection, leaving a pending choice.
@@ -62,7 +72,7 @@ func ExampleVault_ownerStatus() {
 	)
 	assert.ErrorIs(err, cause)
 	assert.SNil(failed)
-	pending := try.To1(readOwnerStatus(handler))
+	pending := try.To1(readOwnerStatus(handler, authorization))
 	assert.Equal(pending, "pending")
 
 	signer.signErr = nil
@@ -70,7 +80,7 @@ func ExampleVault_ownerStatus() {
 		vault, signer, expectedRoot, expectedRoot, offered,
 	))
 	try.To(offered.VerifyAcceptance(acceptance))
-	completed := try.To1(readOwnerStatus(handler))
+	completed := try.To1(readOwnerStatus(handler, authorization))
 	assert.Equal(completed, "completed")
 
 	try.To(vault.Close())
@@ -78,10 +88,12 @@ func ExampleVault_ownerStatus() {
 	clear(p.secret)
 	try.To(os.RemoveAll(dir))
 
+	try.To1(fmt.Println("without owner token:", withoutToken.Code))
 	try.To1(fmt.Println("before selection:", before))
 	try.To1(fmt.Println("after signing error:", pending))
 	try.To1(fmt.Println("after explicit retry:", completed))
 	// Output:
+	// without owner token: 401
 	// before selection: unselected
 	// after signing error: pending
 	// after explicit retry: completed
@@ -251,6 +263,21 @@ func TestOwnerStatusInspectionFailures(t *testing.T) {
 			after := p.remainingEncryptions
 			p.mu.Unlock()
 			assert.Equal(after, remaining)
+
+			token := make([]byte, 32)
+			try.To1(rand.Read(token))
+			protected := try.To1(ownerapi.NewAuthenticatedStatusHandler(
+				vault, expectedRoot, expectedChild, token,
+			))
+			denied := requestOwnerStatus(protected)
+			assert.Equal(denied.Code, http.StatusUnauthorized)
+			assert.Equal(denied.Body.String(), "Unauthorized\n")
+			failed := requestOwnerStatus(
+				protected, "Bearer "+hex.EncodeToString(token),
+			)
+			assert.Equal(failed.Code, http.StatusInternalServerError)
+			assert.Equal(failed.Body.String(), "Internal Server Error\n")
+			assert.Equal(failed.Header().Get("Cache-Control"), "no-store")
 			try.To(vault.Close())
 			try.To(db.Close())
 		})
@@ -369,13 +396,12 @@ func (w *ownerStatusFailedWriter) Write([]byte) (int, error) {
 	return 0, errors.New("response write failed")
 }
 
-func readOwnerStatus(handler http.Handler) (choice string, err error) {
+func readOwnerStatus(
+	handler http.Handler, authorization ...string,
+) (choice string, err error) {
 	defer err2.Handle(&err)
 
-	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(
-		http.MethodGet, "/owner/status", nil,
-	))
+	response := requestOwnerStatus(handler, authorization...)
 	assert.Equal(response.Code, http.StatusOK)
 	assert.Equal(response.Header().Get("Content-Type"), "application/json")
 	assert.Equal(response.Header().Get("Cache-Control"), "no-store")
@@ -385,4 +411,16 @@ func readOwnerStatus(handler http.Handler) (choice string, err error) {
 	choice, found := fields["choice"]
 	assert.That(found)
 	return choice, nil
+}
+
+func requestOwnerStatus(
+	handler http.Handler, authorization ...string,
+) *httptest.ResponseRecorder {
+	request := httptest.NewRequest(http.MethodGet, "/owner/status", nil)
+	for _, value := range authorization {
+		request.Header.Add("Authorization", value)
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
 }

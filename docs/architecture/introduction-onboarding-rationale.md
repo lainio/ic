@@ -231,12 +231,28 @@ Request input cannot select identities or actions.
 Inspection errors, including a closed Vault or inconsistent evidence, return
 generic HTTP 500 text without a choice or repair; all responses use `no-store`.
 
-This owner-control handler remains unmounted and adds no authentication.
-Authentication/access control is required before connecting a running owner API;
-a local URL alone is not an authorization mechanism.
+The bare constructor adds no authentication and must never be mounted without
+protection. `NewAuthenticatedStatusHandler` composes it with a credential check
+before routing or inspection: the caller supplies 32 freshly generated random
+bytes dedicated to status access, independent of signing keys, identities,
+Vault/provider secrets, and transport sessions or addresses. The constructor
+validates length, owns a lowercase hex encoding, and performs no Vault I/O.
+Exactly one `Authorization: Bearer <token>` header must carry that case-sensitive
+64-character encoding; other inputs grant nothing. Rejections return generic
+HTTP 401 with a Bearer challenge and `no-store`, without invoking the handler.
+This scoped check authorizes only reading this configured status surface, not
+human identity, Alice's signing-key control, enrollment, trust, a device grant,
+or node-state mutation. No V19 transition changes; it is not a complete owner
+authentication system or a claim of full OAuth conformance.
+
+Both constructors remain unmounted. A future service must select a separate
+owner endpoint, protect credential provisioning, storage, and transmission,
+and establish its lifetime. A local URL alone is not authorization; bearer
+possession supplies neither encryption nor server authentication, and this
+change does not authorize remote plaintext exposure.
 Peer HTTP `/intro/offer` and `/intro/acceptance`, NATS demos, listeners, and CLI
 registrations remain unchanged and do not expose it.
-Restartable identity and authenticated owner access remain separate work.
+Restartable identity and production owner access remain separate work.
 
 ## Source locators
 

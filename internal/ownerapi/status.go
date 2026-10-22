@@ -21,15 +21,17 @@ type statusResponse struct {
 	Choice string `json:"choice"`
 }
 
-// NewStatusHandler serves GET /owner/status using ReadStoredChoice. It borrows
-// an open, dedicated child/root Vault and copies the independently established
-// expected identities without I/O. The caller owns the Vault/provider lifecycle.
+// NewStatusHandler is the bare GET /owner/status handler using ReadStoredChoice.
+// It borrows an open, dedicated child/root Vault and copies independently
+// established expected identities without I/O. The caller owns the
+// Vault/provider lifecycle.
 // No signing handle is needed, and requests cannot change the identity binding.
 //
 // The labels describe saved local choice, not enrollment, trust, peer delivery,
-// or V19 Known. This handler has no authentication and remains unmounted;
-// authentication/access control is required before connecting an owner API.
-// A local URL alone is not authorization. Never mount it on a peer surface.
+// or V19 Known. This bare handler has no authentication: never mount it without
+// protection. NewAuthenticatedStatusHandler composes it with an owner token
+// check. Both remain unmounted. A local URL alone is not authorization.
+// Never mount either handler on a peer surface.
 func NewStatusHandler(
 	vault *storage.Vault,
 	expectedRoot, expectedChild key.Public,
