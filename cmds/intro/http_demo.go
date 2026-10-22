@@ -166,15 +166,25 @@ func runHTTPDemoRoot(
 			"ready for Alice\nstop with Ctrl+C\n",
 		hex.EncodeToString(public), listener.Addr().String(),
 	))
+	handler := newHTTPExchangeHandler(root)
+	owned = false
+	return serveHTTPDemo(ctx, listener, handler)
+}
+
+// Takes ownership of listener, joins Serve, and finishes bounded shutdown before
+// returning. Callers retain ownership of their handler's underlying resources.
+func serveHTTPDemo(
+	ctx context.Context, listener net.Listener, handler http.Handler,
+) error {
 	server := &http.Server{
-		Handler:           newHTTPExchangeHandler(root),
+		Handler:           handler,
 		ReadHeaderTimeout: httpDemoHeaderTimeout,
 		ReadTimeout:       httpDemoReadTimeout,
 		WriteTimeout:      httpDemoWriteTimeout,
 		IdleTimeout:       httpDemoIdleTimeout,
 	}
 	finished := make(chan error, 1)
-	owned = false // Serve always closes its listener; never close it twice here.
+	// Serve always closes its listener; never close it twice here.
 	go func() { finished <- server.Serve(listener) }()
 
 	select {

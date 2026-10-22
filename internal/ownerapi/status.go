@@ -1,4 +1,4 @@
-// Package ownerapi provides unmounted handlers for an owner-control surface.
+// Package ownerapi provides handlers for a separate owner-control surface.
 package ownerapi
 
 import (
@@ -30,8 +30,9 @@ type statusResponse struct {
 // The labels describe saved local choice, not enrollment, trust, peer delivery,
 // or V19 Known. This bare handler has no authentication: never mount it without
 // protection. NewAuthenticatedStatusHandler composes it with an owner token
-// check. Both remain unmounted. A local URL alone is not authorization.
-// Never mount either handler on a peer surface.
+// check, used by owner-status-demo's dedicated loopback developer listener.
+// The bare constructor remains unprotected; a local URL alone is not
+// authorization. Never mount either handler on a peer surface.
 func NewStatusHandler(
 	vault *storage.Vault,
 	expectedRoot, expectedChild key.Public,

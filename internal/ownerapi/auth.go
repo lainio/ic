@@ -28,10 +28,12 @@ const ownerStatusTokenSize = 32
 //
 // Possession permits only reading this configured status surface, not proof of
 // human identity, signing-key control, enrollment, trust, or device authority.
-// Both constructors remain unmounted. A future service must use a separate owner
-// endpoint, protect credential provisioning/storage/transmission, and establish
-// its lifetime. Bearer possession provides neither encryption nor server
-// authentication; this change does not authorize remote plaintext exposure.
+// The owner-status-demo command mounts this protected handler on a dedicated
+// loopback developer listener with a private credential file for that invocation.
+// The bare constructor remains unprotected. Production owner access must protect
+// provisioning/storage/transmission and establish credential lifetime. Bearer
+// possession provides neither encryption nor server authentication; the demo
+// does not authorize remote plaintext exposure.
 func NewAuthenticatedStatusHandler(
 	vault *storage.Vault,
 	expectedRoot, expectedChild key.Public,

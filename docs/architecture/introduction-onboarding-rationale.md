@@ -245,14 +245,18 @@ human identity, Alice's signing-key control, enrollment, trust, a device grant,
 or node-state mutation. No V19 transition changes; it is not a complete owner
 authentication system or a claim of full OAuth conformance.
 
-Both constructors remain unmounted. A future service must select a separate
-owner endpoint, protect credential provisioning, storage, and transmission,
-and establish its lifetime. A local URL alone is not authorization; bearer
-possession supplies neither encryption nor server authentication, and this
-change does not authorize remote plaintext exposure.
-Peer HTTP `/intro/offer` and `/intro/acceptance`, NATS demos, listeners, and CLI
-registrations remain unchanged and do not expose it.
-Restartable identity and production owner access remain separate work.
+`intro owner-status-demo` mounts only the authenticated constructor on a
+dedicated plaintext loopback developer listener, separate from peer HTTP.
+It creates a disposable Vault with an `unselected` or genuinely signed and saved
+`completed` fixture before serving; requests only read through `ReadStoredChoice`.
+A separate random credential lives in an owner-only file for this invocation;
+bearer possession is the access check, not the URL or fixture label.
+Normal shutdown drains HTTP before closing storage and removing temporary files.
+This trusts the local machine and excludes root or another process of the same
+OS user from its isolation claim; it permits no remote forwarding or exposure.
+The bare constructor remains unprotected. Peer and NATS demos remain unchanged;
+restartable identity, remote/mobile access, and production provisioning remain
+separate work, with no new V19 authority or signing permission.
 
 ## Source locators
 

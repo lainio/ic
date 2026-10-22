@@ -1,5 +1,84 @@
 # Introduction path and acceptance demos
 
+## Two-terminal protected owner status
+
+In Terminal A:
+
+~~~sh
+go run ./cmd/tdc intro owner-status-demo completed
+~~~
+
+After setup and binding, stdout contains only:
+
+~~~text
+fixture: completed
+owner status URL: http://127.0.0.1:<actual-port>/owner/status
+authorization header file: <actual-private-directory>/owner.header
+stop with Ctrl+C
+~~~
+
+In Terminal B, replace `OWNER_STATUS_URL` and `HEADER_FILE` with the printed
+full URL and header-file path. Keep the at-sign: it is curl's header-file syntax.
+No credential needs to be pasted into the terminal.
+
+~~~sh
+curl -q --noproxy '*' --max-time 5 --silent --show-error --include OWNER_STATUS_URL
+curl -q --noproxy '*' --max-time 5 --silent --show-error --include --header '@HEADER_FILE' OWNER_STATUS_URL
+~~~
+
+The first HTTP response is `401 Unauthorized`. The second HTTP response is
+`200 OK` with body `{"choice":"completed"}`. These are HTTP responses, not
+application stdout; without a fail option, HTTP 401 alone is not a curl error.
+Stop Terminal A with Ctrl+C and confirm the printed credential path no longer
+exists. For `{"choice":"unselected"}`, start a fresh invocation with
+`unselected` instead of `completed`; this is a new fixture, not a restarted node
+or a reset of persistent choice.
+
+With a built executable, use
+`tdc intro owner-status-demo CASE --listen 127.0.0.1:0`.
+Exactly one case is required. The loopback default lets the OS select a port;
+only the actual bound endpoint is printed. Setup creates fresh Root/Alice
+handles and a temporary bbolt Vault. `completed` uses `SignAfterStoredChoice`
+and verifies its real signature before serving. HTTP only reads stored choice
+through `NewAuthenticatedStatusHandler` and `ReadStoredChoice`; it cannot sign
+or change state, and peer introduction routes are absent.
+
+Each invocation generates a separate random 32-byte owner credential, independent
+of the random provider secret. `owner.header` is mode 0600 in a private mode 0700
+directory (or stricter). Its accepted lifetime is this handler/process instance.
+Normal shutdown stops HTTP, joins Serve, closes the Vault/database, clears the
+provider secret, and removes the temporary files. This promises neither cleanup
+after SIGKILL nor secure Go-heap/disk erasure.
+
+This plaintext loopback demo requires a trusted developer machine. Bearer
+possession grants status access; loopback and permissions only constrain the
+local boundary. Root and other processes running as the same OS user are outside
+its isolation claim. Do not forward it through Tor or publish a container port.
+Remote/mobile access and production provisioning remain separate work.
+This adds no V19 membership, `Known`, trust, device/helper authority, operational
+identity persistence, restart key recovery, signing permission, Flutter UI, or
+Tor/NATS work. Existing peer demos are unchanged.
+
+Socket-free tests use real fixtures and direct handler requests:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^TestOwnerStatusDemo' -v ./cmds/intro
+~~~
+
+The owner can explicitly enable the self-contained loopback TCP test:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^TestOwnerStatusDemoTCP$' -v ./cmds/intro -args -intro-demo-http-tcp
+~~~
+
+Without the existing flag it skips before opening sockets. The optional TCP
+test and two-terminal CLI walkthrough were **not executed** in the socket-free
+Codex run; direct handler tests do not establish live TCP behavior.
+
+Reading order: this README -> command/setup in `owner_status_demo.go` ->
+authenticated composition in `internal/ownerapi/auth.go` -> shared lifecycle
+in `http_demo.go` -> focused tests in `owner_status_demo_test.go`.
+
 ## Two-terminal HTTP exchange without a broker
 
 In Terminal A, let the OS choose an unused loopback port:
