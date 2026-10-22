@@ -204,6 +204,19 @@ Same-process reopen tests establish neither process-restart key custody,
 physical crash durability, nor globally unique parenthood.
 No concurrency, reentrancy, or rollback-resistance guarantee is added.
 
+`ReadStoredChoice(vault, expectedRoot, expectedChild)` borrows the open Vault
+and inspects both records in one `View`, using independently established public
+identities and no signing handle. Opening the Vault still needs its provider.
+It returns absence (`found == false`), a pending proposal with nil acceptance,
+or a completed proposal with its matching verified acceptance; returned data
+belongs to the caller. Invalid or inconsistent material returns an error with
+no result, retaining storage, parser, and proof causes. Reading never signs,
+repairs, rewrites, initializes a namespace, or reserves encryption usage.
+`found` means a usable saved proposal, not membership or enrollment; completion
+does not prove peer delivery or promote evidence into V19 `Known`.
+It establishes no freshness, global uniqueness, current device authority,
+human consent, or correctness of the independently configured identity binding.
+
 ## Source locators
 
 [S1] Specification checkout `2cd914be966ad4bdf36b575e2678cad7441fcd75`,

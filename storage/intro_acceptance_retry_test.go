@@ -27,6 +27,7 @@ func ExampleVault_acceptanceRetry() {
 
 	root, alice := key.New(), key.New()
 	expectedRoot := key.Public(try.To1(root.CBORPublicKey()))
+	alicePublic := key.Public(try.To1(alice.CBORPublicKey()))
 	expectedParent := expectedRoot // Alice independently chooses R.
 	offered := intro.New(key.InfoFromHandle(root)).Introduce(
 		root, key.InfoFromHandle(alice),
@@ -61,6 +62,16 @@ func ExampleVault_acceptanceRetry() {
 	reopenedVault := try.To1(reopened.OpenVault(ctx, p.vault, p.id, p))
 	defer func() { try.Out(reopenedVault.Close()).Logf() }()
 
+	// Inspect with public identities only, before any signing-workflow retry.
+	saved, found := try.To2(onboarding.ReadStoredChoice(
+		reopenedVault, expectedRoot, alicePublic,
+	))
+	assert.That(found)
+	assert.DeepEqual(saved.Proposal.Bytes(), offered.Bytes())
+	assert.DeepEqual(saved.Acceptance, observed)
+	assert.NoError(saved.Proposal.VerifyAcceptance(saved.Acceptance))
+	assert.Equal(signer.signCalls, 1)
+
 	// Retry the same offer; the earlier signature is only a test observation.
 	retry := try.To1(onboarding.SignAfterStoredChoice(
 		reopenedVault, signer, expectedRoot, expectedParent, offered,
@@ -76,10 +87,12 @@ func ExampleVault_acceptanceRetry() {
 	clear(p.secret)
 	try.To(os.RemoveAll(dir))
 
+	try.To1(fmt.Println("saved choice found:", found))
 	try.To1(fmt.Println("acceptance verifies after reopen:", verifyErr == nil))
 	try.To1(fmt.Println("same acceptance returned:", same))
 	try.To1(fmt.Println("signing calls:", signer.signCalls))
 	// Output:
+	// saved choice found: true
 	// acceptance verifies after reopen: true
 	// same acceptance returned: true
 	// signing calls: 1
