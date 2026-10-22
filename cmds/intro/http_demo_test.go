@@ -369,9 +369,10 @@ func TestHTTPDemoCleanupAndCancellation(t *testing.T) {
 			if strings.HasPrefix(scenario, "cancel") {
 				want = context.Canceled
 			}
-			if scenario == "canceled" {
+			switch scenario {
+			case "canceled":
 				cancel()
-			} else if scenario == "cancel after saving" {
+			case "cancel after saving":
 				out = httpDemoOutputFailure{text: "choice and acceptance saved", cancel: cancel}
 			}
 			client := newHTTPDemoClient()
@@ -496,16 +497,17 @@ func TestHTTPDemoRootLifecycle(t *testing.T) {
 			}
 			want := errors.New("local lifecycle failure")
 			out := io.Discard
-			if scenario == "output" {
+			switch scenario {
+			case "output":
 				out = failingWriter{err: want}
-			} else if scenario == "serve" {
+			case "serve":
 				listener.acceptErr = want
-			} else if scenario == "server closed" {
+			case "server closed":
 				listener.acceptErr = http.ErrServerClosed
 				want = http.ErrServerClosed
-			} else if scenario == "shutdown" {
+			case "shutdown":
 				listener.closeErr = want
-			} else {
+			default:
 				want = nil
 			}
 			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
