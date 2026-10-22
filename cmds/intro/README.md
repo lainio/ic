@@ -1,5 +1,93 @@
 # Introduction path and acceptance demos
 
+## Two-terminal HTTP exchange without a broker
+
+In Terminal A, let the OS choose an unused loopback port:
+
+~~~sh
+go run ./cmd/tdc intro http-demo root --listen 127.0.0.1:0
+~~~
+
+Root binds before printing these stdout lines:
+
+~~~text
+root public key (hex): <actual full public-key hex>
+HTTP endpoint: http://127.0.0.1:<actual bound port>
+ready for Alice
+stop with Ctrl+C
+~~~
+
+In Terminal B, replace BOTH placeholders with the values from Terminal A:
+
+~~~sh
+go run ./cmd/tdc intro http-demo accept --url HTTP_URL --root ROOT_PUBLIC_KEY_HEX
+~~~
+
+With a built executable, use `tdc intro http-demo` with the same subcommands
+and flags. No NATS broker or session argument is needed.
+Each invocation creates a fresh signing handle after input validation.
+Alice independently selects Root with `--root`; neither the URL nor the
+received proposal supplies that expected key. The `accept` invocation
+authorizes this one direct-root demo offer, without an interactive ceremony.
+Alice's successful stdout is:
+
+~~~text
+proposal received: R -> Alice
+choice and acceptance saved: true
+local acceptance verifies: true
+issuer returned HTTP 204: true
+~~~
+
+Root remains open after acceptance. Stop it with Ctrl+C, which performs bounded
+graceful shutdown. A second offer gets the existing `409`; restart Root for
+each fresh exchange and copy its new endpoint and key.
+Errors exit nonzero and the root CLI reports them on stderr; `go run` may add
+its exit status there. Stdout summaries are not complete terminal transcripts.
+
+`--listen` defaults to `127.0.0.1:0`. Alice requires `--url` and `--root`;
+her positive `--timeout` defaults to `2m` and bounds the whole exchange.
+Endpoints require explicit numeric ports and loopback hosts. Only the listener
+allows port zero. `localhost` becomes `127.0.0.1` without DNS; literal IPv4/IPv6
+loopback addresses also work. Alice accepts plain `http://` with no credentials,
+query, fragment, or path beyond `/`. Redirects and environment proxies are
+disabled. The private client closes response bodies and idle connections,
+and actual response reads are bounded to 64 KiB. There are no application retries.
+
+The unchanged handler retains one exact proposal and verifies its detached
+acceptance. Alice uses the existing stored-choice/signing helper and disposable
+Vault, including its cleanup and secret clearing. Wrong-root rejection happens
+before Alice signs or submits acceptance. Failure to receive `204` remains an
+error even after local saving. `204` is an unsigned HTTP response, not an
+authenticated receipt or a membership assertion.
+This is local plain HTTP, with no TLS, secure endpoint binding, Tor integration,
+production enrollment, or process-restart wallet recovery. It adds no V19
+`Edges`, `Known`, trust, device, or PW authority; the existing semantic boundary
+and auxiliary storage policy remain unchanged.
+
+Default client/handler tests use a real `http.Client` with a test-only recorder
+transport and real keys/storage, without sockets or external services:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^TestHTTPDemo' -v ./cmds/intro
+~~~
+
+The owner can separately enable the self-contained TCP check:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^TestHTTPDemoTCP$' -v ./cmds/intro -args -intro-demo-http-tcp
+~~~
+
+Without the flag it explicitly skips. With the flag it owns a temporary loopback
+listener on port zero, coordinates on readiness, runs the same Root runner and
+real HTTP client, cancels Root, and joins it. Socket/setup failure fails the test.
+It needs no fixed port, external executable, or manually started service.
+The TCP check and the manual two-process commands above were **not executed**
+in the socket-free Codex run. Client/handler tests are not TCP evidence.
+NATS live tests remain separately opt-in and skipped without their flag.
+
+Reading order: this README -> Root runner in `http_demo.go` -> Alice runner in
+`http_client.go` -> focused tests in `http_demo_test.go`.
+
 ## HTTP handler tests
 
 `Example_httpExchange` exercises `POST /intro/offer` -> pinned-root check,
@@ -21,8 +109,9 @@ an offer returns `409`. Invalid acceptance cannot replace that proposal.
 rechecking it signs nothing and adds no acknowledgement signature or membership.
 The existing stored-choice helper owns temporary Vault use and cleanup.
 
-This is handler/application-data evidence, not TCP/HTTP wire parsing, a listener,
-an HTTP client, or Tor validation. NATS is demonstration infrastructure; direct
+These handler-only tests still use no sockets. They provide application-data
+evidence, not TCP/HTTP wire parsing, a listener, an HTTP client, or Tor validation.
+NATS is demonstration infrastructure; direct
 HTTP is the first application protocol candidate for onion connectivity.
 There is no universal transport layer. The optional NATS live test below is
 retained; it is neither embedded nor run by these handler tests.
@@ -34,7 +123,7 @@ Tor integration.
 Reading order: `Example_httpExchange` -> HTTP routes in `http_exchange.go` ->
 `newExchangeProposalFromBytes` in `exchange_demo.go` -> negative HTTP tests.
 
-## Two-terminal Root -> Alice exchange
+## Two-terminal NATS Root -> Alice exchange
 
 This disposable developer demo uses two CLI processes with separate fresh
 signing handles and an external local Core NATS broker.

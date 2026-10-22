@@ -21,6 +21,7 @@ func init() {
 	introCmd.AddCommand(newChoiceDemoCommand())
 	introCmd.AddCommand(newStoredChoiceDemoCommand())
 	introCmd.AddCommand(newExchangeDemoCommand())
+	introCmd.AddCommand(newHTTPDemoCommand())
 	cmds.RootCmd().AddCommand(introCmd)
 }
 
