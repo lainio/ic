@@ -1,5 +1,39 @@
 # Introduction path and acceptance demos
 
+## HTTP handler tests
+
+`Example_httpExchange` exercises `POST /intro/offer` -> pinned-root check,
+stored choice and signing -> `POST /intro/acceptance` through direct
+`ServeHTTP` calls with `httptest` requests and recorders. Run it and the focused
+tests with:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^(TestHTTPExchange|Example_httpExchange)' -v ./cmds/intro
+~~~
+
+Both requests use `application/cbor`: the offer carries public-only `key.Info`
+and returns canonical `Path.Bytes()`; acceptance wraps the existing detached
+signature in a canonical CBOR byte string. Actual reads are bounded to 64 KiB.
+One handler borrows Root's handle and retains one exact proposal before replying.
+It serializes signing and proposal access; a second offer or acceptance before
+an offer returns `409`. Invalid acceptance cannot replace that proposal.
+`204` means only that `VerifyAcceptance` succeeded for the retained proposal;
+rechecking it signs nothing and adds no acknowledgement signature or membership.
+The existing stored-choice helper owns temporary Vault use and cleanup.
+
+This is handler/application-data evidence, not TCP/HTTP wire parsing, a listener,
+an HTTP client, or Tor validation. NATS is demonstration infrastructure; direct
+HTTP is the first application protocol candidate for onion connectivity.
+There is no universal transport layer. The optional NATS live test below is
+retained; it is neither embedded nor run by these handler tests.
+This scoped development binding adds no V19 `Edges`, `Known`, trust, PW, or
+device authority, endpoint-identity binding, secure channel, global uniqueness,
+helper protocol, durable operational wallet, reset/retry/session protocol, or
+Tor integration.
+
+Reading order: `Example_httpExchange` -> HTTP routes in `http_exchange.go` ->
+`newExchangeProposalFromBytes` in `exchange_demo.go` -> negative HTTP tests.
+
 ## Two-terminal Root -> Alice exchange
 
 This disposable developer demo uses two CLI processes with separate fresh

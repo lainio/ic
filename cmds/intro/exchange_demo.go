@@ -167,8 +167,16 @@ func newExchangeProposal(
 	defer err2.Handle(&err)
 
 	try.To(checkExchangeRequest(request)) // Before any signing.
+	return newExchangeProposalFromBytes(root, request.Data)
+}
+
+func newExchangeProposalFromBytes(
+	root key.Handle, data []byte,
+) (proposal coreintro.Path, err error) {
+	defer err2.Handle(&err, nil) // Preserve the NATS wrapper's error annotation.
+
 	var child key.Info
-	try.T(wire.UnmarshalCanonical(&child, request.Data))("decoding Alice's key")
+	try.T(wire.UnmarshalCanonical(&child, data))("decoding Alice's key")
 	if len(child.Public) == 0 {
 		return nil, errors.New("alice public key is empty")
 	}
