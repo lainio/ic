@@ -217,6 +217,27 @@ does not prove peer delivery or promote evidence into V19 `Known`.
 It establishes no freshness, global uniqueness, current device authority,
 human consent, or correctness of the independently configured identity binding.
 
+### Read-only owner status
+
+`ownerapi.NewStatusHandler(vault, expectedRoot, expectedChild)` borrows the
+caller's open, dedicated Vault and copies independently established public keys
+without I/O or a signing handle; the caller owns the Vault/provider lifecycle.
+Each `GET /owner/status` calls `ReadStoredChoice` once and returns only a JSON
+`choice`: `unselected` for no saved proposal, `pending` for a valid proposal
+without saved acceptance, or `completed` for its saved, verified acceptance.
+These labels are derived on each read, not persisted states or transitions;
+they imply no enrollment, trust, peer delivery, or V19 `Known`.
+Request input cannot select identities or actions.
+Inspection errors, including a closed Vault or inconsistent evidence, return
+generic HTTP 500 text without a choice or repair; all responses use `no-store`.
+
+This owner-control handler remains unmounted and adds no authentication.
+Authentication/access control is required before connecting a running owner API;
+a local URL alone is not an authorization mechanism.
+Peer HTTP `/intro/offer` and `/intro/acceptance`, NATS demos, listeners, and CLI
+registrations remain unchanged and do not expose it.
+Restartable identity and authenticated owner access remain separate work.
+
 ## Source locators
 
 [S1] Specification checkout `2cd914be966ad4bdf36b575e2678cad7441fcd75`,
