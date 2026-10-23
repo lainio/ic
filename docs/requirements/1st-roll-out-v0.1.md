@@ -21,7 +21,7 @@ understand what we want to achieve, i.e., first step of the continuous delivery.
   2. *The UI App* we should select the most convenient tech to start. Or we can
      start with one and bring others later. The app's philosophy should be
      WeChat: it can do everything at the end, but we start with the messaging
-     app that's totally safe (e2e encrypted) and you can run it yourself.
+     app that's totally safe[Q2] (e2e encrypted) and you can run it yourself.
      Every single part of the system.
        - We have used the term *evidence* that's excellent. Let's decide that we
        start with the simple messaging app, chatting app, but v0.2 would have a
@@ -53,3 +53,25 @@ the UI app. I have good experience of gRPC but maybe it is not best for web UI?
 Let's select something beautiful because then we might get the wow effect from
 the audience. I have always been keen on to learn how well Flutter works as a
 web app. But I'm open for everything.
+
+## Q&A
+
+Q1: should the “Rentable Helper” be able to sign and decrypt on a node holder’s
+behalf, or must those capabilities remain on the holder’s own device?
+
+A1: Yes, the "Rental Helper" should be able to sign and decrypt on a node
+holder's behalf. So, yes, the rental helper is a hosted personal node living
+inside owner's trust boundary.
+
+Q2: Is it totally safe and what e2e encryption means.
+
+A2: We understand that this is *the question*. We (and others) have studied it a
+lot. The benefits we got with this model are so big that we think it should be
+that way. In this peculiar architecture decision we see that the future will
+bring new inventions and tech to help us. And now we think that our solution is
+some kind of hybrid model where the master key (or parts of it) are in the UI
+device and the Rental Helper is not totally autonomous. It needs UI app's help.
+However, we haven't decided how it is done precisely, i.e., are we going to use
+some kind of session model, expiration times, or what. Let's say that until the
+version 1.0 we should decide how exactly we have solved the delegation between
+UI app and the helper app -- distributed key management.
