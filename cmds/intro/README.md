@@ -1,5 +1,67 @@
 # Introduction path and acceptance demos
 
+## Inspect the real HTTP exchange Vault
+
+Start Root in Terminal A:
+
+~~~sh
+go run ./cmd/tdc intro http-demo root --listen 127.0.0.1:0
+~~~
+
+Copy Root's printed endpoint and public key into Terminal B:
+
+~~~sh
+go run ./cmd/tdc intro http-demo accept \
+    --url HTTP_URL --root ROOT_PUBLIC_KEY_HEX \
+    --owner-listen 127.0.0.1:0
+~~~
+
+Alice performs the real HTTP exchange and keeps that same Vault open.
+After the usual successful exchange output, she prints only:
+
+~~~text
+owner status URL: http://127.0.0.1:<actual-port>/owner/status
+authorization header file: <private-directory>/owner.header
+stop with Ctrl+C
+~~~
+
+Leave Terminal B running. In Terminal C, substitute those printed values for
+`OWNER_STATUS_URL` and `HEADER_FILE` in the established curl commands:
+
+~~~sh
+curl -q --noproxy '*' --max-time 5 --silent --show-error --include OWNER_STATUS_URL
+curl -q --noproxy '*' --max-time 5 --silent --show-error --include --header '@HEADER_FILE' OWNER_STATUS_URL
+~~~
+
+The first response is `401`; the second is `200` with `{"choice":"completed"}`.
+Keep the at-sign; curl reads the private header file without copying its token
+into the command. This status reads the proposal and acceptance saved by Alice's
+exchange, using her original identity and independently selected Root.
+The owner credential is never sent to Root, and owner HTTP exposes no peer route.
+The separate owner listener binds before acceptance and starts serving only
+after Root returns `204`. `--timeout` bounds the exchange, not owner serving.
+Omitting `--owner-listen` preserves the existing one-shot command; supplying it
+requires an explicit loopback address, with port zero allowed.
+
+Ctrl+C in Terminal B stops and joins HTTP, closes storage, clears the provider
+secret, and removes the temporary state and credential file. Identity and state
+remain disposable; this is not yet a restartable node. Stop Root separately.
+The release direction is one owner/node/root and a usable end-to-end CLI workflow;
+persistent identity and saved state across process restart remain explicit work.
+Flutter, multi-device recovery, transport frameworks, additional NATS investment,
+and container orchestration are not prerequisites for this increment.
+
+Socket-free composition tests:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^TestHTTPOwner' -v ./cmds/intro
+~~~
+
+Real sockets and this CLI/curl walkthrough were **not run by Codex**.
+Reading order: this README -> new-mode composition in `http_owner.go` ->
+shared Vault lifetime in `exchange_demo.go` and `owner_status_demo.go` ->
+`http_owner_test.go`. The shared HTTP conversation is in `http_client.go`.
+
 ## Two-terminal protected owner status
 
 In Terminal A:

@@ -70,7 +70,7 @@ this endpoint. Remote owner access and production provisioning are separate work
 }
 
 // Private, single-owner setup state. HTTP borrows only the configured handler;
-// fixture signing handles do not survive setup in this holder.
+// this holder keeps no signing handles.
 type ownerStatusDemo struct {
 	fixture, dir, headerFile string
 	provider                 *storedChoiceProvider
@@ -84,7 +84,51 @@ type ownerStatusDemo struct {
 func setupOwnerStatusDemo(
 	ctx context.Context, fixture string,
 ) (_ *ownerStatusDemo, err error) {
-	demo := &ownerStatusDemo{fixture: fixture}
+	var demo *ownerStatusDemo
+	ready := false
+	defer func() {
+		if demo != nil && !ready {
+			try.Out(demo.close()).Logf()
+		}
+	}()
+	defer func() {
+		if demo != nil && !ready {
+			err = errors.Join(err, demo.close())
+		}
+	}()
+	defer err2.Handle(&err)
+
+	try.To(ctx.Err())
+	if fixture != "unselected" && fixture != "completed" {
+		return nil, errors.New("fixture must be unselected or completed")
+	}
+	root, alice := key.New(), key.New()
+	rootInfo := try.To1(exchangePublicInfo(root))
+	aliceInfo := try.To1(exchangePublicInfo(alice))
+	expectedRoot := rootInfo.Public
+	demo = try.To1(
+		setupOwnerStatusResources(ctx, expectedRoot, aliceInfo.Public),
+	)
+	demo.fixture = fixture
+
+	if fixture == "completed" {
+		offer := coreintro.New(rootInfo).Introduce(root, aliceInfo)
+		acceptance := try.To1(onboarding.SignAfterStoredChoice(
+			demo.vault, alice, expectedRoot, expectedRoot, offer,
+		))
+		try.To(offer.VerifyAcceptance(acceptance))
+	}
+	try.To(ctx.Err())
+	ready = true
+	return demo, nil
+}
+
+// Creates an unselected Vault and independent credential for caller-selected
+// public identities. No fixture or signing handle is constructed here.
+func setupOwnerStatusResources(
+	ctx context.Context, expectedRoot, expectedChild key.Public,
+) (_ *ownerStatusDemo, err error) {
+	demo := &ownerStatusDemo{}
 	ready := false
 	defer func() {
 		if !ready {
@@ -99,14 +143,6 @@ func setupOwnerStatusDemo(
 	defer err2.Handle(&err)
 
 	try.To(ctx.Err())
-	if fixture != "unselected" && fixture != "completed" {
-		return nil, errors.New("fixture must be unselected or completed")
-	}
-	root, alice := key.New(), key.New()
-	rootInfo := try.To1(exchangePublicInfo(root))
-	aliceInfo := try.To1(exchangePublicInfo(alice))
-	expectedRoot, expectedChild := rootInfo.Public, aliceInfo.Public
-
 	demo.dir = try.To1(os.MkdirTemp("", "intro-owner-status-demo-"))
 	demo.provider = newStoredChoiceProvider()
 	try.To1(rand.Read(demo.provider.secret))
@@ -114,14 +150,6 @@ func setupOwnerStatusDemo(
 	p := demo.provider
 	try.To(demo.db.CreateVault(ctx, p.vault, p.id, p))
 	demo.vault = try.To1(demo.db.OpenVault(ctx, p.vault, p.id, p))
-
-	if fixture == "completed" {
-		offer := coreintro.New(rootInfo).Introduce(root, aliceInfo)
-		acceptance := try.To1(onboarding.SignAfterStoredChoice(
-			demo.vault, alice, expectedRoot, expectedRoot, offer,
-		))
-		try.To(offer.VerifyAcceptance(acceptance))
-	}
 
 	// This credential is independent of the provider secret and signing keys.
 	token := make([]byte, 32)

@@ -233,18 +233,7 @@ func saveExchangeAcceptance(
 ) (acceptance key.Signature, err error) {
 	defer err2.Handle(&err)
 
-	try.To(ctx.Err())
-	try.To(checkExchangePayload(data))
-	proposal := try.T1(coreintro.ParsePath(data))("parsing proposal")
-	if len(proposal) != 2 {
-		return nil, errors.New("demo requires exactly R -> Alice")
-	}
-	for _, edge := range proposal {
-		if edge.Body.Options.BackupKeyIndex != 0 || edge.Body.Options.Rotation {
-			return nil, errors.New("demo does not support backup or rotation")
-		}
-	}
-	try.To1(fmt.Fprintln(out, "proposal received: R -> Alice"))
+	proposal := try.To1(parseExchangeProposal(ctx, data, out))
 
 	dir := try.To1(os.MkdirTemp("", "intro-exchange-demo-"))
 	defer func() { try.Out(os.RemoveAll(dir)).Logf() }()
@@ -257,20 +246,55 @@ func saveExchangeAcceptance(
 	vault := try.To1(db.OpenVault(ctx, provider.vault, provider.id, provider))
 	defer func() { try.Out(vault.Close()).Logf() }()
 
-	// Root AND parent come from --root, never from the received path.
-	signature, signErr := onboarding.SignAfterStoredChoice(
-		vault, alice, expectedRoot, expectedRoot, proposal,
+	signature, signErr := signExchangeAcceptance(
+		vault, alice, expectedRoot, proposal,
 	)
-	if signErr == nil {
-		signErr = proposal.VerifyAcceptance(signature)
-	}
 	// Attempt all normal-path cleanup even on refusal, retaining its cause.
 	closeErr := errors.Join(vault.Close(), db.Close())
 	clear(provider.secret)
 	removeErr := os.RemoveAll(dir)
 	try.To(errors.Join(signErr, closeErr, removeErr))
-	try.To1(fmt.Fprint(out,
-		"choice and acceptance saved: true\nlocal acceptance verifies: true\n",
+	try.To1(fmt.Fprint(out, exchangeAcceptanceSaved))
+	return signature, nil
+}
+
+const exchangeAcceptanceSaved = "choice and acceptance saved: true\n" +
+	"local acceptance verifies: true\n"
+
+func parseExchangeProposal(
+	ctx context.Context, data []byte, out io.Writer,
+) (proposal coreintro.Path, err error) {
+	defer err2.Handle(&err, nil)
+
+	try.To(ctx.Err())
+	try.To(checkExchangePayload(data))
+	proposal = try.T1(coreintro.ParsePath(data))("parsing proposal")
+	if len(proposal) != 2 {
+		return nil, errors.New("demo requires exactly R -> Alice")
+	}
+	for _, edge := range proposal {
+		if edge.Body.Options.BackupKeyIndex != 0 ||
+			edge.Body.Options.Rotation {
+			return nil, errors.New(
+				"demo does not support backup or rotation",
+			)
+		}
+	}
+	try.To1(fmt.Fprintln(out, "proposal received: R -> Alice"))
+	return proposal, nil
+}
+
+// Borrows the Vault. Onboarding alone owns selection, signing, and saved results.
+func signExchangeAcceptance(
+	vault *storage.Vault, alice key.Handle, expectedRoot key.Public,
+	proposal coreintro.Path,
+) (acceptance key.Signature, err error) {
+	defer err2.Handle(&err, nil)
+
+	// Root AND parent come from --root, never from the received path.
+	signature := try.To1(onboarding.SignAfterStoredChoice(
+		vault, alice, expectedRoot, expectedRoot, proposal,
 	))
+	try.To(proposal.VerifyAcceptance(signature))
 	return signature, nil
 }

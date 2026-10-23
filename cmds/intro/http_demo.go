@@ -49,7 +49,7 @@ This disposable plain HTTP demo adds no Known, trust, or pairwise state.`,
 }
 
 func newHTTPDemoRoleCommand(role string) *cobra.Command {
-	var listen, endpoint, rootHex string
+	var listen, endpoint, rootHex, ownerListen string
 	var timeout time.Duration
 	cmd := &cobra.Command{
 		Use:   role,
@@ -80,6 +80,15 @@ func newHTTPDemoRoleCommand(role string) *cobra.Command {
 			)(
 				"checking --root",
 			)
+			if cmd.Flags().Changed("owner-listen") {
+				address := try.T1(httpDemoAddress(ownerListen, true))(
+					"checking --owner-listen",
+				)
+				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
+				defer stop()
+				return startHTTPOwner(ctx, expectedRoot, base, address,
+					timeout, cmd.OutOrStdout())
+			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 			defer cancel()
 			client := newHTTPDemoClient()
@@ -105,6 +114,8 @@ func newHTTPDemoRoleCommand(role string) *cobra.Command {
 			"Required full hex CBOR public key copied from Root")
 		flags.DurationVar(&timeout, "timeout", httpDemoExchangeTimeout,
 			"Positive timeout for the whole exchange")
+		flags.StringVar(&ownerListen, "owner-listen", "",
+			"Keep this Vault open for owner status at an explicit loopback address")
 		try.To(cmd.MarkFlagRequired("url"))
 		try.To(cmd.MarkFlagRequired("root"))
 	}

@@ -42,13 +42,27 @@ func runHTTPDemoAlice(
 ) (acceptance key.Signature, err error) {
 	defer err2.Handle(&err)
 
+	return exchangeHTTPDemo(ctx, client, alice, base, out,
+		func(data []byte) (signature key.Signature, err error) {
+			defer err2.Handle(&err, nil)
+
+			return saveExchangeAcceptance(ctx, alice, expectedRoot, data, out)
+		})
+}
+
+// Shares the exact conversation across the two concrete Vault lifetimes.
+func exchangeHTTPDemo(
+	ctx context.Context, client *http.Client, alice key.Handle,
+	base string, out io.Writer,
+	save func([]byte) (key.Signature, error),
+) (acceptance key.Signature, err error) {
+	defer err2.Handle(&err, nil)
+
 	try.To(ctx.Err())
 	info := try.To1(exchangePublicInfo(alice))
 	data := try.To1(postHTTPDemo(ctx, client, base, "offer",
 		wire.TryMarshal(info), http.StatusOK))
-	signature := try.To1(saveExchangeAcceptance(
-		ctx, alice, expectedRoot, data, out,
-	))
+	signature := try.To1(save(data))
 
 	try.To(ctx.Err())
 	try.To1(postHTTPDemo(ctx, client, base, "acceptance",
