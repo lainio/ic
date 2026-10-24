@@ -1,5 +1,47 @@
 # One saved signing identity
 
+## Run an existing node
+
+Use `tdc node serve --help` for the operational status-only command.
+Stop the previous Alice accept process to release its Store lock.
+Root can be stopped; reuse Alice's existing paths and independently supplied
+Root public-key pin:
+
+~~~sh
+tdc node serve --dir ALICE_DIR --unlock-file ALICE_UNLOCK_FILE \
+    --storage-key-file ALICE_STORAGE_KEY_FILE --root ROOT_PUBLIC_KEY_HEX
+~~~
+
+The identity and initialized state must already exist.
+All four flags are required and nonempty, with no positional arguments.
+The unlock and storage-key files must be distinct and outside the node directory.
+`--listen` defaults to `127.0.0.1:0`; it accepts explicit loopback addresses and
+normalizes `localhost` without DNS. Port zero selects a free local port.
+Startup never contacts a peer, requests an introduction, signs, or resubmits
+an acceptance. It does not initialize or repair missing or invalid state.
+
+In a second terminal, use the two printed values (keep the `@`):
+
+~~~sh
+curl -q --noproxy '*' --max-time 5 --silent --show-error --include \
+    --header '@HEADER_FILE' OWNER_STATUS_URL
+~~~
+
+For the already-completed Alice, expect HTTP 200 and `{"choice":"completed"}`
+with Root stopped. Unselected and pending choices stay unchanged.
+This requires a trusted local host: loopback plaintext only, no forwarding or
+remote exposure. The temporary status credential grants no signing permission.
+Ctrl+C shuts down HTTP before closing the Store and removes only temporary
+credentials. Identity, state, unlock and storage-key files persist, including
+after errors. Store opening retains the existing block charge described below;
+individual status requests perform no encryption.
+
+Review order: `node serve --help`, setup/cleanup in `serve.go`, then the focused
+`serve_test.go`. The existing address, shutdown, and credential helpers are
+shared with the demos without changing their behavior.
+
+## Create and inspect a saved identity
+
 Use an existing, trusted, user-owned parent outside this repository.
 For example, if `/home/alice/playground` already exists and belongs to you,
 choose these disposable paths (replace `alice` with your own account):
@@ -70,9 +112,9 @@ fresh-Root behavior. Failed loading never generates a replacement key.
 In that fresh-Alice example only Root's signing identity survives.
 Its issued offer stays in memory. For persistent Alice, use `init-state` below
 and all three saved-state flags on HTTP accept.
-This is not a complete node service. `node init`, `info` and `init-state` start
-no network service; HTTP shutdown leaves identity files intact.
-Manual stop/restart and owner-status verification remain pending for the owner.
+`node init`, `info` and `init-state` start no network service;
+`node serve` runs the status-only service described above.
+HTTP shutdown leaves identity files intact.
 
 This operation persists local key material only. It creates no introduction,
 membership, `Known`, trust, pairwise, or device-authority transition, does not
@@ -111,7 +153,8 @@ it never deletes persistent files or switches keys.
 Follow the single [saved-Alice HTTP walkthrough](../intro/README.md#restart-saved-alice-in-the-http-exchange)
 for placeholder replacement, explicit preparation, two separate accept
 invocations, and authenticated owner status.
-Keep Root running: its retained proposal is still in memory.
+Keep Root running for that accept exchange: its retained proposal is in memory.
+The status-only `node serve` command needs no running Root.
 Restarted Root returns `409` to Alice's saved acceptance; Alice keeps her choice
 and never requests a replacement offer.
 Owner shutdown removes only that invocation's temporary credentials, retaining

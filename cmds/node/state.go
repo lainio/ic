@@ -41,14 +41,7 @@ func runInitState(cmd *cobra.Command, args []string) (err error) {
 			return fmt.Errorf("--%s must be nonempty", name)
 		}
 	}
-	rootHex := try.To1(cmd.Flags().GetString("root"))
-	if len(rootHex) > 2*16*1024 {
-		return errors.New("--root exceeds 16 KiB of public-key bytes")
-	}
-	root, decodeErr := hex.DecodeString(rootHex)
-	if decodeErr != nil || len(root) == 0 {
-		return errors.New("--root requires nonempty hex public-key bytes")
-	}
+	root := try.To1(parseRootHex(try.To1(cmd.Flags().GetString("root"))))
 	dir, unlock := try.To2(commandPaths(cmd))
 	dir, unlock = try.To2(nodeidentity.ResolvePaths(dir, unlock))
 	keyFile := try.To1(cmd.Flags().GetString("storage-key-file"))
@@ -71,4 +64,17 @@ func runInitState(cmd *cobra.Command, args []string) (err error) {
 	try.To(printPublic(cmd, handle))
 	try.To1(fmt.Fprintln(cmd.OutOrStdout(), "local state initialized: true"))
 	return nil
+}
+
+func parseRootHex(value string) ([]byte, error) {
+	if len(value) > 2*16*1024 {
+		return nil, errors.New("--root exceeds 16 KiB of public-key bytes")
+	}
+	root, err := hex.DecodeString(value)
+	if err != nil || len(root) == 0 {
+		return nil, errors.New(
+			"--root requires nonempty hex public-key bytes",
+		)
+	}
+	return root, nil
 }

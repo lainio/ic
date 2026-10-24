@@ -3,7 +3,6 @@ package intro
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -163,34 +162,9 @@ func setupOwnerStatusResources(
 func setupOwnerStatusCredentials(ctx context.Context, vault *storage.Vault,
 	expectedRoot, expectedChild key.Public, dir string,
 ) (_ http.Handler, _ string, err error) {
-	defer err2.Handle(&err)
-
-	// This credential is independent of the provider secret and signing keys.
-	token := make([]byte, 32)
-	defer clear(token)
-	try.To1(rand.Read(token))
-	handler := try.To1(ownerapi.NewAuthenticatedStatusHandler(
-		vault, expectedRoot, expectedChild, token,
-	))
-	headerFile := filepath.Join(dir, "owner.header")
-	header := try.To1(os.OpenFile(
-		headerFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600,
-	))
-	closed := false
-	defer func() {
-		if !closed {
-			try.Out(header.Close()).Logf()
-		}
-	}()
-	_, writeErr := fmt.Fprintf(header,
-		"Authorization: Bearer %s\n", hex.EncodeToString(token),
+	return ownerapi.NewStatusCredentials(
+		ctx, vault, expectedRoot, expectedChild, dir,
 	)
-	closeErr := header.Close()
-	closed = true
-	try.To(errors.Join(writeErr, closeErr))
-	try.To(ctx.Err())
-
-	return handler, headerFile, nil
 }
 
 // Called only after HTTP has stopped. All cleanup is attempted and every cause

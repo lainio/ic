@@ -11,12 +11,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/localhttp"
 	"github.com/lainio/ic/internal/nodeidentity"
 	"github.com/lainio/ic/key"
 	"github.com/spf13/cobra"
@@ -25,11 +25,7 @@ import (
 // Private development defaults, not protocol policy.
 const (
 	httpDemoExchangeTimeout = 2 * time.Minute
-	httpDemoHeaderTimeout   = 5 * time.Second
-	httpDemoReadTimeout     = 15 * time.Second
-	httpDemoWriteTimeout    = 15 * time.Second
-	httpDemoIdleTimeout     = 30 * time.Second
-	httpDemoShutdownTimeout = 5 * time.Second
+	httpDemoIdleTimeout     = 30 * time.Second // Also used by the demo client.
 )
 
 func newHTTPDemoCommand() *cobra.Command {
@@ -182,26 +178,7 @@ func selectHTTPDemoRoot(cmd *cobra.Command) (handle key.Handle, err error) {
 }
 
 func httpDemoAddress(value string, allowZero bool) (address string, err error) {
-	defer err2.Handle(&err)
-
-	host, port := try.To2(net.SplitHostPort(value))
-	if host == "localhost" {
-		host = "127.0.0.1" // No DNS lookup, including for localhost.
-	}
-	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return "", errors.New("host must be explicit loopback")
-	}
-	if port == "" || strings.IndexFunc(port, func(c rune) bool {
-		return c < '0' || c > '9'
-	}) >= 0 {
-		return "", errors.New("port must be numeric")
-	}
-	number := try.To1(strconv.ParseUint(port, 10, 16))
-	if number == 0 && !allowZero {
-		return "", errors.New("HTTP endpoint port must be nonzero")
-	}
-	return net.JoinHostPort(ip.String(), strconv.FormatUint(number, 10)), nil
+	return localhttp.Address(value, allowZero)
 }
 
 func httpDemoEndpoint(value string) (endpoint string, err error) {
@@ -246,47 +223,5 @@ func runHTTPDemoRoot(
 func serveHTTPDemo(
 	ctx context.Context, listener net.Listener, handler http.Handler,
 ) error {
-	server := &http.Server{
-		Handler:           handler,
-		ReadHeaderTimeout: httpDemoHeaderTimeout,
-		ReadTimeout:       httpDemoReadTimeout,
-		WriteTimeout:      httpDemoWriteTimeout,
-		IdleTimeout:       httpDemoIdleTimeout,
-	}
-	finished := make(chan error, 1)
-	// Serve always closes its listener; never close it twice here.
-	go func() { finished <- server.Serve(listener) }()
-
-	select {
-	case serveErr := <-finished:
-		return errors.Join(
-			fmt.Errorf("HTTP server exited unexpectedly: %w", serveErr),
-			server.Close(),
-		)
-	case <-ctx.Done():
-		// A completed Serve before our shutdown is still an unexpected exit,
-		// even when its error happens to be http.ErrServerClosed.
-		select {
-		case serveErr := <-finished:
-			return errors.Join(
-				fmt.Errorf("HTTP server exited unexpectedly: %w", serveErr),
-				server.Close(),
-			)
-		default:
-		}
-	}
-
-	shutdownCtx, cancel := context.WithTimeout(
-		context.WithoutCancel(ctx), httpDemoShutdownTimeout,
-	)
-	defer cancel()
-	shutdownErr := server.Shutdown(shutdownCtx)
-	if shutdownErr != nil {
-		shutdownErr = errors.Join(shutdownErr, server.Close())
-	}
-	serveErr := <-finished
-	if errors.Is(serveErr, http.ErrServerClosed) {
-		serveErr = nil // Only intentional shutdown may consume this sentinel.
-	}
-	return errors.Join(shutdownErr, serveErr)
+	return localhttp.Serve(ctx, listener, handler)
 }

@@ -1,4 +1,4 @@
-// Package node provides local signing-identity initialization and inspection.
+// Package node provides saved local identity, state, and owner status commands.
 package node
 
 import (
@@ -24,7 +24,7 @@ func init() {
 func newNodeCommand() *cobra.Command {
 	parent := &cobra.Command{
 		Use:   "node",
-		Short: "Persist and inspect one local signing identity",
+		Short: "Initialize, inspect, and run one saved local node",
 	}
 	for _, cmd := range []*cobra.Command{
 		{Use: "init", Short: "Create a new private identity", RunE: runInit},
@@ -38,6 +38,7 @@ func newNodeCommand() *cobra.Command {
 		parent.AddCommand(cmd)
 	}
 	parent.AddCommand(newInitStateCommand())
+	parent.AddCommand(newServeCommand())
 	return parent
 }
 
