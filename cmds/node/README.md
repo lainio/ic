@@ -86,3 +86,19 @@ Review order: README -> Root selection in `cmds/intro/http_demo.go` -> shared
 loader in `internal/nodeidentity/files.go` -> saved-identity exchange test in
 `cmds/intro/http_identity_test.go`. Existing cross-process restore coverage
 remains in `TestIdentityAcrossProcesses` in `internal/nodeidentity/identity_test.go`.
+
+## Internal Alice persistence (CLI integration pending)
+
+`internal/nodevault` now retains one Alice's proposal and acceptance across
+process exit, using the saved identity and existing onboarding operations.
+The caller supplies an independent random 32-byte storage secret and the same
+expected public binding each time; this component provisions no secrets.
+A dedicated private directory holds encrypted `vault.db` and plain `usage.db`.
+Each opening charges up to 4096 encryptions toward a fixed `1 << 24` limit.
+Unused capacity is discarded; exhausting a block requires an explicit reopen.
+At the lifetime limit, reads and completed-result reuse still work.
+The exclusive usage-file lock permits one active Store for this file pair.
+Copies, rollback, backups, restores, migrations, compatible upgrades and full
+power-loss recovery are unsupported. Persistent Alice CLI/HTTP wiring is pending.
+Read `ExampleStore`, then `Create`/`Open`/`Close`, the private provider, and
+`TestStoreAcrossProcesses` for the bounded two-process acceptance retry.
