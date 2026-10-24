@@ -304,14 +304,15 @@ func TestHTTPSavedAlicePendingAndResponseFailure(t *testing.T) {
 		assert.ErrorIs(err, want)
 		assert.SNil(signature)
 		assertHTTPSavedClosed(t, a)
-		if attempt == 0 {
+		switch attempt {
+		case 0:
 			assert.SLen(calls, 1)
 			assert.Equal(calls[0].request.URL.Path, "/intro/offer")
-		} else if attempt == 1 {
+		case 1:
 			// Failed signing of an already selected proposal makes no request.
 			assert.SEmpty(calls)
 			assert.That(strings.Contains(output.String(), "using saved introduction: true"))
-		} else {
+		default:
 			assert.SLen(calls, 1)
 			assert.Equal(calls[0].request.URL.Path, "/intro/acceptance")
 		}
