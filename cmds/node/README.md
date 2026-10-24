@@ -51,14 +51,38 @@ and does not claim secure erasure of all backend or Go-heap copies.
 The separate unlock file leaves room for future owner-supplied credentials;
 it is not a distributed-key-management decision.
 
-Current exchange and Vault demos do not use this saved identity.
-No Vault secrets are persisted and no storage encryption counters are reset.
-The next integration is a node using this identity with persistent storage;
-the full service is not yet restartable. No network service is started here.
+Use this saved identity in the existing HTTP Root command:
+
+~~~sh
+go run ./cmd/tdc intro http-demo root \
+  --identity-dir /home/alice/playground/node52 \
+  --unlock-file /home/alice/playground/node52.unlock \
+  --listen 127.0.0.1:0
+~~~
+
+Its public key equals `node info`. Stop with Ctrl+C and repeat the Root command,
+without another `init`: the key stays the same and port zero may change the
+endpoint. Follow the [HTTP walkthrough](../intro/README.md) for the unchanged
+Alice command, fresh exchanges, and Alice's `--owner-listen` status option.
+Both saved-Root flags must be supplied and nonempty; omitting both keeps the
+fresh-Root behavior. Failed loading never generates a replacement key.
+
+Only Root's signing identity survives. Its issued offer stays in memory;
+Alice still has a fresh identity, temporary Vault, and temporary signing choice
+per invocation. No Vault secret is persisted or reused with a reset encryption
+counter. Alice persistence must retain her identity together with Vault state
+and non-resetting key-use accounting, not her key with an emptied choice store.
+This is not a persistent wallet or complete node service. `node init` and `info`
+start no network service; HTTP shutdown leaves both identity files intact.
+Manual stop/restart and owner-status verification remain pending for the owner.
 
 This operation persists local key material only. It creates no introduction,
 membership, `Known`, trust, pairwise, or device-authority transition, does not
 resolve V19 global-parent uniqueness, and authorizes no new modeled action.
+Saving Root's key does not establish root authority or implement V19 `Introduce`;
+Alice's caller still supplies the public expected root independently.
 
-Review order: this README, `node.go`, `internal/nodeidentity/identity.go`, then
-`TestIdentityAcrossProcesses` in `internal/nodeidentity/identity_test.go`.
+Review order: README -> Root selection in `cmds/intro/http_demo.go` -> shared
+loader in `internal/nodeidentity/files.go` -> saved-identity exchange test in
+`cmds/intro/http_identity_test.go`. Existing cross-process restore coverage
+remains in `TestIdentityAcrossProcesses` in `internal/nodeidentity/identity_test.go`.

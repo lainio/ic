@@ -17,6 +17,7 @@ import (
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/nodeidentity"
 	"github.com/lainio/ic/key"
 	"github.com/spf13/cobra"
 )
@@ -36,9 +37,11 @@ func newHTTPDemoCommand() *cobra.Command {
 		Use:   "http-demo",
 		Short: "Exchange one direct proposal over local HTTP without a broker",
 		Args:  cobra.NoArgs,
-		Long: `Run Root and Alice in separate terminals with fresh signing handles.
+		Long: `Run Root and Alice in separate terminals.
 Copy BOTH Root's endpoint and public key into accept --url and --root.
-Root serves until Ctrl+C; restart Root for a fresh exchange and key.
+Root serves until Ctrl+C; restart Root for a fresh exchange.
+Root uses a fresh key unless --identity-dir and --unlock-file select a saved one.
+Alice always has a fresh signing identity and temporary Vault.
 Summaries go to stdout; errors exit nonzero via stderr.
 HTTP 204 is an unsigned response, not membership or an authenticated receipt.
 This disposable plain HTTP demo adds no Known, trust, or pairwise state.`,
@@ -62,9 +65,11 @@ func newHTTPDemoRoleCommand(role string) *cobra.Command {
 				address := try.T1(httpDemoAddress(listen, true))(
 					"checking --listen",
 				)
+
+				root := try.To1(selectHTTPDemoRoot(cmd))
 				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 				defer stop()
-				root := key.New()
+				try.To(ctx.Err())
 				listener := try.To1((&net.ListenConfig{}).Listen(
 					ctx, "tcp", address,
 				))
@@ -107,6 +112,10 @@ func newHTTPDemoRoleCommand(role string) *cobra.Command {
 			"127.0.0.1:0",
 			"Explicit loopback host and numeric port (zero selects a free port)",
 		)
+		flags.String("identity-dir", "",
+			"Existing private Root identity directory (requires --unlock-file)")
+		flags.String("unlock-file", "",
+			"Separate private Root unlock file (requires --identity-dir)")
 	} else {
 		cmd.Short = "Accept one offer from an independently selected root"
 		flags.StringVar(&endpoint, "url", "", "Required loopback HTTP base URL")
@@ -120,6 +129,35 @@ func newHTTPDemoRoleCommand(role string) *cobra.Command {
 		try.To(cmd.MarkFlagRequired("root"))
 	}
 	return cmd
+}
+
+// Select Root before allocating server resources; loading never falls back to
+// generation. The caller validates --listen before invoking this helper.
+func selectHTTPDemoRoot(cmd *cobra.Command) (handle key.Handle, err error) {
+	defer err2.Handle(&err)
+
+	flags := cmd.Flags()
+	dirSet := flags.Changed("identity-dir")
+	unlockSet := flags.Changed("unlock-file")
+	if dirSet != unlockSet {
+		return nil, errors.New(
+			"--identity-dir and --unlock-file must both be supplied",
+		)
+	}
+	dir := try.To1(flags.GetString("identity-dir"))
+	unlock := try.To1(flags.GetString("unlock-file"))
+	if dirSet &&
+		(strings.TrimSpace(dir) == "" || strings.TrimSpace(unlock) == "") {
+		return nil, errors.New(
+			"--identity-dir and --unlock-file must be nonempty",
+		)
+	}
+
+	try.To(cmd.Context().Err())
+	if !dirSet {
+		return key.New(), nil
+	}
+	return nodeidentity.OpenDirectory(dir, unlock)
 }
 
 func httpDemoAddress(value string, allowZero bool) (address string, err error) {

@@ -1,14 +1,31 @@
 # Introduction path and acceptance demos
 
-## Inspect the real HTTP exchange Vault
+## Use the saved Root in the HTTP exchange
 
-Start Root in Terminal A:
+Initialize **once** under an existing, trusted, user-owned parent outside this
+repository. If `/home/alice/playground` already exists and belongs to you,
+use the following paths (replace `alice` with your account).
+If you already initialized them using the [node walkthrough](../node/README.md),
+skip `init` and reuse them:
 
 ~~~sh
-go run ./cmd/tdc intro http-demo root --listen 127.0.0.1:0
+go run ./cmd/tdc node init --dir /home/alice/playground/node52 \
+    --unlock-file /home/alice/playground/node52.unlock
+go run ./cmd/tdc node info --dir /home/alice/playground/node52 \
+    --unlock-file /home/alice/playground/node52.unlock
 ~~~
 
-Copy Root's printed endpoint and public key into Terminal B:
+Start Root in Terminal A with that identity:
+
+~~~sh
+go run ./cmd/tdc intro http-demo root \
+    --identity-dir /home/alice/playground/node52 \
+    --unlock-file /home/alice/playground/node52.unlock \
+    --listen 127.0.0.1:0
+~~~
+
+Its public key must equal `node info`. Copy Root's printed endpoint and public
+key into the unchanged Alice command in Terminal B:
 
 ~~~sh
 go run ./cmd/tdc intro http-demo accept \
@@ -44,23 +61,43 @@ Omitting `--owner-listen` preserves the existing one-shot command; supplying it
 requires an explicit loopback address, with port zero allowed.
 
 Ctrl+C in Terminal B stops and joins HTTP, closes storage, clears the provider
-secret, and removes the temporary state and credential file. Identity and state
-remain disposable; this is not yet a restartable node. Stop Root separately.
-The release direction is one owner/node/root and a usable end-to-end CLI workflow;
-persistent identity and saved state across process restart remain explicit work.
-Flutter, multi-device recovery, transport frameworks, additional NATS investment,
-and container orchestration are not prerequisites for this increment.
+secret, and removes Alice's temporary state and credential file.
+Stop Root with Ctrl+C, then repeat only its saved-identity command in Terminal A.
+Check that its public key is identical; the endpoint may change with port zero.
+Start a fresh Alice invocation using the current endpoint and the same public
+expected Root. Each new handler issues a new offer: neither request resumption
+nor equality of whole proposal/signature bytes is promised.
+
+Only Root's signing identity is retained. Its currently issued offer is in
+memory; Alice's identity, Vault, and signing choice remain temporary together.
+Shutdown leaves Root's directory and unlock file intact. The runner borrows the
+handle; there is no new Close API or backend/heap-erasure guarantee.
+The two saved-Root flags are local to `http-demo root`: supply both nonempty or
+neither. Omitting both selects a fresh Root. Explicit empty values and loading
+failures are errors before listening/readiness, with no replacement key or repair.
+
+This is not a persistent wallet or complete node service. Retaining Root's key
+does not establish root authority, enforce globally unique parenthood, or
+implement V19 `Introduce`/`Known`. Alice's caller still supplies the public
+expected root independently. Next persistence work must keep Alice's identity
+together with Vault state and non-resetting key-use accounting; keeping her key
+with an emptied choice store would forget the local restriction on signing.
+No Vault secret is persisted or reused with a reset encryption counter.
+There is no migration or backup support before v1.0, and no additional transport,
+NATS demonstration, Flutter/gRPC/TLS/Tor/NAT, or release-packaging work here.
 
 Socket-free composition tests:
 
 ~~~sh
+go test -mod=readonly -count=1 -run '^TestHTTPDemoSaved' -v ./cmds/intro
 go test -mod=readonly -count=1 -run '^TestHTTPOwner' -v ./cmds/intro
 ~~~
 
-Real sockets and this CLI/curl walkthrough were **not run by Codex**.
-Reading order: this README -> new-mode composition in `http_owner.go` ->
-shared Vault lifetime in `exchange_demo.go` and `owner_status_demo.go` ->
-`http_owner_test.go`. The shared HTTP conversation is in `http_client.go`.
+Real sockets and this stop/restart CLI/curl walkthrough remain **pending for the
+owner**, not passed by Codex. Reading order: this README -> Root selection in
+`http_demo.go` -> shared loader in `internal/nodeidentity/files.go` ->
+saved-identity exchange in `http_identity_test.go`.
+Owner composition remains in `http_owner.go` and `http_owner_test.go`.
 
 ## Two-terminal protected owner status
 
@@ -166,7 +203,8 @@ go run ./cmd/tdc intro http-demo accept --url HTTP_URL --root ROOT_PUBLIC_KEY_HE
 
 With a built executable, use `tdc intro http-demo` with the same subcommands
 and flags. No NATS broker or session argument is needed.
-Each invocation creates a fresh signing handle after input validation.
+Without saved-Root flags, each Root invocation creates a fresh signing handle
+after input validation. Alice always uses a fresh identity and temporary Vault.
 Alice independently selects Root with `--root`; neither the URL nor the
 received proposal supplies that expected key. The `accept` invocation
 authorizes this one direct-root demo offer, without an interactive ceremony.
@@ -181,7 +219,8 @@ issuer returned HTTP 204: true
 
 Root remains open after acceptance. Stop it with Ctrl+C, which performs bounded
 graceful shutdown. A second offer gets the existing `409`; restart Root for
-each fresh exchange and copy its new endpoint and key.
+each fresh exchange and copy its current endpoint and key.
+With the saved-Root flags shown above, that key stays the same across restarts.
 Errors exit nonzero and the root CLI reports them on stderr; `go run` may add
 its exit status there. Stdout summaries are not complete terminal transcripts.
 
