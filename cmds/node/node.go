@@ -37,6 +37,7 @@ func newNodeCommand() *cobra.Command {
 		try.To(cmd.MarkFlagRequired("unlock-file"))
 		parent.AddCommand(cmd)
 	}
+	parent.AddCommand(newInitStateCommand())
 	return parent
 }
 

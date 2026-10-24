@@ -73,8 +73,11 @@ func TestHTTPDemoSavedFlagsAndFreshDefault(t *testing.T) {
 	for _, name := range []string{"identity-dir", "unlock-file"} {
 		assert.NotNil(root.LocalFlags().Lookup(name))
 		assert.Nil(root.PersistentFlags().Lookup(name))
+		accept := newHTTPDemoRoleCommand("accept")
+		assert.NotNil(accept.LocalFlags().Lookup(name))
+		assert.Nil(accept.PersistentFlags().Lookup(name))
 		for _, cmd := range []*cobra.Command{
-			newHTTPDemoCommand(), newHTTPDemoRoleCommand("accept"),
+			newHTTPDemoCommand(),
 			newExchangeRoleCommand("root"), newExchangeRoleCommand("accept"),
 		} {
 			assert.Nil(cmd.Flags().Lookup(name))

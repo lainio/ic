@@ -1,5 +1,127 @@
 # Introduction path and acceptance demos
 
+## Restart saved Alice in the HTTP exchange
+
+Use distinct saved Root and Alice identities on a trusted local host.
+Replace every uppercase placeholder below before running a command:
+`ROOT_DIR` and `ROOT_UNLOCK_FILE` select an existing Root identity;
+`ALICE_DIR` selects Alice's private identity directory;
+`ALICE_UNLOCK_FILE` is her separate identity unlock file;
+`ALICE_STORAGE_KEY_FILE` is a NEW, separate storage-secret file.
+Both key files must be outside the entire Alice directory and have different
+paths after parent normalization. All parent directories must already exist.
+The [node commands](../node/README.md) prepare identities and local state.
+
+In Terminal A, start the existing Root and **keep it running through both
+Alice invocations**:
+
+~~~sh
+tdc intro http-demo root --identity-dir ROOT_DIR --unlock-file ROOT_UNLOCK_FILE
+~~~
+
+Copy its full public-key hex into `ROOT_PUBLIC_KEY_HEX` and its endpoint into
+`HTTP_URL`. These are independently selected expected Root bytes, not proof
+that this Root is authoritative. In Terminal B, prepare Alice once.
+Run `node init` only for a NEW Alice identity; skip it for an existing Alice:
+
+~~~sh
+tdc node init --dir ALICE_DIR --unlock-file ALICE_UNLOCK_FILE
+tdc node init-state --dir ALICE_DIR --unlock-file ALICE_UNLOCK_FILE \
+    --storage-key-file ALICE_STORAGE_KEY_FILE --root ROOT_PUBLIC_KEY_HEX
+~~~
+
+`init-state` restores Alice, creates `ALICE_DIR/state`, and generates a fresh
+independent 32-byte raw storage secret in a new mode-0600 file.
+It refuses existing state or a storage-key path, including symlinks.
+It does not change `identity.json` or the unlock file.
+It closes the new Store and prints only Alice's actual public key followed by
+`local state initialized: true`. Failed initialization can leave exclusively
+created partial files for explicit operator inspection; it never repairs,
+deletes or retries them. This is temporary trusted-host provisioning, not a
+password or a final UI-assisted key/delegation design.
+
+Still in Terminal B, accept and keep Alice's optional owner endpoint open:
+
+~~~sh
+tdc intro http-demo accept --url HTTP_URL --root ROOT_PUBLIC_KEY_HEX \
+    --identity-dir ALICE_DIR --unlock-file ALICE_UNLOCK_FILE \
+    --storage-key-file ALICE_STORAGE_KEY_FILE --owner-listen 127.0.0.1:0
+~~~
+
+Supply all three saved-state flags nonempty, or omit all three for the existing
+fresh-Alice behavior. Saved mode only opens initialized state; it cannot
+provision or replace missing/invalid material. Root retains its two identity
+flags; `--storage-key-file` belongs only to HTTP accept and `node init-state`.
+NATS behavior is unchanged.
+
+The first invocation prints Alice's public key, requests an offer, commits her
+exact proposal choice, signs, saves and verifies the acceptance, then submits
+it. On success the existing summaries include `issuer returned HTTP 204: true`.
+The owner listener then advertises its URL and a temporary `owner.header` path.
+In Terminal C, replace `OWNER_STATUS_URL` and `HEADER_FILE` with these printed
+values and use the existing header-file commands (keep the at-sign):
+
+~~~sh
+curl -q --noproxy '*' --max-time 5 --silent --show-error --include OWNER_STATUS_URL
+curl -q --noproxy '*' --max-time 5 --silent --show-error --include --header '@HEADER_FILE' OWNER_STATUS_URL
+~~~
+
+Expect `401` without authorization, then `200` with `{"choice":"completed"}`.
+This handler reads the same persistent Vault used in the exchange.
+Its token never goes to the peer client or stdout.
+Serving starts only after the exchange succeeds; ending the exchange timeout
+does not stop owner serving.
+
+Stop ONLY Alice with Ctrl+C. HTTP stops and joins before the Store closes.
+Only the temporary credential directory is removed; Alice's identity directory,
+state databases, unlock file and storage-key file remain.
+Repeat only the same accept command in a new process, while Root stays running.
+Alice prints the same public key and `using saved introduction: true`, rechecks
+and reuses her exact saved acceptance without signing, and submits only
+`/intro/acceptance`. There is no new offer request.
+Use the new temporary credential path in Terminal C and observe completed
+status again. Without `--owner-listen`, each acceptance exits after closing the
+Store and retains all persistent files.
+
+A saved pending choice explicitly retries signing the exact proposal, without
+requesting another offer. Unreadable or inconsistent state fails locally.
+Signing, output, submission or acknowledgement failure preserves local records;
+an error carries no acceptance result even if local saving already succeeded.
+There are no automatic retries or exactly-once delivery guarantees.
+If Root restarts, even with the same identity, its in-memory offer is gone:
+acceptance-only submission returns `409`. Alice reports the error and retains
+her choice; she never refetches or clears it. This adds restartable Alice state,
+not durable Root offers or full node restart/recovery.
+
+Every Store opening charges up to 4096 encryptions toward the existing fixed
+`1 << 24` lifetime limit, including inspection and saved-result reuse openings.
+Unused capacity is discarded on close; reads and completed-result reuse do not
+seal records and remain available at the lifetime limit.
+The local layout uses fixed `VaultID{1}` and `KeyID{7}`, which are neither
+secrets nor global node IDs. Each Store gets an independently generated secret;
+Root and Child are independently supplied and checked on every opening.
+No migration or backup support exists before v1.0; copies, rollback, restores
+and full power-loss recovery remain unsupported.
+
+This direct `R -> Alice` workflow adds no backup/rotation support or authority
+guarantee. HTTP 204 remains an unsigned peer report, not enrollment, `Known`,
+trust, globally unique parenthood or device authority.
+Helper processes may sign/decrypt for their owners within the trusted host
+boundary; these files are not the final UI-assisted delegation protocol.
+Plaintext HTTP is restricted to loopback: no remote plaintext exposure,
+forwarded owner endpoint, Tor or TLS integration is provided.
+
+Socket-free composition coverage is in `http_saved_alice_test.go`:
+
+~~~sh
+go test -mod=readonly -count=1 -run '^TestHTTPSavedAlice' -v ./cmds/intro
+~~~
+
+`TestStoreAcrossProcesses` retains its separate two-process Store evidence.
+The HTTP tests use in-process handlers and test-only HTTP adapters, not sockets
+or separate CLI processes. This live CLI/curl restart walkthrough remains
+**pending for the owner**; it was not executed in the socket-free Codex run.
+
 ## Use the saved Root in the HTTP exchange
 
 Initialize **once** under an existing, trusted, user-owned parent outside this
@@ -68,21 +190,22 @@ Start a fresh Alice invocation using the current endpoint and the same public
 expected Root. Each new handler issues a new offer: neither request resumption
 nor equality of whole proposal/signature bytes is promised.
 
-Only Root's signing identity is retained. Its currently issued offer is in
+In this example only Root's signing identity is retained. Its issued offer is in
 memory; Alice's identity, Vault, and signing choice remain temporary together.
 Shutdown leaves Root's directory and unlock file intact. The runner borrows the
 handle; there is no new Close API or backend/heap-erasure guarantee.
-The two saved-Root flags are local to `http-demo root`: supply both nonempty or
-neither. Omitting both selects a fresh Root. Explicit empty values and loading
+For `http-demo root`, supply both identity flags nonempty or neither.
+Omitting both selects a fresh Root. Explicit empty values and loading
 failures are errors before listening/readiness, with no replacement key or repair.
 
 This is not a persistent wallet or complete node service. Retaining Root's key
 does not establish root authority, enforce globally unique parenthood, or
 implement V19 `Introduce`/`Known`. Alice's caller still supplies the public
-expected root independently. Next persistence work must keep Alice's identity
-together with Vault state and non-resetting key-use accounting; keeping her key
-with an emptied choice store would forget the local restriction on signing.
-No Vault secret is persisted or reused with a reset encryption counter.
+expected root independently. For Alice persistence, use the
+[saved-Alice walkthrough](#restart-saved-alice-in-the-http-exchange) above.
+It keeps her identity together with Vault state and non-resetting key-use
+accounting; keeping her key with an emptied choice store would forget the
+local restriction on signing.
 There is no migration or backup support before v1.0, and no additional transport,
 NATS demonstration, Flutter/gRPC/TLS/Tor/NAT, or release-packaging work here.
 
@@ -204,7 +327,8 @@ go run ./cmd/tdc intro http-demo accept --url HTTP_URL --root ROOT_PUBLIC_KEY_HE
 With a built executable, use `tdc intro http-demo` with the same subcommands
 and flags. No NATS broker or session argument is needed.
 Without saved-Root flags, each Root invocation creates a fresh signing handle
-after input validation. Alice always uses a fresh identity and temporary Vault.
+after input validation. Without saved-state flags, Alice uses a fresh identity
+and temporary Vault.
 Alice independently selects Root with `--root`; neither the URL nor the
 received proposal supplies that expected key. The `accept` invocation
 authorizes this one direct-root demo offer, without an interactive ceremony.

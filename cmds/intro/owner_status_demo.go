@@ -150,17 +150,31 @@ func setupOwnerStatusResources(
 	p := demo.provider
 	try.To(demo.db.CreateVault(ctx, p.vault, p.id, p))
 	demo.vault = try.To1(demo.db.OpenVault(ctx, p.vault, p.id, p))
+	demo.handler, demo.headerFile = try.To2(setupOwnerStatusCredentials(
+		ctx, demo.vault, expectedRoot, expectedChild, demo.dir,
+	))
+
+	ready = true
+	return demo, nil
+}
+
+// Borrows the open Vault and a caller-owned private directory. The caller owns
+// HTTP shutdown and directory cleanup; this helper owns only credential setup.
+func setupOwnerStatusCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, dir string,
+) (_ http.Handler, _ string, err error) {
+	defer err2.Handle(&err)
 
 	// This credential is independent of the provider secret and signing keys.
 	token := make([]byte, 32)
 	defer clear(token)
 	try.To1(rand.Read(token))
-	demo.handler = try.To1(ownerapi.NewAuthenticatedStatusHandler(
-		demo.vault, expectedRoot, expectedChild, token,
+	handler := try.To1(ownerapi.NewAuthenticatedStatusHandler(
+		vault, expectedRoot, expectedChild, token,
 	))
-	demo.headerFile = filepath.Join(demo.dir, "owner.header")
+	headerFile := filepath.Join(dir, "owner.header")
 	header := try.To1(os.OpenFile(
-		demo.headerFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600,
+		headerFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600,
 	))
 	closed := false
 	defer func() {
@@ -176,8 +190,7 @@ func setupOwnerStatusResources(
 	try.To(errors.Join(writeErr, closeErr))
 	try.To(ctx.Err())
 
-	ready = true
-	return demo, nil
+	return handler, headerFile, nil
 }
 
 // Called only after HTTP has stopped. All cleanup is attempted and every cause

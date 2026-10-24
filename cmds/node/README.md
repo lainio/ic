@@ -62,18 +62,16 @@ go run ./cmd/tdc intro http-demo root \
 
 Its public key equals `node info`. Stop with Ctrl+C and repeat the Root command,
 without another `init`: the key stays the same and port zero may change the
-endpoint. Follow the [HTTP walkthrough](../intro/README.md) for the unchanged
-Alice command, fresh exchanges, and Alice's `--owner-listen` status option.
+endpoint. Follow the [HTTP walkthrough](../intro/README.md) for fresh exchanges
+and Alice's `--owner-listen` status option.
 Both saved-Root flags must be supplied and nonempty; omitting both keeps the
 fresh-Root behavior. Failed loading never generates a replacement key.
 
-Only Root's signing identity survives. Its issued offer stays in memory;
-Alice still has a fresh identity, temporary Vault, and temporary signing choice
-per invocation. No Vault secret is persisted or reused with a reset encryption
-counter. Alice persistence must retain her identity together with Vault state
-and non-resetting key-use accounting, not her key with an emptied choice store.
-This is not a persistent wallet or complete node service. `node init` and `info`
-start no network service; HTTP shutdown leaves both identity files intact.
+In that fresh-Alice example only Root's signing identity survives.
+Its issued offer stays in memory. For persistent Alice, use `init-state` below
+and all three saved-state flags on HTTP accept.
+This is not a complete node service. `node init`, `info` and `init-state` start
+no network service; HTTP shutdown leaves identity files intact.
 Manual stop/restart and owner-status verification remain pending for the owner.
 
 This operation persists local key material only. It creates no introduction,
@@ -87,18 +85,56 @@ loader in `internal/nodeidentity/files.go` -> saved-identity exchange test in
 `cmds/intro/http_identity_test.go`. Existing cross-process restore coverage
 remains in `TestIdentityAcrossProcesses` in `internal/nodeidentity/identity_test.go`.
 
-## Internal Alice persistence (CLI integration pending)
+## Prepare Alice's persistent local state
+
+The one new command is `tdc node init-state --dir ALICE_DIR
+--unlock-file ALICE_UNLOCK_FILE --storage-key-file ALICE_STORAGE_KEY_FILE
+--root ROOT_PUBLIC_KEY_HEX`.
+All four flags must be supplied and nonempty; positional arguments and `--force`
+are rejected. `node init` and `node info` are unchanged.
+The identity and both parent directories must already exist.
+Root is explicit expected public-key hex (nonempty, at most 16 KiB decoded),
+not evidence that the supplied Root is authoritative.
+Child comes from the restored identity.
+
+Initialization exclusively creates the private `ALICE_DIR/state` directory
+and a new mode-0600 file holding 32 independent random raw storage-secret bytes.
+The storage-key file must be outside the entire identity directory and distinct
+from the unlock file after parent normalization.
+Existing paths, including symlinks, are refused without overwriting or repair.
+The identity record and unlock file remain unchanged.
+The Store closes before the command prints Alice's actual public key and
+`local state initialized: true`.
+An error may leave exclusively created partial files for explicit inspection;
+it never deletes persistent files or switches keys.
+
+Follow the single [saved-Alice HTTP walkthrough](../intro/README.md#restart-saved-alice-in-the-http-exchange)
+for placeholder replacement, explicit preparation, two separate accept
+invocations, and authenticated owner status.
+Keep Root running: its retained proposal is still in memory.
+Restarted Root returns `409` to Alice's saved acceptance; Alice keeps her choice
+and never requests a replacement offer.
+Owner shutdown removes only that invocation's temporary credentials, retaining
+Alice's identity, state, unlock and storage-key files.
 
 `internal/nodevault` now retains one Alice's proposal and acceptance across
 process exit, using the saved identity and existing onboarding operations.
-The caller supplies an independent random 32-byte storage secret and the same
-expected public binding each time; this component provisions no secrets.
+`CreateForNode` provisions the independent storage secret;
+`OpenForNode` requires existing private material and never provisions it.
+The underlying `Create`/`Open` APIs still borrow caller-supplied secrets.
+Each invocation supplies expected Root and restores Child; the Store checks
+the same binding using private layout IDs `VaultID{1}` and `KeyID{7}`.
+These are neither secrets nor global node IDs, and are not CLI options.
 A dedicated private directory holds encrypted `vault.db` and plain `usage.db`.
 Each opening charges up to 4096 encryptions toward a fixed `1 << 24` limit.
 Unused capacity is discarded; exhausting a block requires an explicit reopen.
 At the lifetime limit, reads and completed-result reuse still work.
 The exclusive usage-file lock permits one active Store for this file pair.
 Copies, rollback, backups, restores, migrations, compatible upgrades and full
-power-loss recovery are unsupported. Persistent Alice CLI/HTTP wiring is pending.
+power-loss recovery are unsupported. There is no migration/backup support
+before v1.0. This is temporary trusted-host file provisioning, not final
+UI-assisted key management/delegation. Helper processes may sign/decrypt for
+their owners within that trust boundary; no remote plaintext exposure or new
+authority guarantee follows. HTTP 204 is still an unsigned peer report.
 Read `ExampleStore`, then `Create`/`Open`/`Close`, the private provider, and
 `TestStoreAcrossProcesses` for the bounded two-process acceptance retry.

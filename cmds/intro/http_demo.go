@@ -41,10 +41,12 @@ func newHTTPDemoCommand() *cobra.Command {
 Copy BOTH Root's endpoint and public key into accept --url and --root.
 Root serves until Ctrl+C; restart Root for a fresh exchange.
 Root uses a fresh key unless --identity-dir and --unlock-file select a saved one.
-Alice always has a fresh signing identity and temporary Vault.
+Alice uses a fresh identity and temporary Vault unless all three saved-state
+flags select an existing identity and initialized state. Keep Root running
+when restarting saved Alice: its issued proposal remains in memory.
 Summaries go to stdout; errors exit nonzero via stderr.
 HTTP 204 is an unsigned response, not membership or an authenticated receipt.
-This disposable plain HTTP demo adds no Known, trust, or pairwise state.`,
+This plain HTTP demo adds no Known, trust, or pairwise state.`,
 	}
 	cmd.AddCommand(newHTTPDemoRoleCommand("root"))
 	cmd.AddCommand(newHTTPDemoRoleCommand("accept"))
@@ -85,13 +87,26 @@ func newHTTPDemoRoleCommand(role string) *cobra.Command {
 			)(
 				"checking --root",
 			)
+			paths, saved := try.To2(httpSavedAlicePaths(cmd))
+			var ownerAddress string
 			if cmd.Flags().Changed("owner-listen") {
-				address := try.T1(httpDemoAddress(ownerListen, true))(
+				ownerAddress = try.T1(httpDemoAddress(ownerListen, true))(
 					"checking --owner-listen",
 				)
+			}
+			if saved {
+				ctx, stop := signal.NotifyContext(
+					cmd.Context(),
+					os.Interrupt,
+				)
+				defer stop()
+				return startHTTPSavedAlice(ctx, paths, expectedRoot, base,
+					ownerAddress, timeout, cmd.OutOrStdout())
+			}
+			if cmd.Flags().Changed("owner-listen") {
 				ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
 				defer stop()
-				return startHTTPOwner(ctx, expectedRoot, base, address,
+				return startHTTPOwner(ctx, expectedRoot, base, ownerAddress,
 					timeout, cmd.OutOrStdout())
 			}
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
@@ -125,6 +140,12 @@ func newHTTPDemoRoleCommand(role string) *cobra.Command {
 			"Positive timeout for the whole exchange")
 		flags.StringVar(&ownerListen, "owner-listen", "",
 			"Keep this Vault open for owner status at an explicit loopback address")
+		flags.String("identity-dir", "",
+			"Existing Alice directory (requires both key-file flags)")
+		flags.String("unlock-file", "",
+			"Existing separate private Alice identity unlock file")
+		flags.String("storage-key-file", "",
+			"Existing separate private Alice storage key file")
 		try.To(cmd.MarkFlagRequired("url"))
 		try.To(cmd.MarkFlagRequired("root"))
 	}
