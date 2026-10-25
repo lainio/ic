@@ -14,7 +14,7 @@ import (
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
-	"github.com/lainio/ic/internal/core/intro"
+	"github.com/lainio/ic/internal/onboarding"
 	"github.com/lainio/ic/key"
 )
 
@@ -34,30 +34,8 @@ func (h *statusHandler) serveCheck(w http.ResponseWriter, r *http.Request) {
 		writeStatusError(w, http.StatusMethodNotAllowed)
 		return
 	}
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/json" ||
-		len(r.Header.Values("Content-Type")) != 1 {
-		writeStatusError(w, http.StatusUnsupportedMediaType)
-		return
-	}
-
-	// Authentication has already succeeded. Bound actual reads, including
-	// chunked bodies and dishonest Content-Length, before decoding anything.
-	data, err := io.ReadAll(
-		http.MaxBytesReader(w, r.Body, maxIntroductionBytes),
-	)
-	if err != nil {
-		status := http.StatusBadRequest
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			status = http.StatusRequestEntityTooLarge
-		}
-		writeStatusError(w, status)
-		return
-	}
-	document, err := decodeIntroduction(data)
-	if err != nil {
-		writeStatusError(w, http.StatusBadRequest)
+	document, ok := readIntroductionRequest(w, r)
+	if !ok {
 		return
 	}
 	result, err := checkIntroduction(document, h.expectedRoot, h.expectedChild)
@@ -73,6 +51,37 @@ func (h *statusHandler) serveCheck(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	try.Out1(w.Write(encoded)).Logf("writing owner introduction check response")
+}
+
+// Shared strict HTTP boundary for check and save, after authentication.
+func readIntroductionRequest(w http.ResponseWriter, r *http.Request) (introductionResponse, bool) {
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/json" ||
+		len(r.Header.Values("Content-Type")) != 1 {
+		writeStatusError(w, http.StatusUnsupportedMediaType)
+		return introductionResponse{}, false
+	}
+
+	// Authentication has already succeeded. Bound actual reads, including
+	// chunked bodies and dishonest Content-Length, before decoding anything.
+	data, err := io.ReadAll(
+		http.MaxBytesReader(w, r.Body, maxIntroductionBytes),
+	)
+	if err != nil {
+		status := http.StatusBadRequest
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			status = http.StatusRequestEntityTooLarge
+		}
+		writeStatusError(w, status)
+		return introductionResponse{}, false
+	}
+	document, err := decodeIntroduction(data)
+	if err != nil {
+		writeStatusError(w, http.StatusBadRequest)
+		return introductionResponse{}, false
+	}
+	return document, true
 }
 
 // Decode just this concrete transfer envelope. Token decoding preserves
@@ -132,17 +141,9 @@ func checkIntroduction(document introductionResponse, root, child key.Public) (
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
-	proposal := try.To1(intro.ParsePath(document.Proposal))
-	assert.SLonger(proposal, 1, errInvalidIntroduction)
-	assert.That(publicIntroduction(proposal), errInvalidIntroduction)
-	for _, edge := range proposal {
-		assert.That(edge.Body.Options.BackupKeyIndex == 0 &&
-			!edge.Body.Options.Rotation, errInvalidIntroduction)
-	}
-	try.To(proposal.ProveFromRoot(root))
-	try.To(proposal.VerifyAcceptance(document.Acceptance))
-
-	subject := proposal.LeafPubKey()
+	subject := try.To1(onboarding.CheckIntroduction(
+		document.Proposal, document.Acceptance, root,
+	))
 	return checkResponse{
 		SubjectPublicKeyHex: hex.EncodeToString(subject),
 		IsSelf:              bytes.Equal(subject, child),

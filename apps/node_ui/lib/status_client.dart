@@ -17,6 +17,16 @@ class IntroductionCheck {
   final bool isSelf;
 }
 
+class IntroductionSave extends IntroductionCheck {
+  const IntroductionSave({
+    required super.subjectPublicKeyHex,
+    required super.isSelf,
+    required this.created,
+  });
+
+  final bool created;
+}
+
 // Only these fixed messages cross into the UI; exceptions and bodies do not.
 enum StatusFailure implements Exception {
   invalidUrl('Use the full local owner status URL printed by node serve.'),
@@ -25,6 +35,11 @@ enum StatusFailure implements Exception {
     'Credential not accepted; use the current header file from node serve.',
   ),
   nodeState('The node could not inspect saved state.'),
+  saveStorage('The node could not save the introduction.'),
+  introductionConflict(
+    'Introduction was not saved: a different proposal is already saved or the collection is full.',
+  ),
+  saveUnreachable('Could not reach the local node; save outcome is unknown.'),
   notCompleted('The introduction is not yet completed.'),
   invalidIntroduction(
     "Introduction could not be verified for this node's Root.",
@@ -86,26 +101,62 @@ class StatusClient {
   ) async {
     final destination = _destination(url)
         .replace(path: '/owner/introduction/check');
-    if (document.trim().isEmpty) throw StatusFailure.emptyIntroduction;
-    final bytes = utf8.encode(document);
-    if (bytes.length > 128 * 1024) throw StatusFailure.introductionTooLarge;
     final json = await _request(
       destination,
       headerPath,
       4096,
-      introduction: bytes,
+      introduction: _documentBytes(document),
     );
-    final subject = json['subject_public_key_hex'];
-    final self = json['is_self'];
-    if (json.length != 2 ||
-        subject is! String ||
-        subject.isEmpty ||
-        subject.length.isOdd ||
-        RegExp(r'[^0-9a-f]').hasMatch(subject) ||
-        self is! bool) {
+    return _introductionSummary(json);
+  }
+
+  Future<IntroductionSave> saveIntroduction(
+    String url,
+    String headerPath,
+    String document,
+  ) async {
+    final destination = _destination(url).replace(path: '/owner/introductions');
+    final bytes = _documentBytes(document);
+    final Map<String, dynamic> json;
+    try {
+      json = await _request(destination, headerPath, 4096, introduction: bytes);
+    } on StatusFailure catch (failure) {
+      if (failure == StatusFailure.unreachable) {
+        throw StatusFailure.saveUnreachable;
+      }
+      rethrow;
+    }
+    if (json.length != 3 || json['created'] is! bool) {
       throw StatusFailure.unexpected;
     }
-    return IntroductionCheck(subjectPublicKeyHex: subject, isSelf: self);
+    final summary = _introductionSummary({
+      'subject_public_key_hex': json['subject_public_key_hex'],
+      'is_self': json['is_self'],
+    });
+    return IntroductionSave(
+      subjectPublicKeyHex: summary.subjectPublicKeyHex,
+      isSelf: summary.isSelf,
+      created: json['created'] as bool,
+    );
+  }
+
+  Future<List<IntroductionCheck>> listIntroductions(
+    String url,
+    String headerPath,
+  ) async {
+    final destination = _destination(url).replace(path: '/owner/introductions');
+    final json = await _request(destination, headerPath, 256 * 1024);
+    final items = json['introductions'];
+    if (json.length != 1 || items is! List || items.length > 32) {
+      throw StatusFailure.unexpected;
+    }
+    return items.map((item) {
+      if (item is! Map<String, dynamic> ||
+          utf8.encode(jsonEncode(item)).length > 4096) {
+        throw StatusFailure.unexpected;
+      }
+      return _introductionSummary(item);
+    }).toList();
   }
 
   Future<Map<String, dynamic>> _request(
@@ -160,8 +211,16 @@ class StatusClient {
           401 => StatusFailure.unauthorized,
           409 when destination.path == '/owner/introduction' =>
             StatusFailure.notCompleted,
+          409
+              when destination.path == '/owner/introductions' &&
+                  introduction != null =>
+            StatusFailure.introductionConflict,
           400 when introduction != null => StatusFailure.invalidIntroduction,
           413 when introduction != null => StatusFailure.introductionTooLarge,
+          500
+              when destination.path == '/owner/introductions' &&
+                  introduction != null =>
+            StatusFailure.saveStorage,
           500 => StatusFailure.nodeState,
           _ => StatusFailure.unexpected,
         };
@@ -217,6 +276,27 @@ class StatusClient {
     _closed = true;
     _cancel?.call();
   }
+}
+
+List<int> _documentBytes(String document) {
+  if (document.trim().isEmpty) throw StatusFailure.emptyIntroduction;
+  final bytes = utf8.encode(document);
+  if (bytes.length > 128 * 1024) throw StatusFailure.introductionTooLarge;
+  return bytes;
+}
+
+IntroductionCheck _introductionSummary(Map<String, dynamic> json) {
+  final subject = json['subject_public_key_hex'];
+  final self = json['is_self'];
+  if (json.length != 2 ||
+      subject is! String ||
+      subject.isEmpty ||
+      subject.length.isOdd ||
+      RegExp(r'[^0-9a-f]').hasMatch(subject) ||
+      self is! bool) {
+    throw StatusFailure.unexpected;
+  }
+  return IntroductionCheck(subjectPublicKeyHex: subject, isSelf: self);
 }
 
 bool _standardBase64(dynamic value) {

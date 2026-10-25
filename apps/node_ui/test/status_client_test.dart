@@ -872,6 +872,272 @@ void main() {
       }
     },
   );
+
+  test('save and list are explicit fixed sibling requests with fresh credentials', () async {
+    const document = '{"version":1,"proposal":"AQ==","acceptance":"Ag=="}';
+    var calls = 0;
+    final client = StatusClient(
+      createClient: () => MockClient((request) async {
+        calls++;
+        expect(
+          request.url.toString(),
+          'http://127.0.0.1:12345/owner/introductions',
+        );
+        expect(request.followRedirects, isFalse);
+        expect(request.maxRedirects, 0);
+        expect(request.persistentConnection, isFalse);
+        expect(
+          request.headers['Authorization'],
+          'Bearer ${calls == 1 ? token : 'cd' * 32}',
+        );
+        if (calls == 1) {
+          expect(request.method, 'POST');
+          expect(request.body, document);
+          expect(request.headers['content-type'], 'application/json');
+          return http.Response(
+            '{"subject_public_key_hex":"00ab","is_self":false,"created":true}',
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }
+        expect(request.method, 'GET');
+        expect(request.body, isEmpty);
+        return http.Response(
+          '{"introductions":[{"subject_public_key_hex":"00ab","is_self":false},{"subject_public_key_hex":"abcd","is_self":true}]}',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+    final saved = await client.saveIntroduction(url, header.path, document);
+    expect(saved.subjectPublicKeyHex, '00ab');
+    expect(saved.isSelf, isFalse);
+    expect(saved.created, isTrue);
+    expect(calls, 1);
+    await header.writeAsString('Authorization: Bearer ${'cd' * 32}\n');
+    final listed = await client.listIntroductions(
+      'http://localhost:12345/owner/status',
+      header.path,
+    );
+    expect(listed.map((e) => e.subjectPublicKeyHex), ['00ab', 'abcd']);
+    expect(listed.map((e) => e.isSelf), [false, true]);
+    expect(calls, 2);
+  });
+
+  test(
+    'save maps results and fixed failures without exposing response bodies',
+    () async {
+      for (final (code, body, expected) in [
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":true,"created":false}',
+          false,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":true,"created":"false"}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":true}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"zz","is_self":true,"created":true}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":0,"created":true}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":true,"created":true,"extra":0}',
+          StatusFailure.unexpected,
+        ),
+        (400, 'secret diagnostic', StatusFailure.invalidIntroduction),
+        (401, 'secret diagnostic', StatusFailure.unauthorized),
+        (409, 'secret diagnostic', StatusFailure.introductionConflict),
+        (413, 'secret diagnostic', StatusFailure.introductionTooLarge),
+        (415, 'secret diagnostic', StatusFailure.unexpected),
+        (500, 'secret diagnostic', StatusFailure.saveStorage),
+      ]) {
+        final client = StatusClient(
+          createClient: () => MockClient(
+            (_) async => http.Response(
+              body,
+              code,
+              headers: {'content-type': 'application/json'},
+            ),
+          ),
+        );
+        final result = client.saveIntroduction(url, header.path, '{}');
+        if (expected is bool) {
+          expect((await result).created, expected);
+        } else {
+          await expectLater(result, throwsA(expected));
+        }
+      }
+      final client = StatusClient(
+        createClient: () => MockClient(
+          (_) async => throw const SocketException('private diagnostic'),
+        ),
+      );
+      await expectLater(
+        client.saveIntroduction(url, header.path, '{}'),
+        throwsA(StatusFailure.saveUnreachable),
+      );
+      await expectLater(
+        client.saveIntroduction(url, '/missing/owner.header', '{}'),
+        throwsA(StatusFailure.credentials),
+      );
+      await expectLater(
+        client.saveIntroduction('$url?', header.path, '{}'),
+        throwsA(StatusFailure.invalidUrl),
+      );
+      await expectLater(
+        client.saveIntroduction(url, header.path, 'é' * (64 * 1024 + 1)),
+        throwsA(StatusFailure.introductionTooLarge),
+      );
+    },
+  );
+
+  test('list validates complete bounded summaries and distinguishes empty from failed', () async {
+    const item = {'subject_public_key_hex': 'ab', 'is_self': false};
+    for (final value in [
+      {'introductions': null},
+      {'introductions': [], 'extra': 0},
+      {
+        'introductions': [null],
+      },
+      {
+        'introductions': [
+          {'subject_public_key_hex': 'ab'},
+        ],
+      },
+      {
+        'introductions': [
+          {'subject_public_key_hex': 'a', 'is_self': false},
+        ],
+      },
+      {
+        'introductions': [
+          {'subject_public_key_hex': 'AB', 'is_self': false},
+        ],
+      },
+      {
+        'introductions': [
+          {'subject_public_key_hex': 'ab', 'is_self': 'true'},
+        ],
+      },
+      {
+        'introductions': [
+          {
+            'subject_public_key_hex': 'ab',
+            'is_self': false,
+            'proposal': 'secret',
+          },
+        ],
+      },
+      {
+        'introductions': [
+          {'subject_public_key_hex': 'ab' * 2048, 'is_self': false},
+        ],
+      },
+      {'introductions': List.filled(33, item)},
+    ]) {
+      final client = StatusClient(
+        createClient: () => MockClient(
+          (_) async => http.Response(
+            jsonEncode(value),
+            200,
+            headers: {'content-type': 'application/json'},
+          ),
+        ),
+      );
+      await expectLater(
+        client.listIntroductions(url, header.path),
+        throwsA(StatusFailure.unexpected),
+      );
+    }
+    for (final (code, expected) in [
+      (200, null),
+      (500, StatusFailure.nodeState),
+      (401, StatusFailure.unauthorized),
+    ]) {
+      final client = StatusClient(
+        createClient: () => MockClient(
+          (_) async => http.Response(
+            '{"introductions":[]}',
+            code,
+            headers: {'content-type': 'application/json'},
+          ),
+        ),
+      );
+      if (expected == null) {
+        expect(await client.listIntroductions(url, header.path), isEmpty);
+      } else {
+        await expectLater(
+          client.listIntroductions(url, header.path),
+          throwsA(expected),
+        );
+      }
+    }
+  });
+
+  test(
+    'save and list bound actual response bytes, cancelling oversized streams',
+    () async {
+      for (final save in [true, false]) {
+        final limit = save ? 4096 : 256 * 1024;
+        final json = save
+            ? '{"subject_public_key_hex":"ab","is_self":false,"created":true}'
+            : '{"introductions":[]}';
+        final boundary = utf8.encode('$json${' ' * (limit - json.length)}');
+        Future<Object> request(StatusClient client) => save
+            ? client.saveIntroduction(url, header.path, '{}')
+            : client.listIntroductions(url, header.path);
+        await request(
+          StatusClient(
+            createClient: () => MockClient(
+              (_) async => http.Response.bytes(
+                boundary,
+                200,
+                headers: {'content-type': 'application/json'},
+              ),
+            ),
+          ),
+        );
+        var cancelled = false;
+        final body = StreamController<List<int>>(
+          onCancel: () {
+            cancelled = true;
+          },
+        );
+        final transport = ObservedClient.streaming(
+          (_, _) async => http.StreamedResponse(
+            body.stream,
+            200,
+            contentLength: 1,
+            headers: {'content-type': 'application/json'},
+          ),
+        );
+        final expectation = expectLater(
+          request(StatusClient(createClient: () => transport)),
+          throwsA(StatusFailure.unexpected),
+        );
+        body.add(boundary);
+        body.add([32]);
+        await expectation;
+        expect(cancelled, isTrue);
+        expect(transport.closed, isTrue);
+        await body.close();
+      }
+    },
+  );
 }
 
 class ObservedClient extends MockClient {

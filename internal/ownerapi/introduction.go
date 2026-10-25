@@ -6,13 +6,12 @@ import (
 	"net/http"
 
 	"github.com/lainio/err2/try"
-	"github.com/lainio/ic/internal/core/intro"
 	"github.com/lainio/ic/internal/onboarding"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
 
-const maxIntroductionBytes = 128 * 1024
+const maxIntroductionBytes = onboarding.MaxIntroductionBytes
 
 type introductionResponse struct {
 	Version    int    `json:"version"`
@@ -63,7 +62,7 @@ func (h *statusHandler) serveIntroduction(
 	}
 	// A verified signature does not make a handle ID public: the backend may
 	// embed wrapped private key material. Refuse; never strip signed fields.
-	if !publicIntroduction(stored.Proposal) {
+	if !onboarding.PublicIntroduction(stored.Proposal) {
 		writeStatusError(w, http.StatusInternalServerError)
 		return
 	}
@@ -80,13 +79,4 @@ func (h *statusHandler) serveIntroduction(
 	w.WriteHeader(http.StatusOK)
 	// Output failure must not initiate a second response.
 	try.Out1(w.Write(document)).Logf("writing owner introduction response")
-}
-
-func publicIntroduction(proposal intro.Path) bool {
-	for _, edge := range proposal {
-		if len(edge.Body.Child.ID) != 0 {
-			return false
-		}
-	}
-	return true
 }

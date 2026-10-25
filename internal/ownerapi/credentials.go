@@ -28,7 +28,7 @@ func NewStatusCredentials(ctx context.Context, vault *storage.Vault,
 }
 
 // NewReadCredentials grants GET /owner/status, GET /owner/introduction, and
-// stateless POST /owner/introduction/check on the operational service.
+// stateless POST /owner/introduction/check.
 // Unlike status-only credentials, possession permits disclosure of the saved
 // completed public path and acceptance, and inspection of submitted evidence
 // under the configured Root. POST carries input; it authorizes no persistence,
@@ -41,6 +41,18 @@ func NewReadCredentials(ctx context.Context, vault *storage.Vault,
 ) (http.Handler, string, error) {
 	return newCredentials(ctx,
 		newReadHandler(vault, expectedRoot, expectedChild), dir,
+	)
+}
+
+// NewEvidenceCredentials grants the read/check surface plus exactly GET and
+// POST /owner/introductions. POST may retain submitted received evidence after
+// revalidation. It grants no signing, trust, peer access, or future POST rights.
+// Vault/identity ownership and private credential creation match NewReadCredentials.
+func NewEvidenceCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, dir string,
+) (http.Handler, string, error) {
+	return newCredentials(ctx,
+		newEvidenceHandler(vault, expectedRoot, expectedChild), dir,
 	)
 }
 

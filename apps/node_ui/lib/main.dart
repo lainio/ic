@@ -16,17 +16,31 @@ typedef CheckIntroduction = Future<IntroductionCheck> Function(
   String document,
 );
 
+typedef SaveIntroduction = Future<IntroductionSave> Function(
+  String url,
+  String headerPath,
+  String document,
+);
+typedef ListIntroductions = Future<List<IntroductionCheck>> Function(
+  String url,
+  String headerPath,
+);
+
 class IntroTreeApp extends StatelessWidget {
   const IntroTreeApp({
     super.key,
     this.readStatus,
     this.readIntroduction,
     this.checkIntroduction,
+    this.saveIntroduction,
+    this.listIntroductions,
   });
 
   final ReadStatus? readStatus;
   final ReadIntroduction? readIntroduction;
   final CheckIntroduction? checkIntroduction;
+  final SaveIntroduction? saveIntroduction;
+  final ListIntroductions? listIntroductions;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -44,6 +58,8 @@ class IntroTreeApp extends StatelessWidget {
       readStatus: readStatus,
       readIntroduction: readIntroduction,
       checkIntroduction: checkIntroduction,
+      saveIntroduction: saveIntroduction,
+      listIntroductions: listIntroductions,
     ),
   );
 }
@@ -54,11 +70,15 @@ class StatusScreen extends StatefulWidget {
     this.readStatus,
     this.readIntroduction,
     this.checkIntroduction,
+    this.saveIntroduction,
+    this.listIntroductions,
   });
 
   final ReadStatus? readStatus;
   final ReadIntroduction? readIntroduction;
   final CheckIntroduction? checkIntroduction;
+  final SaveIntroduction? saveIntroduction;
+  final ListIntroductions? listIntroductions;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -73,6 +93,12 @@ class _StatusScreenState extends State<StatusScreen> {
   bool _copying = false;
   bool _copied = false;
   bool _checking = false;
+  bool _saving = false;
+  bool _listing = false;
+  IntroductionSave? _saved;
+  StatusFailure? _saveFailure;
+  List<IntroductionCheck>? _introductions;
+  StatusFailure? _listFailure;
   IntroductionCheck? _checked;
   StatusFailure? _checkFailure;
   int _checkRevision = 0;
@@ -83,6 +109,8 @@ class _StatusScreenState extends State<StatusScreen> {
   void _inputChanged(String _) {
     setState(() {
       _inputRevision++;
+      _introductions = null;
+      _listFailure = null;
       _choice = null;
       _failure = null;
       _copied = false;
@@ -92,6 +120,8 @@ class _StatusScreenState extends State<StatusScreen> {
 
   void _invalidateCheck() {
     _checkRevision++;
+    _saved = null;
+    _saveFailure = null;
     _checked = null;
     _checkFailure = null;
   }
@@ -124,6 +154,76 @@ class _StatusScreenState extends State<StatusScreen> {
       if (revision == _checkRevision) {
         _checked = checked;
         _checkFailure = failure;
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    if (_loading || _checked == null) return;
+    final revision = _checkRevision;
+    setState(() {
+      _loading = true;
+      _saving = true;
+      _saved = null;
+      _saveFailure = null;
+      // Even a lost response can follow a committed save. Require an explicit
+      // load to show a current list, including when inputs change mid-request.
+      _introductions = null;
+      _listFailure = null;
+    });
+    IntroductionSave? saved;
+    StatusFailure? failure;
+    try {
+      saved = await (widget.saveIntroduction ?? _client.saveIntroduction)(
+        _url.text,
+        _headerPath.text,
+        _introduction.text,
+      );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.saveUnreachable;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _saving = false;
+      if (revision == _checkRevision) {
+        _saved = saved;
+        _saveFailure = failure;
+      }
+    });
+  }
+
+  Future<void> _loadIntroductions() async {
+    if (_loading) return;
+    final revision = _inputRevision;
+    setState(() {
+      _loading = true;
+      _listing = true;
+      _introductions = null;
+      _listFailure = null;
+    });
+    List<IntroductionCheck>? introductions;
+    StatusFailure? failure;
+    try {
+      introductions =
+          await (widget.listIntroductions ?? _client.listIntroductions)(
+            _url.text,
+            _headerPath.text,
+          );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.unreachable;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _listing = false;
+      if (revision == _inputRevision) {
+        _introductions = introductions;
+        _listFailure = failure;
       }
     });
   }
@@ -331,6 +431,25 @@ class _StatusScreenState extends State<StatusScreen> {
                   ),
                   const SizedBox(height: 20),
                   Semantics(liveRegion: true, child: _checkResult(theme)),
+                  const SizedBox(height: 32),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Saved introductions',
+                    style: theme.textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Saved evidence; no connection or trust created.'),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: OutlinedButton(
+                      onPressed: _loading ? null : _loadIntroductions,
+                      child: const Text('Load saved introductions'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Semantics(liveRegion: true, child: _listResult(theme)),
                 ],
               ),
             ),
@@ -343,7 +462,7 @@ class _StatusScreenState extends State<StatusScreen> {
   Widget _result(ThemeData theme) {
     final choice = _choice;
     final failure = _failure;
-    if (_loading && !_checking) {
+    if (_loading && !_checking && !_saving && !_listing) {
       final action = _copying ? 'Copying introduction' : 'Reading status';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,6 +540,21 @@ class _StatusScreenState extends State<StatusScreen> {
       children: [
         Text('Path and acceptance verified', style: theme.textTheme.titleLarge),
         const SizedBox(height: 12),
+        OutlinedButton(
+          onPressed: _loading ? null : _save,
+          child: const Text('Save introduction'),
+        ),
+        if (_saving) const Text('Saving introduction…'),
+        if (_saveFailure != null)
+          Text(
+            _saveFailure!.message,
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        if (_saved != null) ...[
+          Text(_saved!.created ? 'Introduction saved' : 'Already saved'),
+          const Text('Load saved introductions refreshes the list.'),
+        ],
+        const SizedBox(height: 12),
         const Text('Subject public key'),
         SelectableText(checked.subjectPublicKeyHex),
         if (checked.isSelf) ...[
@@ -431,6 +565,48 @@ class _StatusScreenState extends State<StatusScreen> {
         const Text(
           "Checked against this node's configured Root. No connection created.",
         ),
+      ],
+    );
+  }
+
+  Widget _listResult(ThemeData theme) {
+    if (_listing) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Loading saved introductions…'),
+          SizedBox(height: 12),
+          LinearProgressIndicator(
+            semanticsLabel: 'Loading saved introductions',
+          ),
+        ],
+      );
+    }
+    if (_listFailure != null) {
+      return Text(
+        _listFailure!.message,
+        style: TextStyle(color: theme.colorScheme.error),
+      );
+    }
+    final introductions = _introductions;
+    if (introductions == null) {
+      return const Text('Saved introductions not loaded.');
+    }
+    if (introductions.isEmpty) return const Text('No saved introductions.');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final introduction in introductions)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(introduction.subjectPublicKeyHex),
+                if (introduction.isSelf) const Text('Your own introduction'),
+              ],
+            ),
+          ),
       ],
     );
   }

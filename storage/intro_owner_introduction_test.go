@@ -24,6 +24,7 @@ import (
 )
 
 type introductionFixture struct {
+	db            *storage.Database
 	vault         *storage.Vault
 	provider      *consumerProvider
 	path          string
@@ -52,7 +53,7 @@ func newIntroductionFixture(t *testing.T, root, child key.Public) introductionFi
 	clear(childBinding)
 	header := string(try.To1(os.ReadFile(file)))
 	assert.Equal(try.To1(os.Stat(file)).Mode().Perm(), os.FileMode(0600))
-	return introductionFixture{vault, p, path, handler,
+	return introductionFixture{db, vault, p, path, handler,
 		strings.TrimSpace(strings.TrimPrefix(header, "Authorization: "))}
 }
 

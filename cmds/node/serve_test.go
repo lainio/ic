@@ -291,6 +291,37 @@ func TestServeSavedChoices(t *testing.T) {
 	}
 }
 
+func TestServeEvidenceScope(t *testing.T) {
+	defer assert.PushTester(t)()
+
+	f := prepareServeFixture(t)
+	saveServeChoice(t, f, "completed")
+	s, _ := try.To2(setupNodeServe(t.Context(), serveCommand(t, f)))
+	defer func() { try.Out(s.close()).Logf() }()
+	header := string(try.To1(os.ReadFile(s.headerFile)))
+	authorization := strings.TrimSpace(strings.TrimPrefix(header, "Authorization: "))
+	request := func(method, path string, body []byte) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, bytes.NewReader(body))
+		r.Header.Set("Authorization", authorization)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		s.handler.ServeHTTP(w, r)
+		return w
+	}
+	listed := request(http.MethodGet, "/owner/introductions", nil)
+	assert.Equal(listed.Code, http.StatusOK)
+	assert.Equal(listed.Body.String(), `{"introductions":[]}`)
+	exported := request(http.MethodGet, "/owner/introduction", nil)
+	assert.Equal(exported.Code, http.StatusOK)
+	saved := request(http.MethodPost, "/owner/introductions", exported.Body.Bytes())
+	assert.Equal(saved.Code, http.StatusOK)
+	assert.That(strings.Contains(saved.Body.String(), `"created":true`))
+	listed = request(http.MethodGet, "/owner/introductions", nil)
+	assert.Equal(listed.Code, http.StatusOK)
+	assert.Equal(listed.Body.String(), `{"introductions":[{"subject_public_key_hex":"`+
+		hex.EncodeToString(f.child)+`","is_self":true}]}`)
+}
+
 func assertServeClosed(t *testing.T, s *nodeServe, f serveFixture,
 	before onboarding.StoredChoice,
 ) {

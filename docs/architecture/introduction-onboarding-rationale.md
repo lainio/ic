@@ -260,7 +260,7 @@ separate work, with no new V19 authority or signing permission.
 
 ### Deliberate public introduction copy
 
-Operational `node serve` uses `NewReadCredentials`: its credential now permits
+`NewReadCredentials` permits
 `GET /owner/status`, disclosure through `GET /owner/introduction`, and stateless
 inspection through `POST /owner/introduction/check`.
 The three existing status constructors remain status-only. POST carries input;
@@ -298,6 +298,22 @@ neither V19 `VerifyReceived` nor `CreatePW`. A copied signature proves neither
 presenter key control, freshness, revocation status, global parent uniqueness,
 nor a live authenticated channel. Peer enrollment, connections, and chat remain
 separate work.
+
+### Deliberately retained received evidence
+
+The owner may save checked public introductions in a separate encrypted Vault
+namespace, keyed by full subject public-key bytes, with exact proposal/acceptance.
+The projection adds decoded path edges to this receiver's `Received`, preserving
+all existing evidence; duplicate/no-change operations stutter in that projection.
+Acceptance signatures and the local index are representation metadata.
+The existing checker is an admission filter for this limited owner import,
+not every possible `ReceiveEdge` action and not durable `VerifyReceived`.
+Checking, saving, and listing never update `Known`, global introduction truth,
+the local choice, ads, PW, trust, deny, device, or recovery state.
+A conflicting proposal is refused locally, without declaring a canonical parent.
+Operational `node serve` uses fresh `NewEvidenceCredentials` for current reads,
+check, and save/list only; read/status credentials gain no persistence or routes.
+This capability grants no signing, trust, or general future POST permission.
 
 ## Source locators
 

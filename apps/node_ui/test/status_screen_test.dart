@@ -16,6 +16,11 @@ void main() {
   final readButton = find.widgetWithText(FilledButton, 'Read status');
   final copyButton = find.widgetWithText(OutlinedButton, 'Copy introduction');
   final checkButton = find.widgetWithText(FilledButton, 'Check introduction');
+  final saveButton = find.widgetWithText(OutlinedButton, 'Save introduction');
+  final loadButton = find.widgetWithText(
+    OutlinedButton,
+    'Load saved introductions',
+  );
   final introductionField = find.widgetWithText(TextField, 'Introduction JSON');
   const subject = '00abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   const document = '{"version":1,"proposal":"AQ==","acceptance":"Ag=="}';
@@ -195,6 +200,14 @@ void main() {
         data: original.copyWith(textScaler: const TextScaler.linear(2)),
         child: IntroTreeApp(
           readIntroduction: (_, _) async => document,
+          saveIntroduction: (_, _, _) async => const IntroductionSave(
+            subjectPublicKeyHex: subject,
+            isSelf: true,
+            created: true,
+          ),
+          listIntroductions: (_, _) async => const [
+            IntroductionCheck(subjectPublicKeyHex: subject, isSelf: true),
+          ],
           checkIntroduction: (_, _, _) async => const IntroductionCheck(
             subjectPublicKeyHex: subject,
             isSelf: true,
@@ -253,6 +266,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(SelectableText, subject), findsOneWidget);
     expect(find.text('This is your own introduction.'), findsOneWidget);
+    await tester.ensureVisible(saveButton);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Introduction saved'), findsOneWidget);
+    await tester.ensureVisible(loadButton);
+    await tester.tap(loadButton);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Your own introduction'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your own introduction'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -302,6 +327,7 @@ void main() {
     expect(exports, 1);
     expect(tester.widget<OutlinedButton>(copyButton).onPressed, isNull);
     expect(tester.widget<FilledButton>(readButton).onPressed, isNull);
+    await tester.ensureVisible(copyButton);
     await tester.tap(copyButton);
     expect(exports, 1);
     expect(reads, 1);
@@ -566,6 +592,7 @@ void main() {
       expect(find.text('Path and acceptance verified'), findsNothing);
       expect(find.text(subject), findsNothing);
       expect(find.text('This is your own introduction.'), findsNothing);
+      expect(saveButton, findsNothing);
 
       if (change == 'dispose') {
         await tester.pumpWidget(
