@@ -10,12 +10,23 @@ typedef ReadIntroduction = Future<String> Function(
   String url,
   String headerPath,
 );
+typedef CheckIntroduction = Future<IntroductionCheck> Function(
+  String url,
+  String headerPath,
+  String document,
+);
 
 class IntroTreeApp extends StatelessWidget {
-  const IntroTreeApp({super.key, this.readStatus, this.readIntroduction});
+  const IntroTreeApp({
+    super.key,
+    this.readStatus,
+    this.readIntroduction,
+    this.checkIntroduction,
+  });
 
   final ReadStatus? readStatus;
   final ReadIntroduction? readIntroduction;
+  final CheckIntroduction? checkIntroduction;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -32,15 +43,22 @@ class IntroTreeApp extends StatelessWidget {
     home: StatusScreen(
       readStatus: readStatus,
       readIntroduction: readIntroduction,
+      checkIntroduction: checkIntroduction,
     ),
   );
 }
 
 class StatusScreen extends StatefulWidget {
-  const StatusScreen({super.key, this.readStatus, this.readIntroduction});
+  const StatusScreen({
+    super.key,
+    this.readStatus,
+    this.readIntroduction,
+    this.checkIntroduction,
+  });
 
   final ReadStatus? readStatus;
   final ReadIntroduction? readIntroduction;
+  final CheckIntroduction? checkIntroduction;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -49,10 +67,15 @@ class StatusScreen extends StatefulWidget {
 class _StatusScreenState extends State<StatusScreen> {
   final _url = TextEditingController();
   final _headerPath = TextEditingController();
+  final _introduction = TextEditingController();
   final _client = StatusClient();
   bool _loading = false;
   bool _copying = false;
   bool _copied = false;
+  bool _checking = false;
+  IntroductionCheck? _checked;
+  StatusFailure? _checkFailure;
+  int _checkRevision = 0;
   NodeChoice? _choice;
   StatusFailure? _failure;
   int _inputRevision = 0;
@@ -63,6 +86,45 @@ class _StatusScreenState extends State<StatusScreen> {
       _choice = null;
       _failure = null;
       _copied = false;
+      _invalidateCheck();
+    });
+  }
+
+  void _invalidateCheck() {
+    _checkRevision++;
+    _checked = null;
+    _checkFailure = null;
+  }
+
+  Future<void> _check() async {
+    if (_loading) return;
+    setState(() {
+      _invalidateCheck();
+      _loading = true;
+      _checking = true;
+    });
+    final revision = _checkRevision;
+    IntroductionCheck? checked;
+    StatusFailure? failure;
+    try {
+      checked = await (widget.checkIntroduction ?? _client.checkIntroduction)(
+        _url.text,
+        _headerPath.text,
+        _introduction.text,
+      );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.unreachable;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _checking = false;
+      if (revision == _checkRevision) {
+        _checked = checked;
+        _checkFailure = failure;
+      }
     });
   }
 
@@ -147,6 +209,7 @@ class _StatusScreenState extends State<StatusScreen> {
     _client.close();
     _url.dispose();
     _headerPath.dispose();
+    _introduction.dispose();
     super.dispose();
   }
 
@@ -238,6 +301,36 @@ class _StatusScreenState extends State<StatusScreen> {
                     'Local acceptance state; not membership, trust, or delivery confirmation.',
                     style: theme.textTheme.bodyMedium,
                   ),
+                  const SizedBox(height: 32),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Check an introduction',
+                    style: theme.textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: _introduction,
+                    onChanged: (_) => setState(_invalidateCheck),
+                    minLines: 4,
+                    maxLines: 8,
+                    keyboardType: TextInputType.multiline,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Introduction JSON',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton(
+                      onPressed: _loading ? null : _check,
+                      child: const Text('Check introduction'),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Semantics(liveRegion: true, child: _checkResult(theme)),
                 ],
               ),
             ),
@@ -250,7 +343,7 @@ class _StatusScreenState extends State<StatusScreen> {
   Widget _result(ThemeData theme) {
     final choice = _choice;
     final failure = _failure;
-    if (_loading) {
+    if (_loading && !_checking) {
       final action = _copying ? 'Copying introduction' : 'Reading status';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -299,6 +392,45 @@ class _StatusScreenState extends State<StatusScreen> {
         ),
         const SizedBox(height: 16),
         const Text('Observed on this read. Read again to refresh.'),
+      ],
+    );
+  }
+
+  Widget _checkResult(ThemeData theme) {
+    if (_checking) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Checking introduction…'),
+          SizedBox(height: 16),
+          LinearProgressIndicator(semanticsLabel: 'Checking introduction'),
+        ],
+      );
+    }
+    final failure = _checkFailure;
+    if (failure != null) {
+      return Text(
+        failure.message,
+        style: TextStyle(color: theme.colorScheme.error),
+      );
+    }
+    final checked = _checked;
+    if (checked == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Path and acceptance verified', style: theme.textTheme.titleLarge),
+        const SizedBox(height: 12),
+        const Text('Subject public key'),
+        SelectableText(checked.subjectPublicKeyHex),
+        if (checked.isSelf) ...[
+          const SizedBox(height: 12),
+          const Text('This is your own introduction.'),
+        ],
+        const SizedBox(height: 12),
+        const Text(
+          "Checked against this node's configured Root. No connection created.",
+        ),
       ],
     );
   }

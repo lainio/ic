@@ -15,6 +15,9 @@ void main() {
   );
   final readButton = find.widgetWithText(FilledButton, 'Read status');
   final copyButton = find.widgetWithText(OutlinedButton, 'Copy introduction');
+  final checkButton = find.widgetWithText(FilledButton, 'Check introduction');
+  final introductionField = find.widgetWithText(TextField, 'Introduction JSON');
+  const subject = '00abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
   const document = '{"version":1,"proposal":"AQ==","acceptance":"Ag=="}';
   late List<String> clipboardWrites;
 
@@ -56,7 +59,7 @@ void main() {
       expect(find.text('IntroTree'), findsOneWidget);
       expect(find.text('My node'), findsOneWidget);
       expect(find.text('Not checked'), findsOneWidget);
-      expect(find.byType(TextField), findsNWidgets(2));
+      expect(find.byType(TextField), findsNWidgets(3));
       expect(calls, 0);
       expect(copyButton, findsNothing);
       expect(clipboardWrites, isEmpty);
@@ -192,6 +195,10 @@ void main() {
         data: original.copyWith(textScaler: const TextScaler.linear(2)),
         child: IntroTreeApp(
           readIntroduction: (_, _) async => document,
+          checkIntroduction: (_, _, _) async => const IntroductionCheck(
+            subjectPublicKeyHex: subject,
+            isSelf: true,
+          ),
           readStatus: (_, _) async {
             calls++;
             return NodeChoice.completed;
@@ -234,6 +241,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(clipboardWrites, [document]);
     expect(find.text('Introduction copied'), findsOneWidget);
+    await tester.ensureVisible(introductionField);
+    await tester.enterText(introductionField, document);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Path and acceptance verified'), findsOneWidget);
+    await tester.ensureVisible(find.text(subject));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(SelectableText, subject), findsOneWidget);
+    expect(find.text('This is your own introduction.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -445,4 +464,173 @@ void main() {
       expect(find.text('Not checked'), findsOneWidget);
     },
   );
+  for (final self in [false, true]) {
+    testWidgets('check is explicit and shows public subject (self=$self)', (
+      tester,
+    ) async {
+      var calls = 0;
+      final pending = Completer<IntroductionCheck>();
+      await tester.pumpWidget(
+        IntroTreeApp(
+          readStatus: (_, _) async => NodeChoice.completed,
+          checkIntroduction: (url, path, input) {
+            calls++;
+            expect(url, 'http://127.0.0.1:12345/owner/status');
+            expect(path, '/synthetic/owner.header');
+            expect(input, document);
+            return pending.future;
+          },
+        ),
+      );
+      await enterInputs(tester);
+      await tester.tap(readButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Acceptance saved'), findsOneWidget);
+      await tester.ensureVisible(introductionField);
+      await tester.enterText(introductionField, document);
+      await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
+      expect(calls, 0);
+      expect(clipboardWrites, isEmpty);
+      await tester.ensureVisible(checkButton);
+      await tester.tap(checkButton);
+      await tester.pump();
+      expect(calls, 1);
+      expect(tester.widget<FilledButton>(checkButton).onPressed, isNull);
+      expect(tester.widget<FilledButton>(readButton).onPressed, isNull);
+      expect(tester.widget<OutlinedButton>(copyButton).onPressed, isNull);
+      expect(find.text('Acceptance saved'), findsOneWidget);
+      expect(find.text('Path and acceptance verified'), findsNothing);
+      pending.complete(
+        IntroductionCheck(subjectPublicKeyHex: subject, isSelf: self),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Path and acceptance verified'), findsOneWidget);
+      expect(find.text('Subject public key'), findsOneWidget);
+      expect(find.widgetWithText(SelectableText, subject), findsOneWidget);
+      expect(
+        find.text('This is your own introduction.'),
+        self ? findsOneWidget : findsNothing,
+      );
+      expect(
+        find.text(
+          "Checked against this node's configured Root. No connection created.",
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Acceptance saved'), findsOneWidget);
+      expect(find.text('completed'), findsOneWidget);
+      expect(clipboardWrites, isEmpty);
+      expect(calls, 1);
+    });
+  }
+
+  for (final change in ['document', 'URL', 'header', 'dispose']) {
+    testWidgets('check result and late completion invalidated by $change', (
+      tester,
+    ) async {
+      var pending = Completer<IntroductionCheck>();
+      var edits = 0;
+      await tester.pumpWidget(
+        IntroTreeApp(checkIntroduction: (_, _, _) => pending.future),
+      );
+      await enterInputs(tester);
+      await tester.ensureVisible(introductionField);
+      await tester.enterText(introductionField, document);
+      await tester.pumpAndSettle();
+
+      Future<void> changeInput() async {
+        if (change == 'dispose') {
+          await tester.pumpWidget(const SizedBox());
+        } else {
+          final field = switch (change) {
+            'document' => introductionField,
+            'URL' => urlField,
+            _ => headerField,
+          };
+          await tester.ensureVisible(field);
+          await tester.enterText(field, 'changed ${++edits}');
+          await tester.pump();
+        }
+      }
+
+      await tester.ensureVisible(checkButton);
+      await tester.tap(checkButton);
+      await tester.pump();
+      pending.complete(
+        const IntroductionCheck(subjectPublicKeyHex: subject, isSelf: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Path and acceptance verified'), findsOneWidget);
+      await changeInput();
+      expect(find.text('Path and acceptance verified'), findsNothing);
+      expect(find.text(subject), findsNothing);
+      expect(find.text('This is your own introduction.'), findsNothing);
+
+      if (change == 'dispose') {
+        await tester.pumpWidget(
+          IntroTreeApp(checkIntroduction: (_, _, _) => pending.future),
+        );
+      }
+      pending = Completer<IntroductionCheck>();
+      await tester.ensureVisible(checkButton);
+      await tester.tap(checkButton);
+      await tester.pump();
+      await changeInput();
+      pending.complete(
+        const IntroductionCheck(subjectPublicKeyHex: subject, isSelf: true),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Path and acceptance verified'), findsNothing);
+      expect(find.text(subject), findsNothing);
+      expect(clipboardWrites, isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('check works before status; retry and rejection clear success', (
+    tester,
+  ) async {
+    var calls = 0;
+    final pending = Completer<IntroductionCheck>();
+    await tester.pumpWidget(
+      IntroTreeApp(
+        checkIntroduction: (_, _, _) {
+          calls++;
+          return calls == 1
+              ? Future.value(
+                  const IntroductionCheck(
+                    subjectPublicKeyHex: subject,
+                    isSelf: false,
+                  ),
+                )
+              : pending.future;
+        },
+      ),
+    );
+    await enterInputs(tester);
+    await tester.ensureVisible(introductionField);
+    await tester.enterText(introductionField, document);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(checkButton);
+    await tester.tap(checkButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Path and acceptance verified'), findsOneWidget);
+    expect(find.text('Not checked'), findsOneWidget);
+    expect(copyButton, findsNothing);
+    await tester.tap(checkButton);
+    await tester.pump();
+    expect(find.text('Path and acceptance verified'), findsNothing);
+    expect(find.text(subject), findsNothing);
+    pending.completeError(StatusFailure.invalidIntroduction);
+    await tester.pumpAndSettle();
+    expect(
+      find.text(StatusFailure.invalidIntroduction.message),
+      findsOneWidget,
+    );
+    expect(find.text('Not checked'), findsOneWidget);
+    expect(find.text('Path and acceptance verified'), findsNothing);
+    expect(find.text(subject), findsNothing);
+    expect(clipboardWrites, isEmpty);
+  });
 }

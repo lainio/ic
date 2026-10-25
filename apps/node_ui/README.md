@@ -1,8 +1,8 @@
 # IntroTree node UI
 
 The Linux/native application reads saved local acceptance state from an existing
-`tdc node serve` and lets its owner copy a completed introduction. It requires a
-trusted same-machine loopback connection. Root can remain stopped.
+`tdc node serve` and lets its owner copy or check an introduction. It requires
+a trusted same-machine loopback connection. Root can remain stopped.
 
 Paste only the printed owner status URL and absolute `owner.header` path.
 The app reads that header file afresh for each click; it never asks for identity
@@ -22,8 +22,9 @@ The credential file is limited to 1 KiB and status responses to 4 KiB.
 
 After a completed read, `Copy introduction` makes one authenticated GET to the
 fixed `/owner/introduction` sibling, with the same deadline and a 128 KiB limit.
-The service credential now authorizes these two owner reads, including evidence
-disclosure; it grants no signing, mutation, enrollment, or peer access.
+The service credential authorizes these two GETs, including evidence disclosure,
+and the stateless check POST below. It grants no signing, persistence, enrollment,
+peer access, other writes, or general permission for future owner POST operations.
 The button copies only after validating a three-field development JSON document:
 integer `version: 1`, `proposal`, and `acceptance` (standard padded base64).
 The proposal and detached acceptance are the exact saved evidence. The envelope
@@ -36,7 +37,29 @@ Keys, ancestor links, and signatures disclose the path even though it is public
 evidence. Nothing is copied before the explicit click or automatically sent to
 peers. `Introduction copied` appears only after the platform clipboard succeeds.
 Clipboard history and other same-user applications remain outside the app's
-control. There is no receiving/importing, connection, or chat implementation.
+control.
+
+In `Check an introduction`, paste that JSON into `Introduction JSON` and click
+`Check introduction`. This works before reading status and with an unselected
+local choice. The app rereads the credential and sends one POST to the fixed
+`/owner/introduction/check` sibling of the validated status URL. Input is kept
+only in memory, never logged or persisted; empty or over-128-KiB UTF-8 input is
+refused locally. The same direct transport and five-second deadline apply;
+the result is limited to 4 KiB. Nothing in evidence selects a destination.
+
+The node checks the canonical path and final child's acceptance separately
+under its independently configured Root, without a Vault or signer. On success,
+the screen shows `Path and acceptance verified`, the full selectable
+`Subject public key`, and `This is your own introduction.` for self evidence.
+Self means public-key byte equality with the local identity. Editing either
+connection field or the document invalidates the result, including late replies.
+Rejection is distinct from credential or transport failure.
+
+This is inspection only: no document, contact, `Received`, `Known`, trust, or
+pairwise state is saved, and no evidence URL is fetched. It implements neither
+V19 `VerifyReceived` nor `CreatePW`. A copied signature proves no presenter's
+current key control, freshness, revocation status, globally unique enrollment,
+or live authenticated channel. No connection or chat is created.
 
 These are local acceptance observations, not membership, trust, delivery, or
 continuous connection monitoring. An unavailable service produces a failure;
@@ -69,13 +92,15 @@ Owner-run only; not part of automated completion:
    or state. Root remains stopped.
 2. Paste the newly printed status URL and header-file path; click `Read status`.
    For the owner's completed Alice, expect `Acceptance saved` / `completed`.
-3. Click `Copy introduction`; expect `Introduction copied`. Optionally paste
-   into a scratch buffer to inspect the three-field public JSON.
+3. Click `Copy introduction`, paste into `Introduction JSON`, and click
+   `Check introduction`. Expect `Path and acceptance verified` and
+   `This is your own introduction.` This is self-inspection only; independent
+   participant and negative cases are covered by automated tests.
 
 Restarting the service changes its credential path and may change its port.
 Closing the UI does not stop the service or delete node data.
 
-Reading order: [export guard](../../internal/ownerapi/introduction.go),
-[screen](lib/main.dart), [client](lib/status_client.dart),
+Reading order: [configured-root check](../../internal/ownerapi/check.go),
+[client request](lib/status_client.dart), [screen action](lib/main.dart),
 [client tests](test/status_client_test.dart),
 [screen tests](test/status_screen_test.dart).

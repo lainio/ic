@@ -55,6 +55,7 @@ func TestServeRegistration(t *testing.T) {
 		"Root can be stopped", "/owner/introduction", "existing", "--dir",
 		"--unlock-file", "--storage-key-file", "--root", "--listen",
 		"--header '@HEADER_FILE'", "Ctrl+C", "trusted local host",
+		"POST /owner/introduction/check", "stateless", "no present key control",
 	} {
 		assert.That(strings.Contains(output.String(), text), text)
 	}
@@ -250,7 +251,11 @@ func TestServeSavedChoices(t *testing.T) {
 			}
 		}
 		exported := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodGet, "/owner/introduction", nil)
+		request := httptest.NewRequest(
+			http.MethodGet,
+			"/owner/introduction",
+			nil,
+		)
 		request.Header.Set("Authorization", authorization)
 		s.handler.ServeHTTP(exported, request)
 		if state == "completed" {
@@ -261,6 +266,23 @@ func TestServeSavedChoices(t *testing.T) {
 			assert.DeepEqual(document.Acceptance, []byte(before.Acceptance))
 		} else {
 			assert.Equal(exported.Code, http.StatusConflict)
+		}
+		checked := httptest.NewRecorder()
+		request = httptest.NewRequest(http.MethodPost,
+			"/owner/introduction/check", bytes.NewReader(exported.Body.Bytes()))
+		request.Header.Set("Authorization", authorization)
+		request.Header.Set("Content-Type", "application/json")
+		s.handler.ServeHTTP(checked, request)
+		if state == "completed" {
+			assert.Equal(checked.Code, http.StatusOK)
+			assert.Equal(
+				checked.Body.String(),
+				`{"subject_public_key_hex":"`+hex.EncodeToString(
+					f.child,
+				)+`","is_self":true}`,
+			)
+		} else {
+			assert.Equal(checked.Code, http.StatusBadRequest)
 		}
 		assert.DeepEqual(try.To1(os.ReadFile(vaultPath)), contents)
 		try.To(s.close())

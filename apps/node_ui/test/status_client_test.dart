@@ -595,6 +595,283 @@ void main() {
     expect(transport.closed, isTrue);
     await body.close();
   });
+  test(
+    'check posts unchanged UTF-8 to the fixed origin and rereads credentials',
+    () async {
+      const document = ' {"endpoint":"http://evidence.invalid/é"} ';
+      var calls = 0;
+      final transports = <ObservedClient>[];
+      final client = StatusClient(
+        createClient: () {
+          final transport = ObservedClient((request) async {
+            calls++;
+            expect(request.method, 'POST');
+            expect(
+              request.url.toString(),
+              'http://127.0.0.1:12345/owner/introduction/check',
+            );
+            expect(request.headers, {
+              'Authorization': 'Bearer ${calls == 1 ? token : 'cd' * 32}',
+              'Content-Type': 'application/json',
+            });
+            expect(request.bodyBytes, utf8.encode(document));
+            expect(request.followRedirects, isFalse);
+            expect(request.maxRedirects, 0);
+            expect(request.persistentConnection, isFalse);
+            return http.Response(
+              jsonEncode({
+                'subject_public_key_hex': '00abcdef',
+                'is_self': calls == 2,
+              }),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          });
+          transports.add(transport);
+          return transport;
+        },
+      );
+      final peer = await client.checkIntroduction(url, header.path, document);
+      expect(peer.subjectPublicKeyHex, '00abcdef');
+      expect(peer.isSelf, isFalse);
+      await header.writeAsString('Authorization: Bearer ${'cd' * 32}\n');
+      final self = await client.checkIntroduction(
+        'http://localhost:12345/owner/status',
+        header.path,
+        document,
+      );
+      expect(self.subjectPublicKeyHex, peer.subjectPublicKeyHex);
+      expect(self.isSelf, isTrue);
+      expect(calls, 2);
+      expect(transports.every((t) => t.closed), isTrue);
+    },
+  );
+
+  test(
+    'check validates URL and input before credential access or transport',
+    () async {
+      var created = 0;
+      final client = StatusClient(
+        createClient: () {
+          created++;
+          return MockClient((_) async => http.Response('{}', 200));
+        },
+      );
+      for (final destination in [
+        'http://192.0.2.1:12345/owner/status',
+        'http://127.0.0.1:12345/owner/introduction/check',
+        '$url?root=other',
+        '$url#',
+      ]) {
+        await expectLater(
+          client.checkIntroduction(destination, '/missing/owner.header', '{}'),
+          throwsA(StatusFailure.invalidUrl),
+        );
+      }
+      for (final document in [
+        '',
+        ' \n\t',
+        'x' * (128 * 1024 + 1),
+        'é' * (64 * 1024 + 1),
+      ]) {
+        await expectLater(
+          client.checkIntroduction(url, '/missing/owner.header', document),
+          throwsA(
+            document.trim().isEmpty
+                ? StatusFailure.emptyIntroduction
+                : StatusFailure.introductionTooLarge,
+          ),
+        );
+      }
+      await expectLater(
+        client.checkIntroduction(url, '/missing/owner.header', '{}'),
+        throwsA(StatusFailure.credentials),
+      );
+      expect(created, 0);
+    },
+  );
+
+  test(
+    'check distinguishes rejection, authentication and malformed responses',
+    () async {
+      for (final (code, body, failure) in [
+        (400, 'private diagnostics', StatusFailure.invalidIntroduction),
+        (401, 'private diagnostics', StatusFailure.unauthorized),
+        (413, 'private diagnostics', StatusFailure.introductionTooLarge),
+        (500, 'private diagnostics', StatusFailure.nodeState),
+        (302, '', StatusFailure.unexpected),
+        (415, '', StatusFailure.unexpected),
+        (200, 'not json', StatusFailure.unexpected),
+        (200, '{}', StatusFailure.unexpected),
+        (
+          200,
+          '{"subject_public_key_hex":"","is_self":false}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"abc","is_self":false}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"AB","is_self":false}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ag","is_self":false}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ab\\n","is_self":false}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":12,"is_self":false}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":"false"}',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":null}',
+          StatusFailure.unexpected,
+        ),
+        (200, '{"subject_public_key_hex":"ab"}', StatusFailure.unexpected),
+        (
+          200,
+          '{"subject_public_key_hex":"ab","is_self":false,"extra":0}',
+          StatusFailure.unexpected,
+        ),
+      ]) {
+        final transport = ObservedClient(
+          (_) async => http.Response(
+            body,
+            code,
+            headers: {'content-type': 'application/json', 'location': url},
+          ),
+        );
+        await expectLater(
+          StatusClient(createClient: () => transport)
+              .checkIntroduction(url, header.path, '{}'),
+          throwsA(failure),
+        );
+        expect(transport.closed, isTrue);
+      }
+      final transport = ObservedClient(
+        (_) async => throw http.ClientException('private document'),
+      );
+      await expectLater(
+        StatusClient(createClient: () => transport)
+            .checkIntroduction(url, header.path, '{}'),
+        throwsA(StatusFailure.unreachable),
+      );
+      expect(transport.closed, isTrue);
+    },
+  );
+
+  test(
+    'check accepts boundary input and bounds actual response reads to 4 KiB',
+    () async {
+      const result = '{"subject_public_key_hex":"ab","is_self":false}';
+      final response = '$result${' ' * (4096 - result.length)}';
+      final client = StatusClient(
+        createClient: () => MockClient((request) async {
+          expect(request.bodyBytes.length, 128 * 1024);
+          return http.Response(
+            response,
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      expect(
+        (await client.checkIntroduction(
+          url,
+          header.path,
+          'é' * (64 * 1024),
+        )).subjectPublicKeyHex,
+        'ab',
+      );
+
+      var cancelled = false;
+      final body = StreamController<List<int>>(
+        onCancel: () {
+          cancelled = true;
+        },
+      );
+      final transport = ObservedClient.streaming(
+        (_, _) async => http.StreamedResponse(
+          body.stream,
+          200,
+          contentLength: 1,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+      final expectation = expectLater(
+        StatusClient(createClient: () => transport)
+            .checkIntroduction(url, header.path, '{}'),
+        throwsA(StatusFailure.unexpected),
+      );
+      body.add(utf8.encode(response));
+      body.add([32]);
+      await expectation;
+      expect(cancelled, isTrue);
+      expect(transport.closed, isTrue);
+      await body.close();
+    },
+  );
+
+  test(
+    'check cancellation and deadline release the single operation slot',
+    () async {
+      for (final dispose in [false, true]) {
+        final started = Completer<void>();
+        var cancelled = false;
+        final body = StreamController<List<int>>(
+          onCancel: () {
+            cancelled = true;
+          },
+        );
+        final transport = ObservedClient.streaming((_, _) async {
+          started.complete();
+          return http.StreamedResponse(
+            body.stream,
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        });
+        final client = StatusClient(
+          createClient: () => transport,
+          timeout: const Duration(milliseconds: 50),
+        );
+        final pending = expectLater(
+          client.checkIntroduction(url, header.path, '{}'),
+          throwsA(StatusFailure.unreachable),
+        );
+        await started.future;
+        await expectLater(
+          client.read(url, header.path),
+          throwsA(StatusFailure.unreachable),
+        );
+        await expectLater(
+          client.readIntroduction(url, header.path),
+          throwsA(StatusFailure.unreachable),
+        );
+        if (dispose) client.close();
+        await pending;
+        expect(cancelled, isTrue);
+        expect(transport.closed, isTrue);
+        await body.close();
+      }
+    },
+  );
 }
 
 class ObservedClient extends MockClient {

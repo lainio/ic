@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/core/intro"
 	"github.com/lainio/ic/internal/onboarding"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -27,15 +28,22 @@ func newReadHandler(vault *storage.Vault, root, child key.Public) http.Handler {
 		vault: vault, expectedRoot: bytes.Clone(root), expectedChild: bytes.Clone(child),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/owner/introduction" {
+		switch r.URL.Path {
+		case "/owner/introduction":
 			h.serveIntroduction(w, r)
+			return
+		case "/owner/introduction/check":
+			h.serveCheck(w, r)
 			return
 		}
 		status.ServeHTTP(w, r)
 	})
 }
 
-func (h *statusHandler) serveIntroduction(w http.ResponseWriter, r *http.Request) {
+func (h *statusHandler) serveIntroduction(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
@@ -55,11 +63,9 @@ func (h *statusHandler) serveIntroduction(w http.ResponseWriter, r *http.Request
 	}
 	// A verified signature does not make a handle ID public: the backend may
 	// embed wrapped private key material. Refuse; never strip signed fields.
-	for _, edge := range stored.Proposal {
-		if len(edge.Body.Child.ID) != 0 {
-			writeStatusError(w, http.StatusInternalServerError)
-			return
-		}
+	if !publicIntroduction(stored.Proposal) {
+		writeStatusError(w, http.StatusInternalServerError)
+		return
 	}
 	// ReadStoredChoice parses canonical bytes, so Bytes reproduces the complete
 	// saved proposal. The detached acceptance is returned exactly as saved.
@@ -74,4 +80,13 @@ func (h *statusHandler) serveIntroduction(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 	// Output failure must not initiate a second response.
 	try.Out1(w.Write(document)).Logf("writing owner introduction response")
+}
+
+func publicIntroduction(proposal intro.Path) bool {
+	for _, edge := range proposal {
+		if len(edge.Body.Child.ID) != 0 {
+			return false
+		}
+	}
+	return true
 }

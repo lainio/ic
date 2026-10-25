@@ -7,6 +7,16 @@ import 'package:http/io_client.dart';
 
 enum NodeChoice { unselected, pending, completed }
 
+class IntroductionCheck {
+  const IntroductionCheck({
+    required this.subjectPublicKeyHex,
+    required this.isSelf,
+  });
+
+  final String subjectPublicKeyHex;
+  final bool isSelf;
+}
+
 // Only these fixed messages cross into the UI; exceptions and bodies do not.
 enum StatusFailure implements Exception {
   invalidUrl('Use the full local owner status URL printed by node serve.'),
@@ -16,6 +26,11 @@ enum StatusFailure implements Exception {
   ),
   nodeState('The node could not inspect saved state.'),
   notCompleted('The introduction is not yet completed.'),
+  invalidIntroduction(
+    "Introduction could not be verified for this node's Root.",
+  ),
+  emptyIntroduction('Paste introduction JSON before checking.'),
+  introductionTooLarge('Introduction JSON exceeds the 128 KiB limit.'),
   clipboard('Could not copy the introduction.'),
   unreachable('Could not read the local node.'),
   unexpected('Unexpected node response.');
@@ -24,7 +39,7 @@ enum StatusFailure implements Exception {
   final String message;
 }
 
-/// One owned, direct HTTP client per explicit read. No settings or token cache.
+/// One owned, direct HTTP client per explicit operation. No settings or token cache.
 class StatusClient {
   StatusClient({this.createClient, this.timeout = const Duration(seconds: 5)});
 
@@ -64,11 +79,41 @@ class StatusClient {
     });
   }
 
+  Future<IntroductionCheck> checkIntroduction(
+    String url,
+    String headerPath,
+    String document,
+  ) async {
+    final destination = _destination(url)
+        .replace(path: '/owner/introduction/check');
+    if (document.trim().isEmpty) throw StatusFailure.emptyIntroduction;
+    final bytes = utf8.encode(document);
+    if (bytes.length > 128 * 1024) throw StatusFailure.introductionTooLarge;
+    final json = await _request(
+      destination,
+      headerPath,
+      4096,
+      introduction: bytes,
+    );
+    final subject = json['subject_public_key_hex'];
+    final self = json['is_self'];
+    if (json.length != 2 ||
+        subject is! String ||
+        subject.isEmpty ||
+        subject.length.isOdd ||
+        RegExp(r'[^0-9a-f]').hasMatch(subject) ||
+        self is! bool) {
+      throw StatusFailure.unexpected;
+    }
+    return IntroductionCheck(subjectPublicKeyHex: subject, isSelf: self);
+  }
+
   Future<Map<String, dynamic>> _request(
     Uri destination,
     String headerPath,
-    int maxBytes,
-  ) async {
+    int maxBytes, {
+    List<int>? introduction,
+  }) async {
     if (_closed || _cancel != null) throw StatusFailure.unreachable;
 
     http.Client? transport;
@@ -92,11 +137,16 @@ class StatusClient {
               ..connectionTimeout = timeout
               ..findProxy = (_) => 'DIRECT',
           );
-      final request = http.Request('GET', destination)
-        ..followRedirects = false
-        ..maxRedirects = 0
-        ..persistentConnection = false
-        ..headers['Authorization'] = authorization;
+      final request =
+          http.Request(introduction == null ? 'GET' : 'POST', destination)
+            ..followRedirects = false
+            ..maxRedirects = 0
+            ..persistentConnection = false
+            ..headers['Authorization'] = authorization;
+      if (introduction != null) {
+        request.headers['Content-Type'] = 'application/json';
+        request.bodyBytes = introduction;
+      }
       final response = await transport!.send(request);
       if (finished) {
         // send() may finish after cancellation, including with a test client.
@@ -110,6 +160,8 @@ class StatusClient {
           401 => StatusFailure.unauthorized,
           409 when destination.path == '/owner/introduction' =>
             StatusFailure.notCompleted,
+          400 when introduction != null => StatusFailure.invalidIntroduction,
+          413 when introduction != null => StatusFailure.introductionTooLarge,
           500 => StatusFailure.nodeState,
           _ => StatusFailure.unexpected,
         };
@@ -160,7 +212,7 @@ class StatusClient {
     }
   }
 
-  /// Abandon an in-flight read when the screen is disposed.
+  /// Abandon an in-flight operation when the screen is disposed.
   void close() {
     _closed = true;
     _cancel?.call();

@@ -261,9 +261,11 @@ separate work, with no new V19 authority or signing permission.
 ### Deliberate public introduction copy
 
 Operational `node serve` uses `NewReadCredentials`: its credential now permits
-both `GET /owner/status` and disclosure through `GET /owner/introduction`.
-The three existing status constructors remain status-only. The two-route
-credential grants no signing, mutation, peer access, or enrollment authority.
+`GET /owner/status`, disclosure through `GET /owner/introduction`, and stateless
+inspection through `POST /owner/introduction/check`.
+The three existing status constructors remain status-only. POST carries input;
+the credential grants no persistence, signing, other writes, peer access,
+enrollment, or permission for future owner POST operations.
 Each export reads the configured node's saved choice once with independently
 supplied root/child identities and no signer. Only completed verified evidence
 is eligible; any nonempty `Body.Child.ID` on any edge is refused because handle
@@ -284,10 +286,18 @@ evidence, and initiates no peer transmission. It changes no stored choice,
 `Known`, trust, device, epoch, ad, or pairwise state and uses no encryption per
 request; opening the Store retains its charge. This prepares self-presentation
 without claiming all guards of V19 `PresentSelf`, `VerifyReceived`, or `CreatePW`.
-A future receiver must choose its own expected root and verify the evidence;
-copying proves neither current sender key control nor a live authenticated
-channel, root authority, global parent uniqueness, or connectivity. Receiving,
-peer enrollment, pairwise connections, and chat remain separate work.
+The check operation parses that same bounded public document, rejects private
+handle IDs and unsupported backup/rotation options without rewriting evidence,
+and separately proves the path and verifies final-child acceptance. It uses
+only the service's independently configured Root and public child identity,
+without a Vault, signer, or completed local choice. The final subject can be
+another node; self evidence is labeled by public-key byte equality. The UI
+shows the full subject only after both checks pass and invalidates stale results
+when input changes. No evidence endpoint is fetched or state recorded: this is
+neither V19 `VerifyReceived` nor `CreatePW`. A copied signature proves neither
+presenter key control, freshness, revocation status, global parent uniqueness,
+nor a live authenticated channel. Peer enrollment, connections, and chat remain
+separate work.
 
 ## Source locators
 

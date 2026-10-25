@@ -27,10 +27,12 @@ func NewStatusCredentials(ctx context.Context, vault *storage.Vault,
 	)
 }
 
-// NewReadCredentials grants the operational service's two owner reads:
-// GET /owner/status and GET /owner/introduction. Unlike status-only credentials,
-// possession also permits disclosure of the saved completed public path and
-// acceptance. It grants no signing, mutation, enrollment, or peer access.
+// NewReadCredentials grants GET /owner/status, GET /owner/introduction, and
+// stateless POST /owner/introduction/check on the operational service.
+// Unlike status-only credentials, possession permits disclosure of the saved
+// completed public path and acceptance, and inspection of submitted evidence
+// under the configured Root. POST carries input; it authorizes no persistence,
+// signing, enrollment, peer access, or other writes or future POST operations.
 // It borrows the open Vault without a signing handle and copies independently
 // configured public identities. The caller owns HTTP shutdown, the Vault, and
 // private-directory cleanup; owner.header is created exclusively with mode 0600.
