@@ -315,6 +315,32 @@ Operational `node serve` uses fresh `NewEvidenceCredentials` for current reads,
 check, and save/list only; read/status credentials gain no persistence or routes.
 This capability grants no signing, trust, or general future POST permission.
 
+### Explicit local verification
+
+`onboarding.VerifyReceived(vault, expectedRoot)` explicitly promotes saved
+Received subjects to durable Known introduction evidence. In one transaction it
+rechecks every received record with the shared admission policy, checks all
+existing Known bindings, and rejects contradictory parent public-key bytes,
+including shared ancestors. Only after validation does it add missing versioned
+digest markers bound to the exact received records. Its count is newly promoted
+subjects, not modeled edges; retries with nothing new roll back without writes
+or seals. `ListKnownIntroductions` revalidates each binding and its evidence in a
+read-only query; markers alone confer nothing. Received and Alice's separate
+choice remain unchanged. Saving, checking, listing, and reopening never promote
+implicitly, and no owner route or UI action exposes promotion.
+
+This is the local cryptographic-validation interpretation of V19
+`VerifyReceived` (specification revision
+`1a9cb30e9fcbcb89cea55c0aed1f6f88a3ea6508`, lines 413–424).
+The model has an abstract genuine `Edges` set; Go has no omniscient oracle and
+cannot prove global parent uniqueness. A valid root-pinned signed path and child
+acceptance are our local operational evidence test, with local parent consistency.
+This proves neither global `Edges` membership nor presenter's current key control,
+and makes no node trusted or connected. It prepares a gate for a future explicitly
+documented composite connection workflow; usable devices, verified current ads,
+mutual acceptance and `CreatePW` remain separate. No PW, ad, trust, or device
+authority is created, and V19 is unchanged.
+
 ## Source locators
 
 [S1] Specification checkout `2cd914be966ad4bdf36b575e2678cad7441fcd75`,
