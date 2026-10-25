@@ -24,11 +24,13 @@ import (
 func newServeCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
-		Short: "Run an existing node's protected local owner status",
+		Short: "Run an existing node's protected local owner reads",
 		Long: `Reopen an existing identity and initialized local state until Ctrl+C.
 Root can be stopped: --root is an independently supplied public-key pin,
-not a peer address. This is status-only for now; startup and status requests
-never contact peers, request introductions, sign, or resubmit acceptances.
+not a peer address. GET /owner/status reads the local choice; authenticated
+GET /owner/introduction exports its saved completed public evidence.
+Startup and owner reads never contact peers, request introductions, sign,
+or resubmit acceptances.
 Saved unselected, pending, and completed choices remain as they are.
 
 All four file/identity flags are required and nonempty. The identity unlock
@@ -41,10 +43,14 @@ terminal (keep the @):
     --header '@HEADER_FILE' OWNER_STATUS_URL
 
 Requires a trusted local host. HTTP is loopback plaintext only; do not forward
-or expose it remotely. The status credential grants no signing permission.
+or expose it remotely. The credential now grants these two owner reads,
+including disclosure of public keys, ancestor links, and signatures. It grants
+no signing, mutation, peer access, or enrollment permission. The UI's explicit
+Copy introduction action copies a development JSON transfer document (version,
+base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.
 Ctrl+C removes only this invocation's temporary credentials; identity, state,
 unlock and storage-key files persist. Opening the Store retains its existing
-encryption block charge; individual status requests perform no encryption.`,
+encryption block charge; individual owner reads perform no encryption.`,
 		Example: `  tdc node serve --dir ALICE_DIR --unlock-file ALICE_UNLOCK_FILE \
     --storage-key-file ALICE_STORAGE_KEY_FILE --root ROOT_PUBLIC_KEY_HEX \
     --listen 127.0.0.1:0`,
@@ -134,7 +140,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.child = try.To1(handle.CBORPublicKey())
 	s.store = try.To1(nodevault.OpenForNode(ctx, dir, keyFile, root, s.child))
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
-	s.handler, s.headerFile = try.To2(ownerapi.NewStatusCredentials(
+	s.handler, s.headerFile = try.To2(ownerapi.NewReadCredentials(
 		ctx, s.store.Vault(), root, s.child, s.credentialDir,
 	))
 	return s, address, nil

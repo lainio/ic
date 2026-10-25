@@ -258,6 +258,37 @@ The bare constructor remains unprotected. Peer and NATS demos remain unchanged;
 restartable identity, remote/mobile access, and production provisioning remain
 separate work, with no new V19 authority or signing permission.
 
+### Deliberate public introduction copy
+
+Operational `node serve` uses `NewReadCredentials`: its credential now permits
+both `GET /owner/status` and disclosure through `GET /owner/introduction`.
+The three existing status constructors remain status-only. The two-route
+credential grants no signing, mutation, peer access, or enrollment authority.
+Each export reads the configured node's saved choice once with independently
+supplied root/child identities and no signer. Only completed verified evidence
+is eligible; any nonempty `Body.Child.ID` on any edge is refused because handle
+IDs can contain wrapped private signing keys. Signed fields are never stripped.
+Absent/pending choices return 409; inconsistent, unreadable, nonpublic, or
+oversize evidence returns generic 500, without repair or partial documents.
+
+The explicit UI click copies a JSON object with exactly `version: 1`, `proposal`,
+and `acceptance`; the latter two contain standard padded base64 of the complete
+canonical saved path and exact detached acceptance. The 128 KiB development
+transfer envelope is not separately signed, a backup, or a permanent public
+interoperability specification. Existing purpose tags and core encodings remain
+unchanged. The UI validates the transfer shape only. Public keys, ancestor links,
+and signatures reveal the path; publicly verifiable is not privacy-free.
+
+Export discloses only this node's saved introduction, never all received or known
+evidence, and initiates no peer transmission. It changes no stored choice,
+`Known`, trust, device, epoch, ad, or pairwise state and uses no encryption per
+request; opening the Store retains its charge. This prepares self-presentation
+without claiming all guards of V19 `PresentSelf`, `VerifyReceived`, or `CreatePW`.
+A future receiver must choose its own expected root and verify the evidence;
+copying proves neither current sender key control nor a live authenticated
+channel, root authority, global parent uniqueness, or connectivity. Receiving,
+peer enrollment, pairwise connections, and chat remain separate work.
+
 ## Source locators
 
 [S1] Specification checkout `2cd914be966ad4bdf36b575e2678cad7441fcd75`,

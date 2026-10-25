@@ -21,16 +21,36 @@ import (
 // owns only credential setup, exclusively creating a private owner.header file.
 func NewStatusCredentials(ctx context.Context, vault *storage.Vault,
 	expectedRoot, expectedChild key.Public, dir string,
+) (http.Handler, string, error) {
+	return newCredentials(ctx,
+		NewStatusHandler(vault, expectedRoot, expectedChild), dir,
+	)
+}
+
+// NewReadCredentials grants the operational service's two owner reads:
+// GET /owner/status and GET /owner/introduction. Unlike status-only credentials,
+// possession also permits disclosure of the saved completed public path and
+// acceptance. It grants no signing, mutation, enrollment, or peer access.
+// It borrows the open Vault without a signing handle and copies independently
+// configured public identities. The caller owns HTTP shutdown, the Vault, and
+// private-directory cleanup; owner.header is created exclusively with mode 0600.
+func NewReadCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, dir string,
+) (http.Handler, string, error) {
+	return newCredentials(ctx,
+		newReadHandler(vault, expectedRoot, expectedChild), dir,
+	)
+}
+
+func newCredentials(ctx context.Context, next http.Handler, dir string,
 ) (_ http.Handler, _ string, err error) {
 	defer err2.Handle(&err)
 
 	// This credential is independent of the provider secret and signing keys.
-	token := make([]byte, 32)
+	token := make([]byte, ownerStatusTokenSize)
 	defer clear(token)
 	try.To1(rand.Read(token))
-	handler := try.To1(NewAuthenticatedStatusHandler(
-		vault, expectedRoot, expectedChild, token,
-	))
+	handler := try.To1(newAuthenticatedHandler(next, token))
 	headerFile := filepath.Join(dir, "owner.header")
 	header := try.To1(os.OpenFile(
 		headerFile, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600,

@@ -39,12 +39,18 @@ func NewAuthenticatedStatusHandler(
 	expectedRoot, expectedChild key.Public,
 	token []byte,
 ) (handler http.Handler, err error) {
+	return newAuthenticatedHandler(
+		NewStatusHandler(vault, expectedRoot, expectedChild), token,
+	)
+}
+
+func newAuthenticatedHandler(next http.Handler, token []byte) (http.Handler, error) {
 	if len(token) != ownerStatusTokenSize {
 		return nil, errors.New("invalid owner status token configuration")
 	}
 
 	return &authenticatedStatusHandler{
-		next:  NewStatusHandler(vault, expectedRoot, expectedChild),
+		next:  next,
 		token: hex.EncodeToString(token),
 	}, nil
 }

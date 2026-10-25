@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -51,7 +52,7 @@ func TestServeRegistration(t *testing.T) {
 	cmd.SetOut(&output)
 	try.To(cmd.Help())
 	for _, text := range []string{
-		"Root can be stopped", "status-only", "existing", "--dir",
+		"Root can be stopped", "/owner/introduction", "existing", "--dir",
 		"--unlock-file", "--storage-key-file", "--root", "--listen",
 		"--header '@HEADER_FILE'", "Ctrl+C", "trusted local host",
 	} {
@@ -247,6 +248,19 @@ func TestServeSavedChoices(t *testing.T) {
 					"{\"choice\":\""+state+"\"}\n",
 				)
 			}
+		}
+		exported := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/owner/introduction", nil)
+		request.Header.Set("Authorization", authorization)
+		s.handler.ServeHTTP(exported, request)
+		if state == "completed" {
+			assert.Equal(exported.Code, http.StatusOK)
+			var document struct{ Proposal, Acceptance []byte }
+			try.To(json.Unmarshal(exported.Body.Bytes(), &document))
+			assert.DeepEqual(document.Proposal, before.Proposal.Bytes())
+			assert.DeepEqual(document.Acceptance, []byte(before.Acceptance))
+		} else {
+			assert.Equal(exported.Code, http.StatusConflict)
 		}
 		assert.DeepEqual(try.To1(os.ReadFile(vaultPath)), contents)
 		try.To(s.close())

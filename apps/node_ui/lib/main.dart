@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'status_client.dart';
 
 void main() => runApp(const IntroTreeApp());
 
 typedef ReadStatus = Future<NodeChoice> Function(String url, String headerPath);
+typedef ReadIntroduction = Future<String> Function(
+  String url,
+  String headerPath,
+);
 
 class IntroTreeApp extends StatelessWidget {
-  const IntroTreeApp({super.key, this.readStatus});
+  const IntroTreeApp({super.key, this.readStatus, this.readIntroduction});
 
   final ReadStatus? readStatus;
+  final ReadIntroduction? readIntroduction;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -23,14 +29,18 @@ class IntroTreeApp extends StatelessWidget {
         floatingLabelBehavior: FloatingLabelBehavior.always,
       ),
     ),
-    home: StatusScreen(readStatus: readStatus),
+    home: StatusScreen(
+      readStatus: readStatus,
+      readIntroduction: readIntroduction,
+    ),
   );
 }
 
 class StatusScreen extends StatefulWidget {
-  const StatusScreen({super.key, this.readStatus});
+  const StatusScreen({super.key, this.readStatus, this.readIntroduction});
 
   final ReadStatus? readStatus;
+  final ReadIntroduction? readIntroduction;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -41,6 +51,8 @@ class _StatusScreenState extends State<StatusScreen> {
   final _headerPath = TextEditingController();
   final _client = StatusClient();
   bool _loading = false;
+  bool _copying = false;
+  bool _copied = false;
   NodeChoice? _choice;
   StatusFailure? _failure;
   int _inputRevision = 0;
@@ -50,6 +62,7 @@ class _StatusScreenState extends State<StatusScreen> {
       _inputRevision++;
       _choice = null;
       _failure = null;
+      _copied = false;
     });
   }
 
@@ -58,6 +71,7 @@ class _StatusScreenState extends State<StatusScreen> {
     final revision = _inputRevision;
     setState(() {
       _loading = true;
+      _copied = false;
       _choice = null;
       _failure = null;
     });
@@ -81,6 +95,51 @@ class _StatusScreenState extends State<StatusScreen> {
         _failure = failure;
       }
     });
+  }
+
+  Future<void> _copy() async {
+    if (_loading || _choice != NodeChoice.completed) return;
+    final revision = _inputRevision;
+    setState(() {
+      _loading = true;
+      _copying = true;
+      _copied = false;
+      _failure = null;
+    });
+    StatusFailure? failure;
+    try {
+      final document =
+          await (widget.readIntroduction ?? _client.readIntroduction)(
+            _url.text,
+            _headerPath.text,
+          );
+      if (!mounted || revision != _inputRevision) return;
+      try {
+        await Clipboard.setData(ClipboardData(text: document));
+      } catch (_) {
+        throw StatusFailure.clipboard;
+      }
+      if (!mounted || revision != _inputRevision) return;
+      setState(() {
+        _copied = true;
+      });
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.unreachable;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _copying = false;
+          if (revision == _inputRevision && failure != null) {
+            _failure = failure;
+            _choice = null;
+            _copied = false;
+          }
+        });
+      }
+    }
   }
 
   @override
@@ -153,6 +212,27 @@ class _StatusScreenState extends State<StatusScreen> {
                       ),
                     ),
                   ),
+                  if (_choice == NodeChoice.completed) ...[
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Contains your public keys and introduction path. Share deliberately.',
+                    ),
+                    const SizedBox(height: 12),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton(
+                        onPressed: _loading ? null : _copy,
+                        child: const Text('Copy introduction'),
+                      ),
+                    ),
+                  ],
+                  if (_copied) ...[
+                    const SizedBox(height: 12),
+                    Semantics(
+                      liveRegion: true,
+                      child: const Text('Introduction copied'),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   Text(
                     'Local acceptance state; not membership, trust, or delivery confirmation.',
@@ -171,12 +251,13 @@ class _StatusScreenState extends State<StatusScreen> {
     final choice = _choice;
     final failure = _failure;
     if (_loading) {
-      return const Column(
+      final action = _copying ? 'Copying introduction' : 'Reading status';
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Reading status…'),
-          SizedBox(height: 16),
-          LinearProgressIndicator(semanticsLabel: 'Reading status'),
+          Text('$action…'),
+          const SizedBox(height: 16),
+          LinearProgressIndicator(semanticsLabel: action),
         ],
       );
     }

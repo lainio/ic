@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +14,24 @@ void main() {
     'Authorization header file',
   );
   final readButton = find.widgetWithText(FilledButton, 'Read status');
+  final copyButton = find.widgetWithText(OutlinedButton, 'Copy introduction');
+  const document = '{"version":1,"proposal":"AQ==","acceptance":"Ag=="}';
+  late List<String> clipboardWrites;
+
+  setUp(() {
+    clipboardWrites = [];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardWrites.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        });
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  });
 
   Future<void> enterInputs(WidgetTester tester) async {
     await tester.enterText(urlField, 'http://127.0.0.1:12345/owner/status');
@@ -39,6 +58,8 @@ void main() {
       expect(find.text('Not checked'), findsOneWidget);
       expect(find.byType(TextField), findsNWidgets(2));
       expect(calls, 0);
+      expect(copyButton, findsNothing);
+      expect(clipboardWrites, isEmpty);
       await enterInputs(tester);
       await tester.tap(readButton);
       await tester.pump();
@@ -72,6 +93,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(calls, 2);
       expect(find.text('Could not read the local node.'), findsOneWidget);
+      expect(copyButton, findsNothing);
       expect(find.text('Acceptance saved'), findsNothing);
       expect(find.text('No introduction selected'), findsNothing);
       expect(find.textContaining(secret), findsNothing);
@@ -106,6 +128,8 @@ void main() {
         expect(find.text(title), findsOneWidget);
         expect(find.text(explanation), findsOneWidget);
         expect(find.text(choice.name), findsOneWidget);
+        expect(copyButton, findsNothing);
+        expect(clipboardWrites, isEmpty);
         await tester.enterText(field, 'changed');
         await tester.pump();
         expect(find.text(title), findsNothing);
@@ -167,6 +191,7 @@ void main() {
       MediaQuery(
         data: original.copyWith(textScaler: const TextScaler.linear(2)),
         child: IntroTreeApp(
+          readIntroduction: (_, _) async => document,
           readStatus: (_, _) async {
             calls++;
             return NodeChoice.completed;
@@ -202,6 +227,222 @@ void main() {
     await tester.ensureVisible(find.text('Acceptance saved'));
     await tester.pumpAndSettle();
     expect(find.text('Acceptance saved'), findsOneWidget);
+    await tester.ensureVisible(copyButton);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(clipboardWrites, [document]);
+    expect(find.text('Introduction copied'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('copy is explicit, single-flight and waits for platform success', (
+    tester,
+  ) async {
+    var exports = 0;
+    var reads = 0;
+    final pending = Completer<String>();
+    final platform = Completer<void>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+          if (call.method == 'Clipboard.setData') {
+            clipboardWrites.add((call.arguments as Map)['text'] as String);
+            await platform.future;
+          }
+          return null;
+        });
+    await tester.pumpWidget(
+      IntroTreeApp(
+        readStatus: (_, _) async {
+          reads++;
+          return NodeChoice.completed;
+        },
+        readIntroduction: (url, path) {
+          exports++;
+          expect(url, 'http://127.0.0.1:12345/owner/status');
+          expect(path, '/synthetic/owner.header');
+          return pending.future;
+        },
+      ),
+    );
+    await enterInputs(tester);
+    await tester.tap(readButton);
+    await tester.pumpAndSettle();
+    expect(exports, 0);
+    expect(clipboardWrites, isEmpty);
+    expect(
+      find.text(
+        'Contains your public keys and introduction path. Share deliberately.',
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(copyButton);
+    await tester.tap(copyButton);
+    await tester.pump();
+    expect(exports, 1);
+    expect(tester.widget<OutlinedButton>(copyButton).onPressed, isNull);
+    expect(tester.widget<FilledButton>(readButton).onPressed, isNull);
+    await tester.tap(copyButton);
+    expect(exports, 1);
+    expect(reads, 1);
+    expect(clipboardWrites, isEmpty);
+    pending.complete(document);
+    await tester.pump();
+    expect(clipboardWrites, [document]);
+    expect(jsonDecode(clipboardWrites.single), {
+      'version': 1,
+      'proposal': 'AQ==',
+      'acceptance': 'Ag==',
+    });
+    expect(clipboardWrites.single, isNot(contains('Bearer')));
+    expect(clipboardWrites.single, isNot(contains('/synthetic/owner.header')));
+    expect(find.text('Introduction copied'), findsNothing);
+    platform.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Introduction copied'), findsOneWidget);
+    await tester.ensureVisible(readButton);
+    await tester.tap(readButton);
+    await tester.pumpAndSettle();
+    expect(find.text('Introduction copied'), findsNothing);
+    expect(exports, 1);
+    expect(clipboardWrites, [document]);
+  });
+
+  for (final failure in [
+    StatusFailure.notCompleted,
+    StatusFailure.unexpected,
+    StatusFailure.unreachable,
+  ]) {
+    testWidgets('failed export $failure leaves clipboard untouched', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        IntroTreeApp(
+          readStatus: (_, _) async => NodeChoice.completed,
+          readIntroduction: (_, _) async => throw failure,
+        ),
+      );
+      await enterInputs(tester);
+      await tester.tap(readButton);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(copyButton);
+      await tester.tap(copyButton);
+      await tester.pumpAndSettle();
+      expect(clipboardWrites, isEmpty);
+      expect(find.text('Introduction copied'), findsNothing);
+      expect(find.text(failure.message), findsOneWidget);
+      expect(copyButton, findsNothing);
+    });
+  }
+
+  for (final change in ['URL', 'header', 'dispose']) {
+    testWidgets('obsolete export after $change does not copy', (tester) async {
+      final pending = Completer<String>();
+      await tester.pumpWidget(
+        IntroTreeApp(
+          readStatus: (_, _) async => NodeChoice.completed,
+          readIntroduction: (_, _) => pending.future,
+        ),
+      );
+      await enterInputs(tester);
+      await tester.tap(readButton);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(copyButton);
+      await tester.tap(copyButton);
+      await tester.pump();
+      if (change == 'dispose') {
+        await tester.pumpWidget(const SizedBox());
+      } else {
+        await tester.enterText(
+          change == 'URL' ? urlField : headerField,
+          'changed',
+        );
+      }
+      pending.complete(document);
+      await tester.pumpAndSettle();
+      expect(clipboardWrites, isEmpty);
+      expect(find.text('Introduction copied'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets(
+    'copy feedback clears on new copy, platform failure and input change',
+    (tester) async {
+      var fail = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') {
+              if (fail) {
+                throw PlatformException(code: 'private platform diagnostic');
+              }
+              clipboardWrites.add((call.arguments as Map)['text'] as String);
+            }
+            return null;
+          });
+      await tester.pumpWidget(
+        IntroTreeApp(
+          readStatus: (_, _) async => NodeChoice.completed,
+          readIntroduction: (_, _) async => document,
+        ),
+      );
+      await enterInputs(tester);
+      await tester.tap(readButton);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(copyButton);
+      await tester.tap(copyButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Introduction copied'), findsOneWidget);
+      fail = true;
+      await tester.tap(copyButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Introduction copied'), findsNothing);
+      expect(find.text('Could not copy the introduction.'), findsOneWidget);
+      expect(find.textContaining('private platform diagnostic'), findsNothing);
+      expect(clipboardWrites, [document]);
+
+      fail = false;
+      await tester.ensureVisible(readButton);
+      await tester.tap(readButton);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(copyButton);
+      await tester.tap(copyButton);
+      await tester.pumpAndSettle();
+      expect(find.text('Introduction copied'), findsOneWidget);
+      await tester.enterText(headerField, 'changed');
+      await tester.pumpAndSettle();
+      expect(find.text('Introduction copied'), findsNothing);
+      expect(copyButton, findsNothing);
+    },
+  );
+
+  testWidgets(
+    'late platform acknowledgement does not announce changed inputs',
+    (tester) async {
+      final platform = Completer<void>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') await platform.future;
+            return null;
+          });
+      await tester.pumpWidget(
+        IntroTreeApp(
+          readStatus: (_, _) async => NodeChoice.completed,
+          readIntroduction: (_, _) async => document,
+        ),
+      );
+      await enterInputs(tester);
+      await tester.tap(readButton);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(copyButton);
+      await tester.tap(copyButton);
+      await tester.pump();
+      await tester.enterText(urlField, 'changed');
+      platform.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Introduction copied'), findsNothing);
+      expect(find.text('Not checked'), findsOneWidget);
+    },
+  );
 }

@@ -403,6 +403,198 @@ void main() {
     expect(transport.closed, isTrue);
     await body.close();
   });
+
+  test(
+    'introduction uses the fixed sibling and rereads the credential',
+    () async {
+      final document = {
+        'version': 1,
+        'proposal': base64.encode([0, 1, 254, 255]),
+        'acceptance': base64.encode([9, 8]),
+      };
+      var calls = 0;
+      final transports = <ObservedClient>[];
+      final client = StatusClient(
+        createClient: () {
+          final transport = ObservedClient((request) async {
+            calls++;
+            expect(request.method, 'GET');
+            expect(
+              request.url.toString(),
+              'http://127.0.0.1:12345/owner/introduction',
+            );
+            expect(request.headers, {
+              'Authorization': 'Bearer ${calls == 1 ? token : 'cd' * 32}',
+            });
+            expect(request.followRedirects, isFalse);
+            expect(request.maxRedirects, 0);
+            expect(request.persistentConnection, isFalse);
+            expect(request.body, isEmpty);
+            return http.Response(
+              jsonEncode(document),
+              200,
+              headers: {'content-type': 'application/json; charset=utf-8'},
+            );
+          });
+          transports.add(transport);
+          return transport;
+        },
+      );
+      expect(
+        jsonDecode(await client.readIntroduction(url, header.path)),
+        document,
+      );
+      await header.writeAsString('Authorization: Bearer ${'cd' * 32}\n');
+      expect(
+        jsonDecode(
+          await client.readIntroduction(
+            'http://localhost:12345/owner/status',
+            header.path,
+          ),
+        ),
+        document,
+      );
+      for (final invalid in [
+        'http://127.0.0.1:12345/owner/introduction',
+        'http://192.0.2.1:12345/owner/status',
+        '$url?path=/owner/introduction',
+      ]) {
+        await expectLater(
+          client.readIntroduction(invalid, '/missing/owner.header'),
+          throwsA(StatusFailure.invalidUrl),
+        );
+      }
+      expect(calls, 2);
+      expect(transports.every((transport) => transport.closed), isTrue);
+    },
+  );
+
+  test(
+    'introduction refuses pending, redirects and malformed envelopes',
+    () async {
+      for (final (code, body, media, failure) in [
+        (409, 'private error', 'application/json', StatusFailure.notCompleted),
+        (302, '', 'application/json', StatusFailure.unexpected),
+        (
+          200,
+          '{"version":1,"proposal":"AQ==","acceptance":"Ag=="}',
+          'text/plain',
+          StatusFailure.unexpected,
+        ),
+        (200, '[]', 'application/json', StatusFailure.unexpected),
+        (
+          200,
+          '{"version":2,"proposal":"AQ==","acceptance":"Ag=="}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1.0,"proposal":"AQ==","acceptance":"Ag=="}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1,"proposal":"AQ=="}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1,"proposal":"AQ==","acceptance":"Ag==","extra":true}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1,"proposal":"","acceptance":"Ag=="}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1,"proposal":"AQ","acceptance":"Ag=="}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1,"proposal":"_w==","acceptance":"Ag=="}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1,"proposal":"AQ==","acceptance":"bad!"}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+        (
+          200,
+          '{"version":1,"proposal":null,"acceptance":"Ag=="}',
+          'application/json',
+          StatusFailure.unexpected,
+        ),
+      ]) {
+        final transport = ObservedClient(
+          (_) async => http.Response(
+            body,
+            code,
+            headers: {'content-type': media, 'location': url},
+          ),
+        );
+        await expectLater(
+          StatusClient(createClient: () => transport)
+              .readIntroduction(url, header.path),
+          throwsA(failure),
+        );
+        expect(transport.closed, isTrue);
+      }
+    },
+  );
+
+  test('introduction has its own 128 KiB streamed response limit', () async {
+    const document = '{"version":1,"proposal":"AQ==","acceptance":"Ag=="}';
+    final boundary = '$document${' ' * (128 * 1024 - document.length)}';
+    final client = StatusClient(
+      createClient: () => MockClient(
+        (_) async => http.Response(
+          boundary,
+          200,
+          headers: {'content-type': 'application/json'},
+        ),
+      ),
+    );
+    expect(
+      jsonDecode(await client.readIntroduction(url, header.path)),
+      jsonDecode(document),
+    );
+
+    var cancelled = false;
+    final body = StreamController<List<int>>(
+      onCancel: () {
+        cancelled = true;
+      },
+    );
+    final transport = ObservedClient.streaming(
+      (_, _) async => http.StreamedResponse(
+        body.stream,
+        200,
+        contentLength: 1,
+        headers: {'content-type': 'application/json'},
+      ),
+    );
+    final result = StatusClient(createClient: () => transport)
+        .readIntroduction(url, header.path);
+    final expectation = expectLater(result, throwsA(StatusFailure.unexpected));
+    body.add(utf8.encode(boundary));
+    body.add([32]);
+    await expectation;
+    expect(cancelled, isTrue);
+    expect(transport.closed, isTrue);
+    await body.close();
+  });
 }
 
 class ObservedClient extends MockClient {

@@ -15,6 +15,8 @@ enum StatusFailure implements Exception {
     'Credential not accepted; use the current header file from node serve.',
   ),
   nodeState('The node could not inspect saved state.'),
+  notCompleted('The introduction is not yet completed.'),
+  clipboard('Could not copy the introduction.'),
   unreachable('Could not read the local node.'),
   unexpected('Unexpected node response.');
 
@@ -32,14 +34,46 @@ class StatusClient {
   bool _closed = false;
 
   Future<NodeChoice> read(String url, String headerPath) async {
+    final json = await _request(_destination(url), headerPath, 4096);
+    return switch (json['choice']) {
+      'unselected' => NodeChoice.unselected,
+      'pending' => NodeChoice.pending,
+      'completed' => NodeChoice.completed,
+      _ => throw StatusFailure.unexpected,
+    };
+  }
+
+  /// Validates only the transfer shape, not the evidence's cryptography.
+  /// The returned JSON contains only the three validated development fields.
+  Future<String> readIntroduction(String url, String headerPath) async {
     // Check the raw URL before Uri can normalize away disallowed components,
-    // and before opening any file or creating a transport.
-    final destination = _destination(url);
+    // then derive only the fixed sibling on the same validated origin.
+    final destination = _destination(url).replace(path: '/owner/introduction');
+    final json = await _request(destination, headerPath, 128 * 1024);
+    if (json.length != 3 ||
+        json['version'] is! int ||
+        json['version'] != 1 ||
+        !_standardBase64(json['proposal']) ||
+        !_standardBase64(json['acceptance'])) {
+      throw StatusFailure.unexpected;
+    }
+    return jsonEncode({
+      'version': 1,
+      'proposal': json['proposal'],
+      'acceptance': json['acceptance'],
+    });
+  }
+
+  Future<Map<String, dynamic>> _request(
+    Uri destination,
+    String headerPath,
+    int maxBytes,
+  ) async {
     if (_closed || _cancel != null) throw StatusFailure.unreachable;
 
     http.Client? transport;
     StreamIterator<List<int>>? body;
-    final abandoned = Completer<NodeChoice>();
+    final abandoned = Completer<Map<String, dynamic>>();
     var finished = false;
 
     void cancel() {
@@ -48,7 +82,7 @@ class StatusClient {
       abandoned.completeError(StatusFailure.unreachable);
     }
 
-    Future<NodeChoice> perform() async {
+    Future<Map<String, dynamic>> perform() async {
       final authorization = await _readAuthorization(headerPath);
       if (finished) throw StatusFailure.unreachable;
       transport =
@@ -74,6 +108,8 @@ class StatusClient {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
           401 => StatusFailure.unauthorized,
+          409 when destination.path == '/owner/introduction' =>
+            StatusFailure.notCompleted,
           500 => StatusFailure.nodeState,
           _ => StatusFailure.unexpected,
         };
@@ -92,7 +128,7 @@ class StatusClient {
       final bytes = <int>[];
       while (await body!.moveNext()) {
         final chunk = body!.current;
-        if (bytes.length + chunk.length > 4096) {
+        if (bytes.length + chunk.length > maxBytes) {
           throw StatusFailure.unexpected;
         }
         bytes.addAll(chunk);
@@ -101,12 +137,7 @@ class StatusClient {
       try {
         final json = jsonDecode(utf8.decode(bytes));
         if (json is! Map<String, dynamic>) throw StatusFailure.unexpected;
-        return switch (json['choice']) {
-          'unselected' => NodeChoice.unselected,
-          'pending' => NodeChoice.pending,
-          'completed' => NodeChoice.completed,
-          _ => throw StatusFailure.unexpected,
-        };
+        return json;
       } on FormatException {
         throw StatusFailure.unexpected;
       }
@@ -133,6 +164,17 @@ class StatusClient {
   void close() {
     _closed = true;
     _cancel?.call();
+  }
+}
+
+bool _standardBase64(dynamic value) {
+  if (value is! String || value.isEmpty) return false;
+  try {
+    // Dart accepts some alternate encodings; round-trip equality requires
+    // standard alphabet, padding, and canonical pad bits without whitespace.
+    return base64.encode(base64.decode(value)) == value;
+  } on FormatException {
+    return false;
   }
 }
 
