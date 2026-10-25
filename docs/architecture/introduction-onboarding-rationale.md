@@ -299,6 +299,29 @@ presenter key control, freshness, revocation status, global parent uniqueness,
 nor a live authenticated channel. Peer enrollment, connections, and chat remain
 separate work.
 
+### Opt-in peer self-presentation
+
+`node serve --peer-listen` explicitly enables a separate plaintext loopback
+listener with only `GET /peer/introduction`. Any local caller can obtain this
+node's already completed choice, validated by `ReadStoredChoice` under the
+independently configured Root and child. The shared pure exporter preserves
+the exact canonical proposal and detached acceptance, refuses private handle
+IDs throughout the path, and bounds the existing JSON document to 128 KiB.
+The peer additionally applies the stateless import admission policy to reject
+unsupported backup/rotation fields, preserving existing owner export semantics.
+It never exports Received/Known collections,
+signs, repairs, or promotes evidence. Owner credentials and routes remain on
+the separate bearer-protected listener; both servers and admitted requests
+finish before Store cleanup.
+
+This implements only sender-side disclosure from V19 `PresentSelf`
+(specification revision `1a9cb30e9fcbcb89cea55c0aed1f6f88a3ea6508`,
+`IntroTreeV19.tla`, lines 533–549). The full action also changes the receiver's
+`Received`; a peer GET does not. A static signed document does not prove that
+the HTTP presenter currently holds its private key. No `VerifyReceived`, device
+authorization, `PublishAd`, mutual authentication, `CreatePW`, discovery or chat
+is implied, and no modeled state changes.
+
 ### Deliberately retained received evidence
 
 The owner may save checked public introductions in a separate encrypted Vault

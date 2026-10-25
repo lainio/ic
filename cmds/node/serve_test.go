@@ -46,6 +46,7 @@ func TestServeRegistration(t *testing.T) {
 		"127.0.0.1:0",
 	)
 	assert.Nil(registered.Flags().Lookup("url"))
+	assert.Empty(try.To1(registered.Flags().GetString("peer-listen")))
 
 	cmd := testCommand("serve")
 	var output bytes.Buffer
@@ -56,6 +57,7 @@ func TestServeRegistration(t *testing.T) {
 		"--unlock-file", "--storage-key-file", "--root", "--listen",
 		"--header '@HEADER_FILE'", "Ctrl+C", "trusted local host",
 		"POST /owner/introduction/check", "stateless", "no present key control",
+		"--peer-listen", "any local caller", "sender-side disclosure only",
 	} {
 		assert.That(strings.Contains(output.String(), text), text)
 	}
@@ -75,6 +77,17 @@ type serveFixture struct {
 
 func prepareServeFixture(t *testing.T) serveFixture {
 	t.Helper()
+	return prepareServeFixtureWithPath(t, func(root key.Handle, child key.Public) coreintro.Path {
+		return coreintro.New(key.Info{Public: try.To1(root.CBORPublicKey())}).Introduce(
+			root, key.Info{Public: child},
+		)
+	})
+}
+
+func prepareServeFixtureWithPath(t *testing.T,
+	path func(key.Handle, key.Public) coreintro.Path,
+) serveFixture {
+	t.Helper()
 	defer assert.PushTester(t)()
 
 	dir, unlock, _ := initialized(t)
@@ -87,9 +100,7 @@ func prepareServeFixture(t *testing.T) serveFixture {
 			root.CBORPublicKey(),
 		), child: try.To1(alice.CBORPublicKey()),
 	}
-	f.proposal = coreintro.New(key.Info{Public: f.root}).Introduce(
-		root, key.Info{Public: f.child},
-	)
+	f.proposal = path(root, f.child)
 	s := try.To1(nodevault.CreateForNode(
 		t.Context(), f.dir, f.storageKey, f.root, f.child,
 	))
@@ -209,6 +220,8 @@ func TestServeSavedChoices(t *testing.T) {
 		s, address := try.To2(setupNodeServe(t.Context(), cmd))
 		defer func() { try.Out(s.close()).Logf() }()
 		assert.Equal(address, "127.0.0.1:0")
+		assert.Empty(s.peerAddress)
+		assert.INil(s.peerHandler)
 		assert.DeepEqual(s.child, f.child)
 		header := string(try.To1(os.ReadFile(s.headerFile)))
 		assert.That(header != previousHeader)
@@ -237,6 +250,7 @@ func TestServeSavedChoices(t *testing.T) {
 			{http.MethodGet, "/owner/status", authorization, http.StatusOK},
 			{http.MethodPost, "/intro/offer", authorization, http.StatusNotFound},
 			{http.MethodPost, "/intro/acceptance", authorization, http.StatusNotFound},
+			{http.MethodGet, "/peer/introduction", authorization, http.StatusNotFound},
 		} {
 			request := httptest.NewRequest(tc.method, tc.path, nil)
 			request.Header.Set("Authorization", tc.credential)
@@ -370,6 +384,14 @@ func TestServeValidationBeforeResources(t *testing.T) {
 		name, value, diagnostic string
 	}{
 		{"listen", "0.0.0.0:0", "checking --listen"},
+		{"peer-listen", "0.0.0.0:0", "checking --peer-listen"},
+		{"peer-listen", ":0", "checking --peer-listen"},
+		{"peer-listen", "example.com:0", "checking --peer-listen"},
+		{"peer-listen", "[::]:0", "checking --peer-listen"},
+		{"peer-listen", "127.0.0.1:http", "checking --peer-listen"},
+		{"peer-listen", "127.0.0.1:65536", "checking --peer-listen"},
+		{"peer-listen", "127.0.0.1", "checking --peer-listen"},
+		{"peer-listen", " ", "checking --peer-listen"},
 		{"root", "xyz", "nonempty hex"},
 		{"root", strings.Repeat("01", 16*1024+1), "exceeds 16 KiB"},
 		{"storage-key-file", f.unlock, "must differ"},
@@ -382,6 +404,10 @@ func TestServeValidationBeforeResources(t *testing.T) {
 		assert.That(strings.Contains(err.Error(), tc.diagnostic), err)
 	}
 	cmd := serveCommand(t, f)
+	try.To(cmd.Flags().Set("listen", "localhost:1234"))
+	try.To(cmd.Flags().Set("peer-listen", "127.0.0.1:01234"))
+	assert.Error(cmd.RunE(cmd, nil))
+	cmd = serveCommand(t, f)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	cmd.SetContext(ctx)
@@ -516,7 +542,7 @@ func TestServeLifecycle(t *testing.T) {
 			done := make(chan struct{})
 			var result error
 			go func() {
-				result = runNodeServe(ctx, listener, s, out)
+				result = runNodeServe(ctx, listener, nil, s, out)
 				close(done)
 			}()
 			defer func() {

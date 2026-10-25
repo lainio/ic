@@ -2,7 +2,7 @@
 
 ## Run an existing node
 
-Use `tdc node serve --help` for the operational status-only command.
+Use `tdc node serve --help` for the local owner service.
 Stop the previous Alice accept process to release its Store lock.
 Root can be stopped; reuse Alice's existing paths and independently supplied
 Root public-key pin:
@@ -36,9 +36,17 @@ credentials. Identity, state, unlock and storage-key files persist, including
 after errors. Store opening retains the existing block charge described below;
 individual status requests perform no encryption.
 
-Review order: `node serve --help`, setup/cleanup in `serve.go`, then the focused
-`serve_test.go`. The existing address, shutdown, and credential helpers are
-shared with the demos without changing their behavior.
+Optional `--peer-listen 127.0.0.1:0` binds a separate plaintext loopback socket
+and prints its actual `GET /peer/introduction` URL. This discloses only this
+node's completed introduction (public keys, ancestor links and signatures) to
+**any local caller without a credential**. Without the flag, no peer socket
+exists and owner behavior is unchanged. The peer socket has no owner routes.
+Both servers finish before the Store closes. This is sender-side disclosure,
+not discovery, an ad, receiver Received/Known changes, present key control,
+mutual authentication, a connection, or chat.
+
+Review order: `internal/peerapi/introduction.go` and the pure export helper,
+second-listener lifecycle in `serve.go`, then focused peer/serve tests.
 
 ## Create and inspect a saved identity
 
@@ -113,7 +121,7 @@ In that fresh-Alice example only Root's signing identity survives.
 Its issued offer stays in memory. For persistent Alice, use `init-state` below
 and all three saved-state flags on HTTP accept.
 `node init`, `info` and `init-state` start no network service;
-`node serve` runs the status-only service described above.
+`node serve` runs the local service described above.
 HTTP shutdown leaves identity files intact.
 
 This operation persists local key material only. It creates no introduction,

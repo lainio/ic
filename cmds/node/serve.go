@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
@@ -17,6 +18,7 @@ import (
 	"github.com/lainio/ic/internal/nodeidentity"
 	"github.com/lainio/ic/internal/nodevault"
 	"github.com/lainio/ic/internal/ownerapi"
+	"github.com/lainio/ic/internal/peerapi"
 	"github.com/lainio/ic/key"
 	"github.com/spf13/cobra"
 )
@@ -40,6 +42,13 @@ Saved unselected, pending, and completed choices remain as they are.
 All four file/identity flags are required and nonempty. The identity unlock
 and storage-key files must be distinct and outside the node directory.
 Missing or invalid state fails without initialization or repair.
+
+--peer-listen explicitly opts in to a second plaintext loopback listener.
+GET /peer/introduction makes only this node's completed introduction path
+(public keys, ancestor links and signatures) available to any local caller,
+without a bearer token. Disabled by default; no peer socket exists otherwise.
+This is sender-side disclosure only, not discovery, an ad, present key control,
+receiver Received/Known changes, mutual authentication, a connection, or chat.
 
 Use the printed owner status URL and authorization header file in another
 terminal (keep the @):
@@ -82,6 +91,8 @@ A new save uses the existing encrypted Vault and may fail if capacity is exhaust
 		String("root", "", "Expected Root public-key hex (at most 16 KiB decoded)")
 	cmd.Flags().String("listen", "127.0.0.1:0",
 		"Explicit loopback host and numeric port; localhost normalizes to 127.0.0.1; zero selects a free port")
+	cmd.Flags().String("peer-listen", "",
+		"Opt in to disclosing your completed introduction to any local caller; explicit loopback host and numeric port")
 	for _, name := range []string{"dir", "unlock-file", "storage-key-file", "root"} {
 		try.To(cmd.MarkFlagRequired(name))
 	}
@@ -96,11 +107,11 @@ func runServe(cmd *cobra.Command, args []string) (err error) {
 	defer stop()
 	s, address := try.To2(setupNodeServe(ctx, cmd))
 	defer func() { try.Out(s.close()).Logf() }()
-	listener, listenErr := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
+	owner, peer, listenErr := bindNodeListeners(ctx, address, s.peerAddress)
 	if listenErr != nil {
 		return errors.Join(listenErr, s.close())
 	}
-	return runNodeServe(ctx, listener, s, cmd.OutOrStdout())
+	return runNodeServe(ctx, owner, peer, s, cmd.OutOrStdout())
 }
 
 // Owns only this invocation's Store and temporary credentials. Persistent paths
@@ -110,6 +121,8 @@ type nodeServe struct {
 	child                     key.Public
 	credentialDir, headerFile string
 	handler                   http.Handler
+	peerAddress               string
+	peerHandler               http.Handler
 }
 
 // Validate all inputs before restoring the identity or opening persistent
@@ -139,6 +152,12 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	address = try.T1(localhttp.Address(
 		try.To1(cmd.Flags().GetString("listen")), true,
 	))("checking --listen")
+	if value := try.To1(cmd.Flags().GetString("peer-listen")); value != "" {
+		s.peerAddress = try.T1(localhttp.Address(value, true))("checking --peer-listen")
+		if s.peerAddress == address && !strings.HasSuffix(address, ":0") {
+			return nil, "", errors.New("owner and peer listeners must use separate endpoints")
+		}
+	}
 	root := try.To1(parseRootHex(try.To1(cmd.Flags().GetString("root"))))
 	dir, unlock := try.To2(commandPaths(cmd))
 	dir, unlock = try.To2(nodeidentity.ResolvePaths(dir, unlock))
@@ -158,7 +177,27 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.handler, s.headerFile = try.To2(ownerapi.NewEvidenceCredentials(
 		ctx, s.store.Vault(), root, s.child, s.credentialDir,
 	))
+	if s.peerAddress != "" {
+		s.peerHandler = peerapi.NewHandler(s.store.Vault(), root, s.child)
+	}
 	return s, address, nil
+}
+
+// Bind both sockets before serving either. A failed second bind releases the
+// first socket; the caller still owns setup resources and persistent files.
+func bindNodeListeners(ctx context.Context, ownerAddress, peerAddress string) (
+	owner, peer net.Listener, err error,
+) {
+	config := &net.ListenConfig{}
+	owner, err = config.Listen(ctx, "tcp", ownerAddress)
+	if err != nil || peerAddress == "" {
+		return owner, nil, err
+	}
+	peer, err = config.Listen(ctx, "tcp", peerAddress)
+	if err != nil {
+		return nil, nil, errors.Join(err, owner.Close())
+	}
+	return owner, peer, nil
 }
 
 // Call after HTTP has stopped and joined. Attempt every cleanup and retain its
@@ -174,9 +213,9 @@ func (s *nodeServe) close() error {
 	return errors.Join(closeErr, removeErr)
 }
 
-// Owns the bound listener and setup resources, including on output failure.
-// localhttp.Serve joins HTTP before the Store is closed.
-func runNodeServe(ctx context.Context, listener net.Listener, s *nodeServe,
+// Owns both bound listeners and setup resources, including on output failure.
+// serveNodeListeners joins HTTP and admitted requests before the Store closes.
+func runNodeServe(ctx context.Context, owner, peer net.Listener, s *nodeServe,
 	out io.Writer,
 ) (err error) {
 	defer func() { try.Out(s.close()).Logf() }()
@@ -184,7 +223,10 @@ func runNodeServe(ctx context.Context, listener net.Listener, s *nodeServe,
 	owned := true
 	defer func() {
 		if owned {
-			err = errors.Join(err, listener.Close())
+			err = errors.Join(err, owner.Close())
+			if peer != nil {
+				err = errors.Join(err, peer.Close())
+			}
 		}
 	}()
 	defer err2.Handle(&err)
@@ -194,8 +236,48 @@ func runNodeServe(ctx context.Context, listener net.Listener, s *nodeServe,
 		"node public key (hex): %x\n"+
 			"owner status URL: http://%s/owner/status\n"+
 			"authorization header file: %s\nstop with Ctrl+C\n",
-		s.child, listener.Addr().String(), s.headerFile,
+		s.child, owner.Addr().String(), s.headerFile,
 	))
+	if peer != nil {
+		try.To1(fmt.Fprintf(out, "peer introduction URL: http://%s/peer/introduction\n",
+			peer.Addr().String()))
+	}
 	owned = false
-	return localhttp.Serve(ctx, listener, s.handler)
+	return serveNodeListeners(ctx, owner, peer, s)
+}
+
+// Each Serve owns one socket and performs bounded shutdown. Cancel the sibling
+// on any exit, retaining both results and joining both before closing the Store.
+func serveNodeListeners(ctx context.Context, owner, peer net.Listener, s *nodeServe) error {
+	// Close after an unexpected Serve exit cancels connections but does not
+	// join active handlers. Drain admitted requests before releasing the Vault,
+	// and prevent a late HTTP goroutine from entering it after shutdown.
+	var requests sync.RWMutex
+	stopped := false
+	join := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requests.RLock()
+			defer requests.RUnlock()
+			if stopped {
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+	defer func() {
+		requests.Lock()
+		stopped = true
+		requests.Unlock()
+	}()
+	if peer == nil {
+		return localhttp.Serve(ctx, owner, join(s.handler))
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	finished := make(chan error, 2)
+	go func() { finished <- localhttp.Serve(ctx, owner, join(s.handler)) }()
+	go func() { finished <- localhttp.Serve(ctx, peer, join(s.peerHandler)) }()
+	first := <-finished
+	cancel()
+	return errors.Join(first, <-finished)
 }

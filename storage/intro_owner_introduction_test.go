@@ -19,6 +19,7 @@ import (
 	"github.com/lainio/ic/internal/core/intro"
 	"github.com/lainio/ic/internal/onboarding"
 	"github.com/lainio/ic/internal/ownerapi"
+	"github.com/lainio/ic/internal/peerapi"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
@@ -124,6 +125,16 @@ func TestOwnerIntroductionCompleted(t *testing.T) {
 	assert.NoError(parsed.VerifyAcceptance(exportedAcceptance))
 	assert.Equal(signer.signCalls, 1)
 	assert.Equal(try.To1(readOwnerStatus(f.handler, f.authorization)), "completed")
+	// Reuse the frozen-budget real-signature fixture for the public exporter.
+	// Repeated peer reads must reproduce the owner document without a seal.
+	peer := peerapi.NewHandler(f.vault, rootPublic, childPublic)
+	for range 2 {
+		w := httptest.NewRecorder()
+		peer.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/peer/introduction", nil))
+		assert.Equal(w.Code, http.StatusOK)
+		assert.DeepEqual(w.Body.Bytes(), response.Body.Bytes())
+		assert.Equal(signer.signCalls, 1)
+	}
 
 	failed := &ownerStatusFailedWriter{ResponseRecorder: httptest.NewRecorder()}
 	f.handler.ServeHTTP(failed, f.request())
@@ -197,6 +208,32 @@ func TestOwnerIntroductionRefusals(t *testing.T) {
 			assert.Equal(response.Body.String(), http.StatusText(want)+"\n")
 			assert.Equal(response.Header().Get("Content-Type"), "text/plain; charset=utf-8")
 			assert.Equal(response.Header().Get("Cache-Control"), "no-store")
+		})
+	}
+}
+
+// The stricter peer admission policy must not change existing owner exports.
+func TestOwnerIntroductionExportCompatibility(t *testing.T) {
+	for _, option := range []intro.Opts{intro.WithRotation(), intro.WithBackupKeyIndex(1)} {
+		t.Run("root option", func(t *testing.T) {
+			defer assert.PushTester(t)()
+
+			root, child := key.New(), key.New()
+			r, c := key.InfoFromHandle(root).Public, key.InfoFromHandle(child).Public
+			proposal := intro.New(key.Info{Public: r}, option).Introduce(root, key.Info{Public: c})
+			f := newIntroductionFixture(t, r, c)
+			try.To1(onboarding.SignAfterStoredChoice(f.vault, child, r, r, proposal))
+			f.assertReadOnly(t)
+			owner := httptest.NewRecorder()
+			f.handler.ServeHTTP(owner, f.request())
+			assert.Equal(owner.Code, http.StatusOK)
+			var document struct{ Proposal []byte }
+			try.To(json.Unmarshal(owner.Body.Bytes(), &document))
+			assert.DeepEqual(document.Proposal, proposal.Bytes())
+			peer := httptest.NewRecorder()
+			peerapi.NewHandler(f.vault, r, c).ServeHTTP(peer,
+				httptest.NewRequest(http.MethodGet, "/peer/introduction", nil))
+			assert.Equal(peer.Code, http.StatusInternalServerError)
 		})
 	}
 }

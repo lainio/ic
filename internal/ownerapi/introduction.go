@@ -2,7 +2,6 @@ package ownerapi
 
 import (
 	"bytes"
-	"encoding/json"
 	"net/http"
 
 	"github.com/lainio/err2/try"
@@ -60,18 +59,8 @@ func (h *statusHandler) serveIntroduction(
 		writeStatusError(w, http.StatusConflict)
 		return
 	}
-	// A verified signature does not make a handle ID public: the backend may
-	// embed wrapped private key material. Refuse; never strip signed fields.
-	if !onboarding.PublicIntroduction(stored.Proposal) {
-		writeStatusError(w, http.StatusInternalServerError)
-		return
-	}
-	// ReadStoredChoice parses canonical bytes, so Bytes reproduces the complete
-	// saved proposal. The detached acceptance is returned exactly as saved.
-	document, err := json.Marshal(introductionResponse{
-		Version: 1, Proposal: stored.Proposal.Bytes(), Acceptance: stored.Acceptance,
-	})
-	if err != nil || len(document) > maxIntroductionBytes {
+	document, err := onboarding.EncodeIntroduction(stored)
+	if err != nil {
 		writeStatusError(w, http.StatusInternalServerError)
 		return
 	}
