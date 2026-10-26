@@ -26,6 +26,10 @@ func newEvidenceHandler(vault *storage.Vault, root, child key.Public) http.Handl
 		vault: vault, expectedRoot: bytes.Clone(root), expectedChild: bytes.Clone(child),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/owner/introductions/fetch" {
+			h.serveFetchIntroduction(w, r)
+			return
+		}
 		if r.URL.Path != "/owner/introductions" {
 			read.ServeHTTP(w, r)
 			return
@@ -70,6 +74,10 @@ func (h *statusHandler) serveSaveIntroduction(w http.ResponseWriter, r *http.Req
 		writeStatusError(w, status)
 		return
 	}
+	h.writeSavedIntroduction(w, subject, created)
+}
+
+func (h *statusHandler) writeSavedIntroduction(w http.ResponseWriter, subject key.Public, created bool) {
 	encoded, err := json.Marshal(saveResponse{h.subjectSummary(subject), created})
 	if err != nil || len(encoded) > maxCheckResponseBytes {
 		writeStatusError(w, http.StatusInternalServerError)

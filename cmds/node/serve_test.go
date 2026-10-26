@@ -58,6 +58,7 @@ func TestServeRegistration(t *testing.T) {
 		"--header '@HEADER_FILE'", "Ctrl+C", "trusted local host",
 		"POST /owner/introduction/check", "stateless", "no present key control",
 		"--peer-listen", "any local caller", "sender-side disclosure only",
+		"POST /owner/introductions/fetch", "Received", "Self-fetch is refused",
 	} {
 		assert.That(strings.Contains(output.String(), text), text)
 	}

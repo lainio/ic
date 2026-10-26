@@ -45,8 +45,13 @@ Both servers finish before the Store closes. This is sender-side disclosure,
 not discovery, an ad, receiver Received/Known changes, present key control,
 mutual authentication, a connection, or chat.
 
-Review order: `internal/peerapi/introduction.go` and the pure export helper,
-second-listener lifecycle in `serve.go`, then focused peer/serve tests.
+The evidence credential also permits `POST /owner/introductions/fetch` with
+only `peer_url` in its JSON body. The Go node fetches that exact loopback
+`/peer/introduction` URL and saves validated evidence under its own Root in
+Received, without Known promotion. See `node serve --help` for the bounds.
+
+Review order: destination/client boundary in `internal/ownerapi/fetch.go`,
+Received-only save and credential routing, then focused two-Vault fetch tests.
 
 ## Create and inspect a saved identity
 

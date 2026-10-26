@@ -115,6 +115,7 @@ func TestPeerRouteBoundary(t *testing.T) {
 		{"GET", "/owner/introduction", "", 404},
 		{"POST", "/owner/introduction/check", "{}", 404},
 		{"POST", "/owner/introductions", "{}", 404},
+		{"POST", "/owner/introductions/fetch", "{}", 404},
 		{"GET", "/owner/introductions", "", 404},
 		{"POST", "/intro/acceptance", "{}", 404},
 		{"GET", "/intro/offer", "", 404},
@@ -140,7 +141,7 @@ func TestPeerRouteBoundary(t *testing.T) {
 			assert.Equal(w.Header().Get("Cache-Control"), "no-store")
 		}
 	}
-	for _, path := range []string{"/owner/introduction", "/owner/introductions"} {
+	for _, path := range []string{"/owner/introduction", "/owner/introductions", "/owner/introductions/fetch"} {
 		w := httptest.NewRecorder()
 		s.handler.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}")))
 		assert.Equal(w.Code, http.StatusUnauthorized)

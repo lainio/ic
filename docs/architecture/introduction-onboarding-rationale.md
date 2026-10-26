@@ -335,8 +335,35 @@ Checking, saving, and listing never update `Known`, global introduction truth,
 the local choice, ads, PW, trust, deny, device, or recovery state.
 A conflicting proposal is refused locally, without declaring a canonical parent.
 Operational `node serve` uses fresh `NewEvidenceCredentials` for current reads,
-check, and save/list only; read/status credentials gain no persistence or routes.
+check, save/list, and the exact fetch route below; read/status credentials gain
+no persistence, network access, or routes.
 This capability grants no signing, trust, or general future POST permission.
+
+### Owner-initiated peer receipt
+
+`POST /owner/introductions/fetch` accepts only a bounded JSON `peer_url` field.
+Before networking it requires direct `http://`, a literal loopback IP or locally
+normalized `localhost`, an explicit nonzero numeric port, and exactly
+`/peer/introduction`, without credentials, encoded paths, queries or fragments.
+The Go node performs one GET with a five-second timeout and a hard 128 KiB body
+limit, without DNS, redirects, proxies, cookies or forwarded owner credentials.
+Only HTTP 200 JSON reaches the existing strict transfer decoder. The receiver
+uses its independently configured Root to check the completed path and
+acceptance, rejects its own subject, and calls `SaveIntroduction` after network
+I/O has finished. Exact replay preserves the first record without encryption;
+a different proposal for the same subject conflicts. Failures retain no partial
+evidence and return generic request, peer, conflict, or storage errors.
+
+This completes receiver-side transfer as a restricted operational projection
+of V19 `PresentSelf` (lines 533–549) and `ReceiveEdge` (lines 399–412), at spec
+revision `1a9cb30e9fcbcb89cea55c0aed1f6f88a3ea6508`. Signed JSON and admission
+validation do not fully refine every modeled guard or `SelfEvidencePayload`.
+Receipt changes only Received; the admission filter is not `VerifyReceived`
+(lines 413–424). Neither node gains Known, choice, trust, ads, PW or chat state.
+The URL does not establish subject identity, present signing-key control,
+verified reachability or global unique parentage. `CreatePW` (lines 551–576)
+still requires verified current advertisements, usable devices and bilateral
+acceptance. Direct owner save continues to permit local self evidence.
 
 ### Explicit local verification
 

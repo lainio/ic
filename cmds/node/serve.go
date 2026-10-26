@@ -35,6 +35,12 @@ POST /owner/introduction/check checks a pasted public document's path and final
 child acceptance against this node's configured Root, including other subjects.
 POST /owner/introductions deliberately saves received evidence after rechecking;
 GET /owner/introductions lists saved subject keys, including self evidence.
+POST /owner/introductions/fetch explicitly fetches another node's completed
+introduction and saves it in Received under this node's configured Root.
+Its JSON body has only peer_url: http://LOOPBACK:PORT/peer/introduction.
+Use a literal loopback IP or localhost (no DNS), with an explicit nonzero port.
+The Go node makes one direct GET, limited to 5 seconds and 128 KiB, without
+redirects, proxies, cookies, or owner credentials. Self-fetch is refused.
 Startup and owner inspection never contact peers, request introductions, sign,
 or resubmit acceptances.
 Saved unselected, pending, and completed choices remain as they are.
@@ -57,9 +63,9 @@ terminal (keep the @):
 
 Requires a trusted local host. HTTP is loopback plaintext only; do not forward
 or expose it remotely. The fresh evidence credential grants the existing reads,
-stateless check, and these exact save/list routes, including public keys,
+stateless check, and these exact save/list/fetch routes, including public keys,
 ancestor links, and signatures. Read/status credentials retain their old scope.
-No signing, trust, other writes, future POST operations, peer access, or enrollment
+No signing, trust, other writes, future POST operations, other peer access, or enrollment
 are authorized.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,

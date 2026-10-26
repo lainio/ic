@@ -374,13 +374,16 @@ func TestOwnerReceivedCredentialScope(t *testing.T) {
 		{ownerapi.NewStatusHandler(nil, nil, nil), ""},
 	} {
 		for _, method := range []string{http.MethodGet, http.MethodPost} {
-			w := httptest.NewRecorder()
-			r := receivedRequest(old.auth, method, nil)
-			reader := &checkCountingReader{Reader: strings.NewReader("must not read")}
-			r.Body = io.NopCloser(reader)
-			old.handler.ServeHTTP(w, r)
-			assertCheckError(t, w, http.StatusNotFound)
-			assert.Equal(reader.bytesRead, 0)
+			for _, path := range []string{receivedPath, fetchPath} {
+				w := httptest.NewRecorder()
+				r := receivedRequest(old.auth, method, nil)
+				r.URL.Path = path
+				reader := &checkCountingReader{Reader: strings.NewReader("must not read")}
+				r.Body = io.NopCloser(reader)
+				old.handler.ServeHTTP(w, r)
+				assertCheckError(t, w, http.StatusNotFound)
+				assert.Equal(reader.bytesRead, 0)
+			}
 		}
 	}
 }
