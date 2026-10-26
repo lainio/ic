@@ -60,6 +60,21 @@ func NewEvidenceCredentials(ctx context.Context, vault *storage.Vault,
 	)
 }
 
+// NewDeviceCredentials is the operational node-serve credential: it grants the
+// evidence routes plus POST /owner/device/bootstrap, an explicit durable first
+// authorization of the already restored local software signer. It borrows that
+// signer exclusively for this route; construction never probes or bootstraps.
+// The caller must keep configuration fixed, serialize any external evidence or
+// signer use, and join HTTP before closing the Vault. Credential file ownership
+// matches NewReadCredentials. Never mount this handler on a peer listener.
+func NewDeviceCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, signer key.Handle, dir string,
+) (http.Handler, string, error) {
+	return newCredentials(ctx,
+		newDeviceHandler(vault, expectedRoot, expectedChild, signer), dir,
+	)
+}
+
 func newCredentials(ctx context.Context, next http.Handler, dir string,
 ) (_ http.Handler, _ string, err error) {
 	defer err2.Handle(&err)

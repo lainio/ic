@@ -59,6 +59,8 @@ func TestServeRegistration(t *testing.T) {
 		"POST /owner/introduction/check", "stateless", "no present key control",
 		"--peer-listen", "any local caller", "sender-side disclosure only",
 		"POST /owner/introductions/fetch", "Received", "Self-fetch is refused",
+		"POST /owner/device/bootstrap", "durable", "restored software signer",
+		"Startup/restart never bootstrap or probe", "Evidence credentials keep their",
 	} {
 		assert.That(strings.Contains(output.String(), text), text)
 	}

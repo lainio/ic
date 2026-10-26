@@ -31,7 +31,7 @@ func (h *statusHandler) serveVerifyReceived(w http.ResponseWriter, r *http.Reque
 		writeStatusError(w, http.StatusBadRequest)
 		return
 	}
-	if !readVerifyRequest(w, r) {
+	if !readEmptyObjectRequest(w, r) {
 		return
 	}
 	newlyKnown, err := onboarding.VerifyReceived(h.vault, h.expectedRoot)
@@ -62,7 +62,7 @@ func (h *statusHandler) serveVerifyReceived(w http.ResponseWriter, r *http.Reque
 
 // Only the literal empty object (with optional surrounding JSON whitespace).
 // No selector, duplicate/extra property, or trailing document can reach storage.
-func readVerifyRequest(w http.ResponseWriter, r *http.Request) bool {
+func readEmptyObjectRequest(w http.ResponseWriter, r *http.Request) bool {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" || len(r.Header.Values("Content-Type")) != 1 {
 		writeStatusError(w, http.StatusUnsupportedMediaType)

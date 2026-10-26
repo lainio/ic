@@ -65,11 +65,16 @@ terminal (keep the @):
     --header '@HEADER_FILE' OWNER_STATUS_URL
 
 Requires a trusted local host. HTTP is loopback plaintext only; do not forward
-or expose it remotely. The fresh evidence credential grants the existing reads,
+or expose it remotely. The fresh operational credential grants the existing reads,
 stateless check, and these exact save/list/fetch/verify routes, including public keys,
 ancestor links, and signatures. Read/status credentials retain their old scope.
-No signing, trust, other writes, future POST operations, other peer access, or enrollment
-are authorized.
+It additionally authorizes POST /owner/device/bootstrap with {}: one durable
+first-device authorization using this node's restored software signer, after its
+own evidence is Known. Success reports usability only at that call's probe.
+Startup/restart never bootstrap or probe; a repeated POST returns 409 without
+signing or writing, and does not establish current usability. After a lost
+response, inspection/retry must be explicit. Evidence credentials keep their
+old scope; no ad publication, trust, or other signing operation is authorized.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.
@@ -126,7 +131,8 @@ func runServe(cmd *cobra.Command, args []string) (err error) {
 }
 
 // Owns only this invocation's Store and temporary credentials. Persistent paths
-// are never cleanup inputs, and no signing handle reaches this holder or HTTP.
+// are never cleanup inputs. Only the operational owner handler borrows the
+// restored signing handle; the separate peer handler remains signer-free.
 type nodeServe struct {
 	store                     *nodevault.Store
 	child                     key.Public
@@ -185,8 +191,8 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.child = try.To1(handle.CBORPublicKey())
 	s.store = try.To1(nodevault.OpenForNode(ctx, dir, keyFile, root, s.child))
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
-	s.handler, s.headerFile = try.To2(ownerapi.NewEvidenceCredentials(
-		ctx, s.store.Vault(), root, s.child, s.credentialDir,
+	s.handler, s.headerFile = try.To2(ownerapi.NewDeviceCredentials(
+		ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
 	))
 	if s.peerAddress != "" {
 		s.peerHandler = peerapi.NewHandler(s.store.Vault(), root, s.child)
