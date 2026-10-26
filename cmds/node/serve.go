@@ -41,6 +41,9 @@ Its JSON body has only peer_url: http://LOOPBACK:PORT/peer/introduction.
 Use a literal loopback IP or localhost (no DNS), with an explicit nonzero port.
 The Go node makes one direct GET, limited to 5 seconds and 128 KiB, without
 redirects, proxies, cookies, or owner credentials. Self-fetch is refused.
+POST /owner/introductions/verify with {} explicitly verifies saved Received
+evidence into local Known and returns newly_known and all known_subjects.
+It makes no peer request. Fetch, save, list, and startup never promote evidence.
 Startup and owner inspection never contact peers, request introductions, sign,
 or resubmit acceptances.
 Saved unselected, pending, and completed choices remain as they are.
@@ -63,7 +66,7 @@ terminal (keep the @):
 
 Requires a trusted local host. HTTP is loopback plaintext only; do not forward
 or expose it remotely. The fresh evidence credential grants the existing reads,
-stateless check, and these exact save/list/fetch routes, including public keys,
+stateless check, and these exact save/list/fetch/verify routes, including public keys,
 ancestor links, and signatures. Read/status credentials retain their old scope.
 No signing, trust, other writes, future POST operations, other peer access, or enrollment
 are authorized.
@@ -77,6 +80,8 @@ retain the original acceptance without another encryption. Load explicitly to
 refresh the saved list. Saved evidence creates no connection or Known state
 and proves no present key control, freshness, revocation status, global uniqueness,
 or live authenticated channel.
+Explicit verification creates locally verified evidence, not connection or trust.
+An explicit retry is safe and makes no write when nothing is newly Known.
 Ctrl+C removes only this invocation's temporary credentials; identity, state,
 unlock and storage-key files persist. Opening the Store retains its existing
 encryption block charge; reads, checks, and duplicate saves use no encryption.

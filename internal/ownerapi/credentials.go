@@ -48,8 +48,9 @@ func NewReadCredentials(ctx context.Context, vault *storage.Vault,
 // POST /owner/introductions. POST may retain submitted received evidence after
 // revalidation. POST /owner/introductions/fetch additionally permits one bounded
 // direct loopback GET of /peer/introduction and a Received-only save under the
-// configured Root. It grants no other peer access, Known promotion, signing,
-// trust, or future POST rights.
+// configured Root. POST /owner/introductions/verify explicitly promotes valid
+// Received evidence to local Known using VerifyReceived, without peer requests.
+// It grants no other peer access, signing, trust, or future POST rights.
 // Vault/identity ownership and private credential creation match NewReadCredentials.
 func NewEvidenceCredentials(ctx context.Context, vault *storage.Vault,
 	expectedRoot, expectedChild key.Public, dir string,

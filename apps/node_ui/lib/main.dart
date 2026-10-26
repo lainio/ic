@@ -30,6 +30,10 @@ typedef FetchIntroduction = Future<IntroductionSave> Function(
   String headerPath,
   String peerUrl,
 );
+typedef VerifyReceived = Future<IntroductionVerification> Function(
+  String url,
+  String headerPath,
+);
 
 class IntroTreeApp extends StatelessWidget {
   const IntroTreeApp({
@@ -40,6 +44,7 @@ class IntroTreeApp extends StatelessWidget {
     this.saveIntroduction,
     this.listIntroductions,
     this.fetchIntroduction,
+    this.verifyReceived,
   });
 
   final ReadStatus? readStatus;
@@ -48,6 +53,7 @@ class IntroTreeApp extends StatelessWidget {
   final SaveIntroduction? saveIntroduction;
   final ListIntroductions? listIntroductions;
   final FetchIntroduction? fetchIntroduction;
+  final VerifyReceived? verifyReceived;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -68,6 +74,7 @@ class IntroTreeApp extends StatelessWidget {
       saveIntroduction: saveIntroduction,
       listIntroductions: listIntroductions,
       fetchIntroduction: fetchIntroduction,
+      verifyReceived: verifyReceived,
     ),
   );
 }
@@ -81,6 +88,7 @@ class StatusScreen extends StatefulWidget {
     this.saveIntroduction,
     this.listIntroductions,
     this.fetchIntroduction,
+    this.verifyReceived,
   });
 
   final ReadStatus? readStatus;
@@ -89,6 +97,7 @@ class StatusScreen extends StatefulWidget {
   final SaveIntroduction? saveIntroduction;
   final ListIntroductions? listIntroductions;
   final FetchIntroduction? fetchIntroduction;
+  final VerifyReceived? verifyReceived;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -107,6 +116,10 @@ class _StatusScreenState extends State<StatusScreen> {
   bool _saving = false;
   bool _listing = false;
   bool _fetching = false;
+  bool _verifying = false;
+  IntroductionVerification? _verified;
+  StatusFailure? _verifyFailure;
+  int _verifyRevision = 0;
   IntroductionSave? _fetched;
   StatusFailure? _fetchFailure;
   int _fetchRevision = 0;
@@ -131,6 +144,7 @@ class _StatusScreenState extends State<StatusScreen> {
       _copied = false;
       _invalidateCheck();
       _invalidateFetch();
+      _invalidateVerification();
     });
   }
 
@@ -148,10 +162,48 @@ class _StatusScreenState extends State<StatusScreen> {
     _fetchFailure = null;
   }
 
+  void _invalidateVerification() {
+    _verifyRevision++;
+    _verified = null;
+    _verifyFailure = null;
+  }
+
+  Future<void> _verify() async {
+    if (_loading) return;
+    setState(() {
+      _invalidateVerification();
+      _loading = true;
+      _verifying = true;
+    });
+    final revision = _verifyRevision;
+    IntroductionVerification? verified;
+    StatusFailure? failure;
+    try {
+      verified = await (widget.verifyReceived ?? _client.verifyReceived)(
+        _url.text,
+        _headerPath.text,
+      );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.verifyUnknown;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _verifying = false;
+      if (revision == _verifyRevision) {
+        _verified = verified;
+        _verifyFailure = failure;
+      }
+    });
+  }
+
   Future<void> _fetch() async {
     if (_loading) return;
     setState(() {
       _invalidateFetch();
+      _invalidateVerification();
       _loading = true;
       _fetching = true;
       // Even an unknown outcome may have changed the saved collection.
@@ -219,6 +271,7 @@ class _StatusScreenState extends State<StatusScreen> {
     if (_loading || _checked == null) return;
     final revision = _checkRevision;
     setState(() {
+      _invalidateVerification();
       _loading = true;
       _saving = true;
       _saved = null;
@@ -525,13 +578,22 @@ class _StatusScreenState extends State<StatusScreen> {
                   const SizedBox(height: 16),
                   Semantics(liveRegion: true, child: _fetchResult(theme)),
                   const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: OutlinedButton(
-                      onPressed: _loading ? null : _loadIntroductions,
-                      child: const Text('Load saved introductions'),
-                    ),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      OutlinedButton(
+                        onPressed: _loading ? null : _loadIntroductions,
+                        child: const Text('Load saved introductions'),
+                      ),
+                      FilledButton(
+                        onPressed: _loading ? null : _verify,
+                        child: const Text('Verify received introductions'),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 16),
+                  Semantics(liveRegion: true, child: _verifyResult(theme)),
                   const SizedBox(height: 16),
                   Semantics(liveRegion: true, child: _listResult(theme)),
                 ],
@@ -546,7 +608,12 @@ class _StatusScreenState extends State<StatusScreen> {
   Widget _result(ThemeData theme) {
     final choice = _choice;
     final failure = _failure;
-    if (_loading && !_checking && !_saving && !_listing && !_fetching) {
+    if (_loading &&
+        !_checking &&
+        !_saving &&
+        !_listing &&
+        !_fetching &&
+        !_verifying) {
       final action = _copying ? 'Copying introduction' : 'Reading status';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -685,6 +752,52 @@ class _StatusScreenState extends State<StatusScreen> {
         SelectableText(fetched.subjectPublicKeyHex),
         const SizedBox(height: 12),
         const Text('Received evidence; no connection or trust created.'),
+      ],
+    );
+  }
+
+  Widget _verifyResult(ThemeData theme) {
+    if (_verifying) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Verifying received introductions…'),
+          SizedBox(height: 12),
+          LinearProgressIndicator(
+            semanticsLabel: 'Verifying received introductions',
+          ),
+        ],
+      );
+    }
+    final failure = _verifyFailure;
+    if (failure != null) {
+      return Text(
+        failure.message,
+        style: TextStyle(color: theme.colorScheme.error),
+      );
+    }
+    final verified = _verified;
+    if (verified == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          verified.newlyKnown > 0
+              ? '${verified.newlyKnown} newly verified'
+              : verified.knownSubjects.isEmpty
+              ? 'No received introductions verified'
+              : 'No new introductions verified',
+          style: theme.textTheme.titleLarge,
+        ),
+        if (verified.knownSubjects.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          const Text('Locally known subject public keys'),
+          for (final subject in verified.knownSubjects) SelectableText(subject),
+        ],
+        const SizedBox(height: 12),
+        const Text(
+          'Locally verified evidence; no connection or trust created.',
+        ),
       ],
     );
   }

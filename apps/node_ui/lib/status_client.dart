@@ -27,6 +27,16 @@ class IntroductionSave extends IntroductionCheck {
   final bool created;
 }
 
+class IntroductionVerification {
+  const IntroductionVerification({
+    required this.newlyKnown,
+    required this.knownSubjects,
+  });
+
+  final int newlyKnown;
+  final List<String> knownSubjects;
+}
+
 // Only these fixed messages cross into the UI; exceptions and bodies do not.
 enum StatusFailure implements Exception {
   invalidUrl('Use the full local owner status URL printed by node serve.'),
@@ -55,6 +65,16 @@ enum StatusFailure implements Exception {
   ),
   fetchUnexpected(
     'Unexpected local node response; fetch outcome is unknown. Use Load saved introductions to inspect saved evidence.',
+  ),
+  verifyUnavailable('Verification is unavailable on the local owner service.'),
+  verifyRejected(
+    'The node rejected verification of its saved evidence or storage state.',
+  ),
+  verifyUnknown(
+    'Verification acknowledgement was not received; outcome is unknown. Click Verify received introductions again to check safely.',
+  ),
+  verifyInvalidResponse(
+    'Invalid verification response; outcome is unknown. Click Verify received introductions again to check safely.',
   ),
   notCompleted('The introduction is not yet completed.'),
   invalidIntroduction(
@@ -181,6 +201,53 @@ class StatusClient {
     }
   }
 
+  Future<IntroductionVerification> verifyReceived(
+    String ownerStatusUrl,
+    String headerPath,
+  ) async {
+    final destination = _destination(ownerStatusUrl)
+        .replace(path: '/owner/introductions/verify');
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        16 * 1024,
+        introduction: utf8.encode('{}'),
+      );
+      final count = json['newly_known'];
+      final subjects = json['known_subjects'];
+      if (json.length != 2 ||
+          count is! int ||
+          count < 0 ||
+          subjects is! List ||
+          subjects.length > 32 ||
+          count > subjects.length) {
+        throw StatusFailure.unexpected;
+      }
+      final known = <String>[];
+      for (final subject in subjects) {
+        if (subject is! String ||
+            subject.isEmpty ||
+            subject.length.isOdd ||
+            RegExp(r'[^0-9a-f]').hasMatch(subject) ||
+            (known.isNotEmpty && known.last.compareTo(subject) >= 0)) {
+          throw StatusFailure.unexpected;
+        }
+        known.add(subject);
+      }
+      return IntroductionVerification(
+        newlyKnown: count,
+        knownSubjects: List.unmodifiable(known),
+      );
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.unreachable => StatusFailure.verifyUnknown,
+        StatusFailure.unexpected => StatusFailure.verifyInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
   Future<List<IntroductionCheck>> listIntroductions(
     String url,
     String headerPath,
@@ -210,6 +277,7 @@ class StatusClient {
     if (_closed || _cancel != null) throw StatusFailure.unreachable;
     final operationTimeout = requestTimeout ?? timeout;
     final fetching = destination.path == '/owner/introductions/fetch';
+    final verifying = destination.path == '/owner/introductions/verify';
 
     http.Client? transport;
     StreamIterator<List<int>>? body;
@@ -253,6 +321,12 @@ class StatusClient {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
           401 => StatusFailure.unauthorized,
+          404 when verifying => StatusFailure.verifyUnavailable,
+          400 ||
+          409 ||
+          413 ||
+          415 when verifying => StatusFailure.verifyRejected,
+          500 when verifying => StatusFailure.verifyUnknown,
           400 when fetching => StatusFailure.invalidPeerUrl,
           413 when fetching => StatusFailure.peerUrlTooLarge,
           502 when fetching => StatusFailure.peerUnavailable,
@@ -295,7 +369,11 @@ class StatusClient {
       }
       if (finished) throw StatusFailure.unreachable;
       try {
-        final json = jsonDecode(utf8.decode(bytes));
+        final text = utf8.decode(bytes);
+        if (verifying && !_verificationEnvelope(text)) {
+          throw StatusFailure.unexpected;
+        }
+        final json = jsonDecode(text);
         if (json is! Map<String, dynamic>) throw StatusFailure.unexpected;
         return json;
       } on FormatException {
@@ -325,6 +403,20 @@ class StatusClient {
     _closed = true;
     _cancel?.call();
   }
+}
+
+// This small, flat response has exactly two fields, in either order. Check its
+// wire shape before jsonDecode can discard duplicate properties. No other
+// owner operation changes its decoder. Values are checked again above.
+bool _verificationEnvelope(String text) {
+  const count = r'"newly_known"\s*:\s*(?:0|[1-9][0-9]*)';
+  const keys =
+      r'"known_subjects"\s*:\s*\[\s*'
+      r'(?:"[0-9a-f]+"(?:\s*,\s*"[0-9a-f]+")*)?\s*\]';
+  final match = RegExp(
+    '^\\s*\\{\\s*(?:$count\\s*,\\s*$keys|$keys\\s*,\\s*$count)\\s*\\}\\s*\$',
+  ).firstMatch(text);
+  return match != null && match.end == text.length;
 }
 
 List<int> _documentBytes(String document) {

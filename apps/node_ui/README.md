@@ -2,7 +2,7 @@
 
 The Linux/native application reads saved local acceptance state from an existing
 `tdc node serve` and lets its owner copy, check, save, or fetch an
-introduction, then load saved subject keys from the node. It requires
+introduction, load saved subject keys, and explicitly verify received evidence. It requires
 a trusted same-machine loopback connection. Root can remain stopped.
 
 Paste only the printed owner status URL and absolute `owner.header` path.
@@ -24,7 +24,7 @@ The credential file is limited to 1 KiB and status responses to 4 KiB.
 After a completed read, `Copy introduction` makes one authenticated GET to the
 fixed `/owner/introduction` sibling, with the same deadline and a 128 KiB limit.
 The fresh operational evidence credential authorizes these reads, the stateless
-check POST, and exactly the save/list/fetch routes below. Existing read/status
+check POST, and exactly the save/list/fetch/verify routes below. Existing read/status
 constructors keep their earlier scope. It grants no signing, trust, enrollment,
 peer access, other writes, or general permission for future owner POST operations.
 The button copies only after validating a three-field development JSON document:
@@ -109,6 +109,26 @@ path edges to this receiver's `Received`, preserving all earlier evidence. It ne
 promotes evidence into `Known` or changes local choice, ads, PW, trust, deny,
 device/recovery state, or global introduction truth. The checker is an admission
 filter for this owner import, not every possible V19 `ReceiveEdge` action.
+
+`Verify received introductions` is a separate owner action under `Saved
+introductions`. With just the owner URL and header configured, it sends one
+authenticated POST containing `{}` to `/owner/introductions/verify` (five-second
+deadline, 16 KiB response limit). The existing Go `VerifyReceived` rechecks all
+saved Received evidence and local parent consistency under the configured Root,
+then durably promotes valid subjects into local Known. No peer request, signing,
+or implicit self evidence is involved. Fetch, save, load, and startup never
+perform this transition.
+
+The result shows `N newly verified` and all locally Known full public keys.
+An empty collection shows `No received introductions verified`; an explicit
+retry shows `No new introductions verified` and preserves the still-known keys,
+without another seal or record rewrite. Save/Fetch attempts and owner connection
+edits clear this display. Credential/unavailable, rejected state, invalid reply,
+and unknown acknowledgement failures use fixed messages. A lost reply may follow
+a committed promotion; there is no automatic retry, but another explicit click
+is safe. Locally verified evidence; no connection or trust created. This proves
+neither global parent uniqueness, current key possession, usable authorized
+devices, fresh ads, nor mutual pairwise state.
 
 These are local acceptance observations, not membership, trust, delivery, or
 continuous connection monitoring. An unavailable service produces a failure;

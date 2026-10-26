@@ -26,6 +26,10 @@ func newEvidenceHandler(vault *storage.Vault, root, child key.Public) http.Handl
 		vault: vault, expectedRoot: bytes.Clone(root), expectedChild: bytes.Clone(child),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/owner/introductions/verify" {
+			h.serveVerifyReceived(w, r)
+			return
+		}
 		if r.URL.Path == "/owner/introductions/fetch" {
 			h.serveFetchIntroduction(w, r)
 			return
