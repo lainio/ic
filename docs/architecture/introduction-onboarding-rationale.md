@@ -391,6 +391,19 @@ documented composite connection workflow; usable devices, verified current ads,
 mutual acceptance and `CreatePW` remain separate. No PW, ad, trust, or device
 authority is created, and V19 is unchanged.
 
+`internal/device.BootstrapLocal` is the v0.1 local software interpretation of
+V19's abstract first-device ceremony (spec `1a9cb30e9fcbcb89cea55c0aed1f6f88a3ea6508`,
+lines 238–252): one private Vault slot denotes the existing restored node signer,
+with its exact public key serving as both owner and device binding. Non-Root
+nodes require their own validated Known subject; the independently pinned Root
+uses `Init`'s self-Known case without fabricated evidence. One atomic write
+persists authorization, while `InspectLocal` derives current usability only
+from a supplied matching signer and a fresh local sign-and-verify probe. The
+caller preserves the Vault's configured node/Root binding and serializes
+evidence changes during preflight; the transaction rechecks empty authorization.
+This adds no human-consent proof, general delegation, peer protocol, ad, PW,
+trust, or startup action, and claims no full V19 refinement.
+
 ## Source locators
 
 [S1] Specification checkout `2cd914be966ad4bdf36b575e2678cad7441fcd75`,
