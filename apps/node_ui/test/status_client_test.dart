@@ -2,9 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:ic_node_ui/main.dart';
 import 'package:ic_node_ui/status_client.dart';
 
 void main() {
@@ -1138,6 +1140,407 @@ void main() {
       }
     },
   );
+  const peerUrl = 'http://localhost:23456/peer/introduction';
+  const fetchResponse =
+      '{"subject_public_key_hex":"00abcdef","is_self":false,"created":true}';
+
+  testWidgets('one Fetch click makes exactly one authenticated owner POST', (
+    tester,
+  ) async {
+    final requests = <http.Request>[];
+    final client = StatusClient(
+      createClient: () => MockClient((request) async {
+        requests.add(request);
+        return http.Response(
+          fetchResponse,
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+    addTearDown(client.close);
+    Future<IntroductionSave>? fetching;
+    await tester.pumpWidget(
+      IntroTreeApp(
+        fetchIntroduction: (url, path, peer) =>
+            fetching = client.fetchIntroduction(url, path, peer),
+      ),
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Owner status URL'),
+      url,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Authorization header file'),
+      header.path,
+    );
+    final peerField = find.widgetWithText(TextField, 'Peer introduction URL');
+    await tester.ensureVisible(peerField);
+    await tester.enterText(peerField, peerUrl);
+    await tester.pumpAndSettle();
+    final button = find.widgetWithText(FilledButton, 'Fetch introduction');
+    await tester.ensureVisible(button);
+    expect(requests, isEmpty);
+    await tester.runAsync(() async {
+      await header.writeAsString('Authorization: Bearer ${'cd' * 32}\n');
+      await tester.tap(button);
+      expect(fetching, isNotNull);
+      await fetching!.timeout(const Duration(seconds: 2));
+    });
+    await tester.pumpAndSettle();
+    expect(requests, hasLength(1));
+    final request = requests.single;
+    expect(request.method, 'POST');
+    expect(
+      request.url.toString(),
+      'http://127.0.0.1:12345/owner/introductions/fetch',
+    );
+    expect(request.headers['Authorization'], 'Bearer ${'cd' * 32}');
+    expect(request.headers['content-type'], 'application/json');
+    expect(jsonDecode(request.body), {'peer_url': peerUrl});
+    expect(request.followRedirects, isFalse);
+    expect(request.maxRedirects, 0);
+    expect(find.text('Introduction received'), findsOneWidget);
+    expect(find.widgetWithText(SelectableText, '00abcdef'), findsOneWidget);
+  });
+
+  test(
+    'fetch posts only to owner with exact peer data and fresh credentials',
+    () async {
+      var calls = 0;
+      final transports = <ObservedClient>[];
+      final client = StatusClient(
+        createClient: () {
+          final transport = ObservedClient((request) async {
+            calls++;
+            expect(request.method, 'POST');
+            expect(
+              request.url.toString(),
+              'http://127.0.0.1:12345/owner/introductions/fetch',
+            );
+            expect(request.followRedirects, isFalse);
+            expect(request.maxRedirects, 0);
+            expect(request.persistentConnection, isFalse);
+            expect(request.headers, {
+              'Authorization': 'Bearer ${calls == 1 ? token : 'cd' * 32}',
+              'Content-Type': 'application/json',
+            });
+            expect(jsonDecode(request.body), {'peer_url': peerUrl});
+            expect(request.body, isNot(contains(token)));
+            return http.Response(
+              fetchResponse.replaceFirst('true', '${calls == 1}'),
+              200,
+              headers: {'content-type': 'application/json'},
+            );
+          });
+          transports.add(transport);
+          return transport;
+        },
+      );
+      for (final created in [true, false]) {
+        final saved = await client.fetchIntroduction(
+          'http://localhost:12345/owner/status',
+          header.path,
+          peerUrl,
+        );
+        expect(saved.subjectPublicKeyHex, '00abcdef');
+        expect(saved.isSelf, isFalse);
+        expect(saved.created, created);
+        expect(calls, created ? 1 : 2);
+        await header.writeAsString('Authorization: Bearer ${'cd' * 32}\n');
+      }
+      expect(transports.every((t) => t.closed), isTrue);
+    },
+  );
+
+  test(
+    'fetch validates owner and encoded input before client creation',
+    () async {
+      var created = 0;
+      final client = StatusClient(
+        createClient: () {
+          created++;
+          return MockClient((_) async => http.Response('{}', 200));
+        },
+      );
+      for (final owner in [
+        peerUrl,
+        '$url?',
+        'http://example.test:12345/owner/status',
+      ]) {
+        await expectLater(
+          client.fetchIntroduction(owner, '/missing/owner.header', peerUrl),
+          throwsA(StatusFailure.invalidUrl),
+        );
+      }
+      for (final input in ['', ' \n\t', 'x' * 2048, 'é' * 1024, '"' * 1024]) {
+        await expectLater(
+          client.fetchIntroduction(url, '/missing/owner.header', input),
+          throwsA(
+            input.trim().isEmpty
+                ? StatusFailure.emptyPeerUrl
+                : StatusFailure.peerUrlTooLarge,
+          ),
+        );
+      }
+      await expectLater(
+        client.fetchIntroduction(url, '/missing/owner.header', peerUrl),
+        throwsA(StatusFailure.credentials),
+      );
+      expect(created, 0);
+    },
+  );
+
+  test('fetch leaves unsupported peer spellings unchanged for Go', () async {
+    for (final peer in [
+      ' $peerUrl ',
+      '$peerUrl?',
+      'https://example.test/peer/%69ntroduction',
+    ]) {
+      var calls = 0;
+      final client = StatusClient(
+        createClient: () => MockClient((request) async {
+          calls++;
+          expect(request.url.path, '/owner/introductions/fetch');
+          expect(jsonDecode(request.body), {'peer_url': peer});
+          return http.Response('private body $token', 400);
+        }),
+      );
+      await expectLater(
+        client.fetchIntroduction(url, header.path, peer),
+        throwsA(StatusFailure.invalidPeerUrl),
+      );
+      expect(calls, 1);
+    }
+  });
+
+  test(
+    'fetch maps HTTP failures without leaking bodies or following redirects',
+    () async {
+      for (final (code, failure) in [
+        (400, StatusFailure.invalidPeerUrl),
+        (401, StatusFailure.unauthorized),
+        (409, StatusFailure.introductionConflict),
+        (413, StatusFailure.peerUrlTooLarge),
+        (502, StatusFailure.peerUnavailable),
+        (500, StatusFailure.saveStorage),
+        (302, StatusFailure.fetchUnexpected),
+        (204, StatusFailure.fetchUnexpected),
+        (404, StatusFailure.fetchUnexpected),
+      ]) {
+        var calls = 0;
+        final transport = ObservedClient((request) async {
+          calls++;
+          expect(request.followRedirects, isFalse);
+          return http.Response(
+            'private body $token',
+            code,
+            headers: {'location': peerUrl},
+          );
+        });
+        await expectLater(
+          StatusClient(createClient: () => transport)
+              .fetchIntroduction(url, header.path, peerUrl),
+          throwsA(failure),
+        );
+        expect(failure.message, isNot(contains(token)));
+        expect(failure.message, isNot(contains('private body')));
+        expect(failure.message, isNot(contains(peerUrl)));
+        expect(calls, 1);
+        expect(transport.closed, isTrue);
+      }
+    },
+  );
+
+  test(
+    'fetch requires an exact non-self save summary and JSON response',
+    () async {
+      final valid = jsonDecode(fetchResponse) as Map<String, dynamic>;
+      for (final body in [
+        'private body $token',
+        '[]',
+        '{}',
+        for (final key in valid.keys) jsonEncode({...valid}..remove(key)),
+        for (final subject in ['', 'abc', 'AB', 'ag', 'ab\n', 12, null])
+          jsonEncode({...valid, 'subject_public_key_hex': subject}),
+        for (final self in [true, 'false', 0, null])
+          jsonEncode({...valid, 'is_self': self}),
+        for (final created in ['true', 1, null])
+          jsonEncode({...valid, 'created': created}),
+        jsonEncode({...valid, 'extra': 0}),
+      ]) {
+        final client = StatusClient(
+          createClient: () => MockClient(
+            (_) async => http.Response(
+              body,
+              200,
+              headers: {'content-type': 'application/json'},
+            ),
+          ),
+        );
+        await expectLater(
+          client.fetchIntroduction(url, header.path, peerUrl),
+          throwsA(StatusFailure.fetchUnexpected),
+        );
+      }
+      for (final media in ['', 'text/plain']) {
+        final client = StatusClient(
+          createClient: () => MockClient(
+            (_) async => http.Response.bytes(
+              utf8.encode(fetchResponse),
+              200,
+              headers: {'content-type': media},
+            ),
+          ),
+        );
+        await expectLater(
+          client.fetchIntroduction(url, header.path, peerUrl),
+          throwsA(StatusFailure.fetchUnexpected),
+        );
+      }
+    },
+  );
+
+  test(
+    'fetch bounds encoded POST at 2 KiB and streamed response at 4 KiB',
+    () async {
+      final input =
+          'x' * (2048 - utf8.encode(jsonEncode({'peer_url': ''})).length);
+      final boundary = utf8.encode(
+        '$fetchResponse${' ' * (4096 - fetchResponse.length)}',
+      );
+      final client = StatusClient(
+        createClient: () => MockClient((request) async {
+          expect(request.bodyBytes.length, 2048);
+          return http.Response.bytes(
+            boundary,
+            200,
+            headers: {'content-type': 'application/json'},
+          );
+        }),
+      );
+      expect(
+        (await client.fetchIntroduction(url, header.path, input)).created,
+        isTrue,
+      );
+      await expectLater(
+        client.fetchIntroduction(url, header.path, '${input}x'),
+        throwsA(StatusFailure.peerUrlTooLarge),
+      );
+      var cancelled = false;
+      final body = StreamController<List<int>>(
+        onCancel: () {
+          cancelled = true;
+        },
+      );
+      final transport = ObservedClient.streaming(
+        (_, _) async => http.StreamedResponse(
+          body.stream,
+          200,
+          contentLength: 1,
+          headers: {'content-type': 'application/json'},
+        ),
+      );
+      final result = expectLater(
+        StatusClient(createClient: () => transport)
+            .fetchIntroduction(url, header.path, peerUrl),
+        throwsA(StatusFailure.fetchUnexpected),
+      );
+      body.add(boundary);
+      body.add([32]);
+      await result;
+      expect(cancelled, isTrue);
+      expect(transport.closed, isTrue);
+      await body.close();
+    },
+  );
+
+  test('fetch alone uses the longer injectable deadline', () async {
+    expect(StatusClient().timeout, const Duration(seconds: 5));
+    expect(StatusClient().fetchTimeout, const Duration(seconds: 8));
+    var calls = 0;
+    final client = StatusClient(
+      timeout: Duration.zero,
+      fetchTimeout: const Duration(seconds: 1),
+      createClient: () => MockClient((_) async {
+        calls++;
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        return http.Response(
+          fetchResponse,
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+    );
+    await expectLater(
+      client.read(url, header.path),
+      throwsA(StatusFailure.unreachable),
+    );
+    expect(
+      (await client.fetchIntroduction(url, header.path, peerUrl)).created,
+      isTrue,
+    );
+    expect(calls, 1);
+  });
+
+  test('fetch loss, deadline and close report unknown without retry', () async {
+    for (final finish in ['loss', 'deadline', 'close']) {
+      var calls = 0;
+      var cancelled = false;
+      final started = Completer<void>();
+      final body = StreamController<List<int>>(
+        onCancel: () {
+          cancelled = true;
+        },
+      );
+      final transport = ObservedClient.streaming((_, _) async {
+        calls++;
+        started.complete();
+        return http.StreamedResponse(
+          body.stream,
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final client = StatusClient(
+        createClient: () => transport,
+        timeout: const Duration(milliseconds: 100),
+      );
+      final result = expectLater(
+        client.fetchIntroduction(url, header.path, peerUrl),
+        throwsA(StatusFailure.fetchUnknown),
+      );
+      await started.future;
+      await expectLater(
+        client.read(url, header.path),
+        throwsA(StatusFailure.unreachable),
+      );
+      if (finish == 'loss') {
+        body.addError(http.ClientException('private body $token'));
+      }
+      if (finish == 'close') client.close();
+      await result;
+      expect(calls, 1);
+      expect(cancelled, isTrue);
+      expect(transport.closed, isTrue);
+      expect(
+        StatusFailure.fetchUnknown.message,
+        contains('outcome is unknown'),
+      );
+      expect(
+        StatusFailure.fetchUnknown.message,
+        contains('Load saved introductions'),
+      );
+      await body.close();
+      if (finish == 'close') {
+        await expectLater(
+          client.fetchIntroduction(url, header.path, peerUrl),
+          throwsA(StatusFailure.fetchUnknown),
+        );
+        expect(calls, 1);
+      }
+    }
+  });
 }
 
 class ObservedClient extends MockClient {

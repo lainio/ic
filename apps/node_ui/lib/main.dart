@@ -25,6 +25,11 @@ typedef ListIntroductions = Future<List<IntroductionCheck>> Function(
   String url,
   String headerPath,
 );
+typedef FetchIntroduction = Future<IntroductionSave> Function(
+  String url,
+  String headerPath,
+  String peerUrl,
+);
 
 class IntroTreeApp extends StatelessWidget {
   const IntroTreeApp({
@@ -34,6 +39,7 @@ class IntroTreeApp extends StatelessWidget {
     this.checkIntroduction,
     this.saveIntroduction,
     this.listIntroductions,
+    this.fetchIntroduction,
   });
 
   final ReadStatus? readStatus;
@@ -41,6 +47,7 @@ class IntroTreeApp extends StatelessWidget {
   final CheckIntroduction? checkIntroduction;
   final SaveIntroduction? saveIntroduction;
   final ListIntroductions? listIntroductions;
+  final FetchIntroduction? fetchIntroduction;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -60,6 +67,7 @@ class IntroTreeApp extends StatelessWidget {
       checkIntroduction: checkIntroduction,
       saveIntroduction: saveIntroduction,
       listIntroductions: listIntroductions,
+      fetchIntroduction: fetchIntroduction,
     ),
   );
 }
@@ -72,6 +80,7 @@ class StatusScreen extends StatefulWidget {
     this.checkIntroduction,
     this.saveIntroduction,
     this.listIntroductions,
+    this.fetchIntroduction,
   });
 
   final ReadStatus? readStatus;
@@ -79,6 +88,7 @@ class StatusScreen extends StatefulWidget {
   final CheckIntroduction? checkIntroduction;
   final SaveIntroduction? saveIntroduction;
   final ListIntroductions? listIntroductions;
+  final FetchIntroduction? fetchIntroduction;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -88,6 +98,7 @@ class _StatusScreenState extends State<StatusScreen> {
   final _url = TextEditingController();
   final _headerPath = TextEditingController();
   final _introduction = TextEditingController();
+  final _peerUrl = TextEditingController();
   final _client = StatusClient();
   bool _loading = false;
   bool _copying = false;
@@ -95,6 +106,10 @@ class _StatusScreenState extends State<StatusScreen> {
   bool _checking = false;
   bool _saving = false;
   bool _listing = false;
+  bool _fetching = false;
+  IntroductionSave? _fetched;
+  StatusFailure? _fetchFailure;
+  int _fetchRevision = 0;
   IntroductionSave? _saved;
   StatusFailure? _saveFailure;
   List<IntroductionCheck>? _introductions;
@@ -115,6 +130,7 @@ class _StatusScreenState extends State<StatusScreen> {
       _failure = null;
       _copied = false;
       _invalidateCheck();
+      _invalidateFetch();
     });
   }
 
@@ -124,6 +140,47 @@ class _StatusScreenState extends State<StatusScreen> {
     _saveFailure = null;
     _checked = null;
     _checkFailure = null;
+  }
+
+  void _invalidateFetch() {
+    _fetchRevision++;
+    _fetched = null;
+    _fetchFailure = null;
+  }
+
+  Future<void> _fetch() async {
+    if (_loading) return;
+    setState(() {
+      _invalidateFetch();
+      _loading = true;
+      _fetching = true;
+      // Even an unknown outcome may have changed the saved collection.
+      _introductions = null;
+      _listFailure = null;
+    });
+    final revision = _fetchRevision;
+    IntroductionSave? fetched;
+    StatusFailure? failure;
+    try {
+      fetched = await (widget.fetchIntroduction ?? _client.fetchIntroduction)(
+        _url.text,
+        _headerPath.text,
+        _peerUrl.text,
+      );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.fetchUnknown;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _fetching = false;
+      if (revision == _fetchRevision) {
+        _fetched = fetched;
+        _fetchFailure = failure;
+      }
+    });
   }
 
   Future<void> _check() async {
@@ -310,6 +367,7 @@ class _StatusScreenState extends State<StatusScreen> {
     _url.dispose();
     _headerPath.dispose();
     _introduction.dispose();
+    _peerUrl.dispose();
     super.dispose();
   }
 
@@ -441,6 +499,32 @@ class _StatusScreenState extends State<StatusScreen> {
                   const SizedBox(height: 12),
                   const Text('Saved evidence; no connection or trust created.'),
                   const SizedBox(height: 16),
+                  TextField(
+                    controller: _peerUrl,
+                    onChanged: (_) => setState(_invalidateFetch),
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Peer introduction URL',
+                      hintText: 'Paste the other node’s peer introduction URL',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Printed by the other node’s tdc node serve --peer-listen …. '
+                    'This is not your local owner status URL or a credential.',
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: FilledButton(
+                      onPressed: _loading ? null : _fetch,
+                      child: const Text('Fetch introduction'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Semantics(liveRegion: true, child: _fetchResult(theme)),
+                  const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerLeft,
                     child: OutlinedButton(
@@ -462,7 +546,7 @@ class _StatusScreenState extends State<StatusScreen> {
   Widget _result(ThemeData theme) {
     final choice = _choice;
     final failure = _failure;
-    if (_loading && !_checking && !_saving && !_listing) {
+    if (_loading && !_checking && !_saving && !_listing && !_fetching) {
       final action = _copying ? 'Copying introduction' : 'Reading status';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -565,6 +649,42 @@ class _StatusScreenState extends State<StatusScreen> {
         const Text(
           "Checked against this node's configured Root. No connection created.",
         ),
+      ],
+    );
+  }
+
+  Widget _fetchResult(ThemeData theme) {
+    if (_fetching) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Fetching introduction…'),
+          SizedBox(height: 12),
+          LinearProgressIndicator(semanticsLabel: 'Fetching introduction'),
+        ],
+      );
+    }
+    final failure = _fetchFailure;
+    if (failure != null) {
+      return Text(
+        failure.message,
+        style: TextStyle(color: theme.colorScheme.error),
+      );
+    }
+    final fetched = _fetched;
+    if (fetched == null) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          fetched.created ? 'Introduction received' : 'Already received',
+          style: theme.textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        const Text('Subject public key'),
+        SelectableText(fetched.subjectPublicKeyHex),
+        const SizedBox(height: 12),
+        const Text('Received evidence; no connection or trust created.'),
       ],
     );
   }

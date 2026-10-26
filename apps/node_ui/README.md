@@ -1,7 +1,7 @@
 # IntroTree node UI
 
 The Linux/native application reads saved local acceptance state from an existing
-`tdc node serve` and lets its owner copy, check, and deliberately save an
+`tdc node serve` and lets its owner copy, check, save, or fetch an
 introduction, then load saved subject keys from the node. It requires
 a trusted same-machine loopback connection. Root can remain stopped.
 
@@ -24,7 +24,7 @@ The credential file is limited to 1 KiB and status responses to 4 KiB.
 After a completed read, `Copy introduction` makes one authenticated GET to the
 fixed `/owner/introduction` sibling, with the same deadline and a 128 KiB limit.
 The fresh operational evidence credential authorizes these reads, the stateless
-check POST, and exactly the save/list routes below. Existing read/status
+check POST, and exactly the save/list/fetch routes below. Existing read/status
 constructors keep their earlier scope. It grants no signing, trust, enrollment,
 peer access, other writes, or general permission for future owner POST operations.
 The button copies only after validating a three-field development JSON document:
@@ -78,6 +78,23 @@ means an idempotent retry. A transport failure can leave the save outcome unknow
 there is no automatic mutation retry. Every save attempt clears the displayed
 list, and success reminds you that `Load saved introductions` refreshes it.
 Saving does not automatically issue that second request.
+
+Under `Saved introductions`, paste the other node's printed `peer introduction
+URL` into `Peer introduction URL` and click `Fetch introduction`. This works
+without reading status or checking JSON. The URL comes from `tdc node serve
+--peer-listen ...`; it is not an owner status URL or a credential. Flutter sends
+one authenticated POST to `/owner/introductions/fetch` on the owner's validated
+origin, with exactly `{"peer_url":"..."}` (at most 2 KiB encoded). Only Go
+contacts the peer, validates evidence against its pinned Root, and saves it.
+Flutter receives no signing key and never sends owner credentials to the peer.
+Fetch has an eight-second deadline (Go's peer GET has five); other owner actions
+retain five seconds. The response is limited to 4 KiB. `Introduction received`
+or `Already received` shows the full selectable subject key and means Received
+evidence only, not `VerifyReceived`, present signing-key control, or trust.
+Fetch clears the displayed list without loading it. Lost or unexpected replies
+leave the outcome unknown: use `Load saved introductions` to inspect it; there
+is no automatic retry. Owner connection edits invalidate both results and list;
+peer URL edits invalidate only the fetch result, including late replies.
 
 `Saved introductions` stays unpopulated until an explicit `Load saved introductions`
 click makes one GET to `/owner/introductions`. Each returned subject is selectable

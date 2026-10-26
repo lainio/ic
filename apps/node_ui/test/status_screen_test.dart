@@ -64,7 +64,7 @@ void main() {
       expect(find.text('IntroTree'), findsOneWidget);
       expect(find.text('My node'), findsOneWidget);
       expect(find.text('Not checked'), findsOneWidget);
-      expect(find.byType(TextField), findsNWidgets(3));
+      expect(find.byType(TextField), findsNWidgets(4));
       expect(calls, 0);
       expect(copyButton, findsNothing);
       expect(clipboardWrites, isEmpty);

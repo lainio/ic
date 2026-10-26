@@ -35,11 +35,27 @@ enum StatusFailure implements Exception {
     'Credential not accepted; use the current header file from node serve.',
   ),
   nodeState('The node could not inspect saved state.'),
-  saveStorage('The node could not save the introduction.'),
+  saveStorage('The node could not save the introduction. Check its storage.'),
   introductionConflict(
-    'Introduction was not saved: a different proposal is already saved or the collection is full.',
+    'Introduction was not saved: a different proposal is already saved or the collection is full. Use Load saved introductions to inspect existing evidence.',
   ),
   saveUnreachable('Could not reach the local node; save outcome is unknown.'),
+  emptyPeerUrl('Paste a peer introduction URL before fetching.'),
+  peerUrlTooLarge(
+    'Peer introduction URL exceeds the 2 KiB request limit. Paste the printed peer introduction URL.',
+  ),
+  invalidPeerUrl(
+    "Peer URL is invalid or identifies this node. Paste the other node's printed peer introduction URL.",
+  ),
+  peerUnavailable(
+    "Peer is unavailable or its evidence is invalid for this node's Root. Check the peer listener and URL.",
+  ),
+  fetchUnknown(
+    'Local node request failed; fetch outcome is unknown. Use Load saved introductions to inspect saved evidence.',
+  ),
+  fetchUnexpected(
+    'Unexpected local node response; fetch outcome is unknown. Use Load saved introductions to inspect saved evidence.',
+  ),
   notCompleted('The introduction is not yet completed.'),
   invalidIntroduction(
     "Introduction could not be verified for this node's Root.",
@@ -56,10 +72,13 @@ enum StatusFailure implements Exception {
 
 /// One owned, direct HTTP client per explicit operation. No settings or token cache.
 class StatusClient {
-  StatusClient({this.createClient, this.timeout = const Duration(seconds: 5)});
+  StatusClient({this.createClient, Duration? timeout, Duration? fetchTimeout})
+    : timeout = timeout ?? const Duration(seconds: 5),
+      fetchTimeout = fetchTimeout ?? timeout ?? const Duration(seconds: 8);
 
   final http.Client Function()? createClient;
   final Duration timeout;
+  final Duration fetchTimeout;
   void Function()? _cancel;
   bool _closed = false;
 
@@ -126,18 +145,40 @@ class StatusClient {
       }
       rethrow;
     }
-    if (json.length != 3 || json['created'] is! bool) {
-      throw StatusFailure.unexpected;
+    return _introductionSave(json);
+  }
+
+  Future<IntroductionSave> fetchIntroduction(
+    String ownerStatusUrl,
+    String headerPath,
+    String peerIntroductionUrl,
+  ) async {
+    final destination = _destination(ownerStatusUrl)
+        .replace(path: '/owner/introductions/fetch');
+    if (peerIntroductionUrl.trim().isEmpty) throw StatusFailure.emptyPeerUrl;
+    // The peer URL is opaque data for Go's strict validation, never a Dart
+    // destination. Bound the encoded request, including JSON escaping.
+    final bytes = utf8.encode(jsonEncode({'peer_url': peerIntroductionUrl}));
+    if (bytes.length > 2048) throw StatusFailure.peerUrlTooLarge;
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        4096,
+        introduction: bytes,
+        requestTimeout: fetchTimeout,
+      );
+      final saved = _introductionSave(json);
+      if (saved.isSelf) throw StatusFailure.unexpected;
+      return saved;
+    } on StatusFailure catch (failure) {
+      // A save may have committed even if its acknowledgement is lost or bad.
+      throw switch (failure) {
+        StatusFailure.unreachable => StatusFailure.fetchUnknown,
+        StatusFailure.unexpected => StatusFailure.fetchUnexpected,
+        _ => failure,
+      };
     }
-    final summary = _introductionSummary({
-      'subject_public_key_hex': json['subject_public_key_hex'],
-      'is_self': json['is_self'],
-    });
-    return IntroductionSave(
-      subjectPublicKeyHex: summary.subjectPublicKeyHex,
-      isSelf: summary.isSelf,
-      created: json['created'] as bool,
-    );
   }
 
   Future<List<IntroductionCheck>> listIntroductions(
@@ -164,8 +205,11 @@ class StatusClient {
     String headerPath,
     int maxBytes, {
     List<int>? introduction,
+    Duration? requestTimeout,
   }) async {
     if (_closed || _cancel != null) throw StatusFailure.unreachable;
+    final operationTimeout = requestTimeout ?? timeout;
+    final fetching = destination.path == '/owner/introductions/fetch';
 
     http.Client? transport;
     StreamIterator<List<int>>? body;
@@ -185,7 +229,7 @@ class StatusClient {
           createClient?.call() ??
           IOClient(
             HttpClient()
-              ..connectionTimeout = timeout
+              ..connectionTimeout = operationTimeout
               ..findProxy = (_) => 'DIRECT',
           );
       final request =
@@ -209,17 +253,22 @@ class StatusClient {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
           401 => StatusFailure.unauthorized,
+          400 when fetching => StatusFailure.invalidPeerUrl,
+          413 when fetching => StatusFailure.peerUrlTooLarge,
+          502 when fetching => StatusFailure.peerUnavailable,
           409 when destination.path == '/owner/introduction' =>
             StatusFailure.notCompleted,
           409
-              when destination.path == '/owner/introductions' &&
-                  introduction != null =>
+              when fetching ||
+                  (destination.path == '/owner/introductions' &&
+                      introduction != null) =>
             StatusFailure.introductionConflict,
           400 when introduction != null => StatusFailure.invalidIntroduction,
           413 when introduction != null => StatusFailure.introductionTooLarge,
           500
-              when destination.path == '/owner/introductions' &&
-                  introduction != null =>
+              when fetching ||
+                  (destination.path == '/owner/introductions' &&
+                      introduction != null) =>
             StatusFailure.saveStorage,
           500 => StatusFailure.nodeState,
           _ => StatusFailure.unexpected,
@@ -255,7 +304,7 @@ class StatusClient {
     }
 
     _cancel = cancel;
-    final deadline = Timer(timeout, cancel);
+    final deadline = Timer(operationTimeout, cancel);
     try {
       return await Future.any([perform(), abandoned.future]);
     } on StatusFailure {
@@ -283,6 +332,21 @@ List<int> _documentBytes(String document) {
   final bytes = utf8.encode(document);
   if (bytes.length > 128 * 1024) throw StatusFailure.introductionTooLarge;
   return bytes;
+}
+
+IntroductionSave _introductionSave(Map<String, dynamic> json) {
+  if (json.length != 3 || json['created'] is! bool) {
+    throw StatusFailure.unexpected;
+  }
+  final summary = _introductionSummary({
+    'subject_public_key_hex': json['subject_public_key_hex'],
+    'is_self': json['is_self'],
+  });
+  return IntroductionSave(
+    subjectPublicKeyHex: summary.subjectPublicKeyHex,
+    isSelf: summary.isSelf,
+    created: json['created'] as bool,
+  );
 }
 
 IntroductionCheck _introductionSummary(Map<String, dynamic> json) {
