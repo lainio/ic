@@ -5,6 +5,7 @@ import (
 	"errors"
 	"slices"
 
+	"github.com/duo-labs/webauthn/protocol/webauthncose"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -25,6 +26,34 @@ var (
 	ErrReceivedClaimsFull     = errors.New("received ad claim collection full")
 	errReceivedClaimUnchanged = errors.New("received ad claim unchanged")
 )
+
+// ValidateClaim checks only the canonical v1 shape and its binding to an
+// independently supplied Root and subject. It performs no storage, signature
+// authentication, expiry, Known, device, or currentness check. ReceiveClaim
+// repeats this admission check before writing; this helper permits composites
+// to reject malformed claims before committing other received evidence.
+func ValidateClaim(expectedRoot, subject key.Public, canonicalAd []byte) error {
+	if len(canonicalAd) == 0 || len(canonicalAd) > maxRecordBytes ||
+		len(expectedRoot) > maxPublicBytes || len(subject) > maxPublicBytes {
+		return ErrInvalidClaim
+	}
+	// Discard raw CBOR diagnostics (which can contain hostile map keys)
+	// before the existing canonical decoder's err2 tracing can see them.
+	var current Current
+	if wire.DecMode.Unmarshal(canonicalAd, &current) != nil {
+		return ErrInvalidClaim
+	}
+	for _, public := range []key.Public{expectedRoot, subject} {
+		var decoded webauthncose.EC2PublicKeyData
+		if wire.DecMode.Unmarshal(public, &decoded) != nil {
+			return ErrInvalidClaim
+		}
+	}
+	if _, err := decodeAdShape(canonicalAd, expectedRoot, subject); err != nil {
+		return ErrInvalidClaim
+	}
+	return nil
+}
 
 // This private versioned record is a bounded table indexed by the complete
 // subject key, in strict byte order. Each subject has only slot 1. The table is
@@ -67,8 +96,8 @@ func ReceiveClaim(vault *storage.Vault, expectedRoot, subject key.Public,
 	}
 	expectedRoot, subject = bytes.Clone(expectedRoot), bytes.Clone(subject)
 	canonicalAd = bytes.Clone(canonicalAd)
-	if _, err := decodeAdShape(canonicalAd, expectedRoot, subject); err != nil {
-		return false, ErrInvalidClaim
+	if err := ValidateClaim(expectedRoot, subject, canonicalAd); err != nil {
+		return false, err
 	}
 	updateErr := vault.Update(func(tx storage.WriteTx) error {
 		return replaceReceivedClaim(tx, expectedRoot, subject, canonicalAd)

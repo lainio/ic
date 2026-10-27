@@ -93,20 +93,19 @@ func decodeIntroduction(data []byte) (_ introductionResponse, err error) {
 	assert.That(utf8.Valid(data), errInvalidIntroduction)
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
-	assert.Equal(try.To1(decoder.Token()), json.Token(json.Delim('{')),
+	assert.That(try.To1(introductionToken(decoder)) == json.Delim('{'),
 		errInvalidIntroduction)
 	document := introductionResponse{}
 	seen := make(map[string]bool, 3)
 	for decoder.More() {
-		name, ok := try.To1(decoder.Token()).(string)
+		name, ok := try.To1(introductionToken(decoder)).(string)
 		assert.That(ok && !seen[name], errInvalidIntroduction)
 		seen[name] = true
-		value := try.To1(decoder.Token())
+		value := try.To1(introductionToken(decoder))
 		switch name {
 		case "version":
-			assert.Equal(
-				value,
-				json.Token(json.Number("1")),
+			assert.That(
+				value == json.Number("1"),
 				errInvalidIntroduction,
 			)
 			document.Version = 1
@@ -114,7 +113,7 @@ func decodeIntroduction(data []byte) (_ introductionResponse, err error) {
 			encoded, ok := value.(string)
 			assert.That(ok && encoded != "", errInvalidIntroduction)
 			decoded := try.To1(base64.StdEncoding.DecodeString(encoded))
-			assert.Equal(base64.StdEncoding.EncodeToString(decoded), encoded,
+			assert.That(base64.StdEncoding.EncodeToString(decoded) == encoded,
 				errInvalidIntroduction)
 			if name == "proposal" {
 				document.Proposal = decoded
@@ -125,12 +124,22 @@ func decodeIntroduction(data []byte) (_ introductionResponse, err error) {
 			return introductionResponse{}, errInvalidIntroduction
 		}
 	}
-	assert.Equal(try.To1(decoder.Token()), json.Token(json.Delim('}')),
+	assert.That(try.To1(introductionToken(decoder)) == json.Delim('}'),
 		errInvalidIntroduction)
 	assert.Equal(len(seen), 3, errInvalidIntroduction)
 	_, end := decoder.Token()
-	assert.Equal(end, io.EOF, errInvalidIntroduction)
+	assert.That(end == io.EOF, errInvalidIntroduction)
 	return document, nil
+}
+
+// JSON syntax errors can contain peer-controlled bytes. Discard them before
+// tracing; callers also use boolean assertions rather than echoing tokens.
+func introductionToken(decoder *json.Decoder) (json.Token, error) {
+	token, err := decoder.Token()
+	if err != nil {
+		return nil, errInvalidIntroduction
+	}
+	return token, nil
 }
 
 // Stateless inspection only: no Vault, signer, Known promotion or peer I/O.

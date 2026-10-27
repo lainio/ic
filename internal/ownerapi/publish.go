@@ -17,6 +17,10 @@ type publicationHandler struct {
 }
 
 func (h *publicationHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/owner/ads/fetch" {
+		h.serveFetchAd(w, r)
+		return
+	}
 	if r.URL.Path == "/owner/ads/publish" {
 		h.servePublish(w, r)
 		return

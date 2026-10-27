@@ -404,6 +404,47 @@ evidence changes during preflight; the transaction rechecks empty authorization.
 This adds no human-consent proof, general delegation, peer protocol, ad, PW,
 trust, or startup action, and claims no full V19 refinement.
 
+### Owner-requested ad receipt
+
+Operational `NewPublicationCredentials` adds `POST /owner/ads/fetch` with only
+`{"peer_url":"http://LOOPBACK:PORT/peer/ad"}`. Older credential constructors and
+the peer listener do not expose it. One direct GET uses the owner's context, a
+five-second deadline, bounded headers and at most `MaxIntroductionBytes + 4096`
+actual body bytes, without DNS, proxies, redirects, cookies, credentials,
+compression, connection reuse or retries. The strict version-1 JSON envelope
+contains only the nested introduction and canonical base64 inner ad CBOR.
+The node checks the signed path and detached child acceptance against its own
+configured Root, derives the subject from that path, and refuses self-reception.
+The ad's canonical v1 shape must match that full Root/subject, device=subject,
+slot 1 and epoch 0; the existing 1024-byte ad limit applies. Its endpoint remains
+an untrusted hint; it is neither followed nor compared with the fetch address.
+
+This is an explicit sequential receive-only composite: a `ReceiveEdge`
+projection through `SaveIntroduction`, followed by `ReceiveAdClaim` through
+`ads.ReceiveClaim` (V19 lines 447–461, spec
+`1a9cb30e9fcbcb89cea55c0aed1f6f88a3ea6508`). Network I/O, complete decoding and
+admission validation finish before the service mutation lock or any Vault
+transaction. Both writes borrow the open Vault and share the existing lock with
+owner evidence, Known, bootstrap and publication operations. If the first write
+fails, the second is not attempted. If the second fails, the introduction receipt
+can remain committed; it is never deleted to simulate atomicity. Errors return
+coarse 400 request, 502 peer, 409 conflict/full, or 500 storage status, with no
+success result for a partial receipt. Both writes can precede a lost HTTP
+acknowledgement. Explicit retry preserves valid existing introduction evidence
+and byte-identical claims without rewriting or consuming encryption; a different
+proposal still conflicts. Success returns only `subject_public_key_hex`,
+`introduction_created`, and `ad_changed`, with `Cache-Control: no-store`.
+
+The development HTTP response cannot establish the model's omniscient
+`AuthenticAds` or `CurrentAd`, and these primitives have separate transactions.
+This therefore does not implement atomic/full V19 `ReadAd` (lines 477–496) or
+`VerifyAd` (lines 498–520). Receipt authenticates no ad signature, checks no
+expiry or device usability, and permits forged signatures and expired claims
+when their structure is valid. Only received introduction evidence and
+`ReceivedAd` change: no Known promotion, `VerifiedAd`, local publication, device,
+PW or trust change occurs. `CreatePW` remains unavailable from these receipts
+alone. There is no startup fetch, discovery, polling or automatic verification.
+
 ## Source locators
 
 [S1] Specification checkout `2cd914be966ad4bdf36b575e2678cad7441fcd75`,

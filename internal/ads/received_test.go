@@ -112,6 +112,7 @@ func TestReceiveClaimForgedExpiredAndSupersededRemainUntrusted(t *testing.T) {
 			defer assert.PushTester(t)()
 			f := newVault(t) // No Known, local authorization, or signer is needed.
 			ad := try.To1(wire.Marshal(tc.ad))
+			assert.NoError(ValidateClaim(root.public, peer.public, ad))
 			publisher.unchanged(t, func() {
 				assert.That(try.To1(ReceiveClaim(f.vault, root.public, peer.public, ad)))
 			})

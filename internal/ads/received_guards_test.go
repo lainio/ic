@@ -28,6 +28,7 @@ func TestReceiveClaimMalformedInputNeverWrites(t *testing.T) {
 			t.Run(name+map[bool]string{false: "/absent", true: "/present"}[existing], func(t *testing.T) {
 				defer assert.PushTester(t)()
 				f.unchanged(t, func() {
+					assert.ErrorIs(ValidateClaim(root.public, peer.public, ad), ErrInvalidClaim)
 					changed, err := ReceiveClaim(f.vault, root.public, peer.public, ad)
 					assert.ThatNot(changed)
 					assert.ErrorIs(err, ErrInvalidClaim)

@@ -78,7 +78,10 @@ func NewDeviceCredentials(ctx context.Context, vault *storage.Vault,
 }
 
 // NewPublicationCredentials grants the device routes plus exactly
-// POST /owner/ads/publish. Construction never probes, signs, or accesses Vault
+// POST /owner/ads/publish and POST /owner/ads/fetch. Fetch performs one bounded
+// direct loopback GET, then sequentially saves received introduction evidence
+// and an untrusted ad claim. It never signs or promotes either receipt.
+// Construction never probes, signs, or accesses Vault
 // state. The returned one-shot closure must receive this service's bound peer
 // listener before Serve starts; nil permanently disables publication. Until
 // wired, publication returns 409. The endpoint is copied from Addr, never HTTP

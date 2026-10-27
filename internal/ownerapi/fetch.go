@@ -42,7 +42,7 @@ func (h *statusHandler) serveFetchIntroduction(w http.ResponseWriter, r *http.Re
 		writeStatusError(w, http.StatusBadRequest)
 		return
 	}
-	endpoint, ok := readFetchRequest(w, r)
+	endpoint, ok := readFetchRequest(w, r, "/peer/introduction")
 	if !ok {
 		return
 	}
@@ -81,7 +81,7 @@ func (h *statusHandler) serveFetchIntroduction(w http.ResponseWriter, r *http.Re
 	h.writeSavedIntroduction(w, subject, created)
 }
 
-func readFetchRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
+func readFetchRequest(w http.ResponseWriter, r *http.Request, path string) (string, bool) {
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/json" || len(r.Header.Values("Content-Type")) != 1 {
 		writeStatusError(w, http.StatusUnsupportedMediaType)
@@ -97,7 +97,7 @@ func readFetchRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
 		writeStatusError(w, status)
 		return "", false
 	}
-	endpoint, err := decodeFetchRequest(data)
+	endpoint, err := decodeFetchRequest(data, path)
 	if err != nil {
 		writeStatusError(w, http.StatusBadRequest)
 		return "", false
@@ -107,7 +107,7 @@ func readFetchRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
 
 // Exactly one string field; token decoding rejects duplicates, extra fields,
 // case aliases, and trailing input before any client or storage work.
-func decodeFetchRequest(data []byte) (_ string, err error) {
+func decodeFetchRequest(data []byte, path string) (_ string, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
@@ -120,33 +120,49 @@ func decodeFetchRequest(data []byte) (_ string, err error) {
 	assert.Equal(try.To1(decoder.Token()), json.Token(json.Delim('}')), errInvalidFetch)
 	_, end := decoder.Token()
 	assert.Equal(end, io.EOF, errInvalidFetch)
-	return peerIntroductionURL(value)
+	return peerFetchURL(value, path)
 }
 
 // This is a destination for one operation, not a general URL fetcher. Reject
 // even empty query/fragment delimiters and encoded spellings. Address performs
 // the literal loopback/port check and normalizes localhost without DNS.
 func peerIntroductionURL(value string) (_ string, err error) {
+	return peerFetchURL(value, "/peer/introduction")
+}
+
+// Both concrete fetch routes use the same destination policy; path is fixed
+// by the handler, never selected by the request or a peer response.
+func peerFetchURL(value, path string) (_ string, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
-	assert.That(strings.HasPrefix(value, "http://") && !strings.ContainsAny(value, "?#%"), errInvalidFetch)
+	assert.That(strings.HasPrefix(value, "http://") && !strings.ContainsAny(value, "?#%\\"), errInvalidFetch)
 	u, parseErr := url.Parse(value)
 	assert.That(parseErr == nil, errInvalidFetch)
 	assert.That(u.Scheme == "http" && u.User == nil && u.Opaque == "" &&
-		u.Path == "/peer/introduction" && u.RawPath == "", errInvalidFetch)
+		u.Path == path && u.RawPath == "", errInvalidFetch)
 	// Brackets are for IPv6 literals, not IPv4 addresses or localhost.
 	assert.That(!strings.HasPrefix(u.Host, "[") || strings.Contains(u.Hostname(), ":"), errInvalidFetch)
 	address := try.To1(localhttp.Address(u.Host, false))
-	return "http://" + address + "/peer/introduction", nil
+	return "http://" + address + path, nil
+}
+
+func fetchIntroduction(ctx context.Context, endpoint string) (introductionResponse, error) {
+	data, err := fetchPeerDocument(ctx, endpoint, maxIntroductionBytes)
+	if err != nil {
+		return introductionResponse{}, err
+	}
+	return decodeIntroduction(data)
 }
 
 // A fresh direct transport makes one GET: no environment proxy, redirects,
 // cookies, credentials, compression, connection reuse, or automatic retries.
 // Neither remote response bodies nor underlying errors escape this boundary.
-func fetchIntroduction(ctx context.Context, endpoint string) (_ introductionResponse, err error) {
+func fetchPeerDocument(ctx context.Context, endpoint string, limit int64) (_ []byte, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, func(error) error { return errPeerFetch })
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 
 	transport := &http.Transport{
 		DisableKeepAlives: true, DisableCompression: true, MaxResponseHeaderBytes: 8 * 1024,
@@ -170,9 +186,9 @@ func fetchIntroduction(ctx context.Context, endpoint string) (_ introductionResp
 	mediaType, _, mediaErr := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	assert.That(mediaErr == nil && mediaType == "application/json" &&
 		len(response.Header.Values("Content-Type")) == 1, errPeerFetch)
-	assert.That(response.ContentLength <= maxIntroductionBytes, errPeerFetch)
-	data, readErr := io.ReadAll(io.LimitReader(response.Body, maxIntroductionBytes+1))
-	assert.That(readErr == nil && len(data) <= maxIntroductionBytes, errPeerFetch)
+	assert.That(response.ContentLength <= limit, errPeerFetch)
+	data, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	assert.That(readErr == nil && int64(len(data)) <= limit, errPeerFetch)
 	try.To(ctx.Err())
-	return decodeIntroduction(data)
+	return data, nil
 }
