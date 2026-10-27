@@ -16,6 +16,7 @@ import (
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/ads"
 	"github.com/lainio/ic/internal/onboarding"
 )
 
@@ -113,6 +114,8 @@ func TestPeerBindFailureCleanup(t *testing.T) {
 		try.To(owner.Close())
 		// Reopening proves Store/usage locks were released and saved choice kept.
 		s, _ := try.To2(setupNodeServe(t.Context(), serveCommand(t, f)))
+		_, found := try.To2(ads.ReadCurrentLocal(s.store.Vault(), f.root, f.child, time.Now()))
+		assert.ThatNot(found)
 		try.To(s.close())
 		assertServeClosed(t, s, f, before)
 	}

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -330,82 +331,97 @@ func TestDeviceFailuresAreGenericAndReadOnly(t *testing.T) {
 	}
 }
 
-func TestDeviceSerializesBootstrapWithEvidenceMutations(t *testing.T) {
-	for _, path := range []string{"/owner/introductions", fetchPath, verifyPath} {
-		t.Run(path, func(t *testing.T) {
-			defer assert.PushTester(t)()
-			f := newDeviceFixture(t)
-			signer := &deviceProbe{Handle: key.New()}
-			root := try.To1(signer.Handle.CBORPublicKey())
-			other := key.New()
-			proposal := intro.New(key.Info{Public: root}).Introduce(signer.Handle, key.Info{Public: try.To1(other.CBORPublicKey())})
-			acceptance := try.To1(proposal.SignAcceptance(other))
-			document := string(try.To1(onboarding.EncodeIntroduction(onboarding.StoredChoice{Proposal: proposal, Acceptance: acceptance})))
-			body := document
-			if path == verifyPath {
-				try.To2(onboarding.SaveIntroduction(f.vault, root, proposal.Bytes(), acceptance))
-				body = "{}"
-			}
-			if path == fetchPath {
-				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-					w.Header().Set("Content-Type", "application/json")
-					_, _ = io.WriteString(w, document)
-				}))
-				defer server.Close()
-				body = `{"peer_url":"` + server.URL + `/peer/introduction"}`
-			}
-			entered, release := make(chan struct{}), make(chan struct{})
-			var once sync.Once
-			unblock := func() { once.Do(func() { close(release) }) }
-			defer unblock()
-			signer.sign = func(data []byte) ([]byte, error) {
-				if signer.signs.Load() == 1 {
-					close(entered)
+func TestDeviceSerializesSigningWithEvidenceMutations(t *testing.T) {
+	for _, operation := range []string{bootstrapPath, publishPath} {
+		for _, path := range []string{"/owner/introductions", fetchPath, verifyPath} {
+			t.Run(operation+path, func(t *testing.T) {
+				defer assert.PushTester(t)()
+				f := newDeviceFixture(t)
+				signer := &deviceProbe{Handle: key.New()}
+				root := try.To1(signer.Handle.CBORPublicKey())
+				other := key.New()
+				proposal := intro.New(key.Info{Public: root}).Introduce(signer.Handle, key.Info{Public: try.To1(other.CBORPublicKey())})
+				acceptance := try.To1(proposal.SignAcceptance(other))
+				document := string(try.To1(onboarding.EncodeIntroduction(onboarding.StoredChoice{Proposal: proposal, Acceptance: acceptance})))
+				body := document
+				if path == verifyPath {
+					try.To2(onboarding.SaveIntroduction(f.vault, root, proposal.Bytes(), acceptance))
+					body = "{}"
 				}
-				<-release
-				return signer.Handle.Sign(data)
-			}
-			h, auth := deviceCredential(t, f, root, root, signer)
-			remaining := f.lease.remaining.Load()
-			first, second, mutation := make(chan int, 1), make(chan int, 1), make(chan int, 1)
-			go func() { first <- deviceRequest(h, auth, "POST", bootstrapPath, "{}").Code }()
-			select {
-			case <-entered:
-			case <-time.After(5 * time.Second):
-				t.Fatal("bootstrap did not reach signer")
-			}
-			go func() { second <- deviceRequest(h, auth, "POST", bootstrapPath, "{}").Code }()
-			go func() { mutation <- deviceRequest(h, auth, "POST", path, body).Code }()
-			// An independent write transaction and ordinary reads can complete
-			// during the probe: the service mutex must not be a Vault transaction.
-			reads := make(chan error, 1)
-			go func() {
-				reads <- f.vault.Update(func(storage.WriteTx) error { return nil })
-			}()
-			select {
-			case err := <-reads:
-				assert.NoError(err)
-			case <-time.After(5 * time.Second):
-				t.Fatal("signer held a Vault transaction")
-			}
-			read := make(chan int, 1)
-			go func() { read <- deviceRequest(h, auth, "GET", "/owner/introductions", "").Code }()
-			assert.Equal(waitDeviceResponse(t, read), 200)
-			select {
-			case <-mutation:
-				t.Fatal("evidence mutation overlapped bootstrap probe")
-			case <-second:
-				t.Fatal("second bootstrap overlapped first probe")
-			case <-time.After(50 * time.Millisecond):
-			}
-			assert.Equal(signer.signs.Load(), int32(1))
-			assert.Equal(f.lease.remaining.Load(), remaining)
-			unblock()
-			assert.Equal(waitDeviceResponse(t, first), 200)
-			assert.Equal(waitDeviceResponse(t, second), 409)
-			assert.Equal(waitDeviceResponse(t, mutation), 200)
-			assert.Equal(signer.signs.Load(), int32(1))
-		})
+				if path == fetchPath {
+					server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+						w.Header().Set("Content-Type", "application/json")
+						_, _ = io.WriteString(w, document)
+					}))
+					defer server.Close()
+					body = `{"peer_url":"` + server.URL + `/peer/introduction"}`
+				}
+				entered, release := make(chan struct{}), make(chan struct{})
+				var once sync.Once
+				unblock := func() { once.Do(func() { close(release) }) }
+				defer unblock()
+				signer.sign = func(data []byte) ([]byte, error) {
+					if signer.signs.Load() == 1 {
+						close(entered)
+					}
+					<-release
+					return signer.Handle.Sign(data)
+				}
+				h, auth := deviceCredential(t, f, root, root, signer)
+				secondStatus, totalSigns := 409, int32(1)
+				if operation == publishPath {
+					try.To1(device.BootstrapLocal(f.vault, root, root, signer.Handle))
+					var configure func(net.Listener)
+					h, auth, configure = publicationCredential(t, f.vault, root, root, signer)
+					configure(publicationListener(t))
+					secondStatus, totalSigns = 200, 4
+				}
+				remaining := f.lease.remaining.Load()
+				first, second, mutation := make(chan int, 1), make(chan int, 1), make(chan int, 1)
+				go func() { first <- deviceRequest(h, auth, "POST", operation, "{}").Code }()
+				select {
+				case <-entered:
+				case <-time.After(5 * time.Second):
+					t.Fatal("request did not reach signer")
+				}
+				go func() { second <- deviceRequest(h, auth, "POST", operation, "{}").Code }()
+				bootstrap := make(chan int, 1)
+				go func() { bootstrap <- deviceRequest(h, auth, "POST", bootstrapPath, "{}").Code }()
+				go func() { mutation <- deviceRequest(h, auth, "POST", path, body).Code }()
+				// An independent write transaction and ordinary reads can complete
+				// during the probe: the service mutex must not be a Vault transaction.
+				reads := make(chan error, 1)
+				go func() {
+					reads <- f.vault.Update(func(storage.WriteTx) error { return nil })
+				}()
+				select {
+				case err := <-reads:
+					assert.NoError(err)
+				case <-time.After(5 * time.Second):
+					t.Fatal("signer held a Vault transaction")
+				}
+				read := make(chan int, 1)
+				go func() { read <- deviceRequest(h, auth, "GET", "/owner/introductions", "").Code }()
+				assert.Equal(waitDeviceResponse(t, read), 200)
+				select {
+				case <-mutation:
+					t.Fatal("evidence mutation overlapped signing")
+				case <-bootstrap:
+					t.Fatal("bootstrap overlapped signing request")
+				case <-second:
+					t.Fatal("second request overlapped signing")
+				case <-time.After(50 * time.Millisecond):
+				}
+				assert.Equal(signer.signs.Load(), int32(1))
+				assert.Equal(f.lease.remaining.Load(), remaining)
+				unblock()
+				assert.Equal(waitDeviceResponse(t, first), 200)
+				assert.Equal(waitDeviceResponse(t, second), secondStatus)
+				assert.Equal(waitDeviceResponse(t, bootstrap), 409)
+				assert.Equal(waitDeviceResponse(t, mutation), 200)
+				assert.Equal(signer.signs.Load(), totalSigns)
+			})
+		}
 	}
 }
 

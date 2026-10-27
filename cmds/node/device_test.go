@@ -106,10 +106,11 @@ func TestServeExplicitDeviceBootstrapRequiresOwnKnown(t *testing.T) {
 	_, found := try.To2(ads.ReadCurrentLocal(s.store.Vault(), f.root, f.child, time.Now()))
 	assert.ThatNot(found)
 	assert.DeepEqual(serveDeviceRequest(s.peerHandler, "", "GET", "/peer/introduction", nil).Body.Bytes(), peerBefore.Body.Bytes())
-	assert.Equal(request("POST", "/owner/ads/publish", []byte("{}")).Code, 404)
 	for _, name := range []string{"vault.db", "usage.db"} {
 		file := filepath.Join(f.dir, "state", name)
 		beforeRetry := try.To1(os.ReadFile(file))
+		// setupPeerServe configures :0 but has not bound a peer listener.
+		assert.Equal(request("POST", "/owner/ads/publish", []byte("{}")).Code, 409)
 		assert.Equal(bootstrap().Code, 409)
 		assert.That(bytes.Equal(try.To1(os.ReadFile(file)), beforeRetry))
 	}
@@ -150,60 +151,74 @@ func deviceUnrelatedRecords(vault *storage.Vault) (_ map[string]map[string][]byt
 	return result, nil
 }
 
-func TestServeShutdownJoinsAdmittedBootstrap(t *testing.T) {
-	defer assert.PushTester(t)()
-	f := prepareServeFixture(t)
-	choice := saveServeChoice(t, f, "completed")
-	s := setupPeerServe(t, f)
-	try.To2(onboarding.SaveIntroduction(s.store.Vault(), f.root, choice.Proposal.Bytes(), choice.Acceptance))
-	try.To1(onboarding.VerifyReceived(s.store.Vault(), f.root))
-	owner, peer := try.To2(bindNodeListeners(t.Context(), "127.0.0.1:0", s.peerAddress))
-	listener := &peerObservedListener{Listener: owner, closed: make(chan struct{})}
-	entered, release := make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	unblock := func() { once.Do(func() { close(release) }) }
-	defer unblock()
-	next := s.handler
-	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		close(entered)
-		<-release
-		next.ServeHTTP(w, r)
-	})
-	ctx, cancel := context.WithCancel(t.Context())
-	done := make(chan struct{})
-	var result error
-	go func() {
-		result = runNodeServe(ctx, listener, peer, s, io.Discard)
-		close(done)
-	}()
-	defer func() { cancel(); unblock(); waitNodeServe(t, done) }()
-	auth := serveAuthorization(t, s)
-	response := make(chan peerHTTPResult, 1)
-	go func() {
-		response <- postDeviceHTTP(t.Context(), "http://"+owner.Addr().String()+ownerBootstrapPath, auth)
-	}()
-	waitNodeServe(t, entered)
-	cancel()
-	waitNodeServe(t, listener.closed)
-	select {
-	case <-done:
-		t.Fatal("service closed while bootstrap was admitted")
-	default:
+func TestServeShutdownJoinsAdmittedSigning(t *testing.T) {
+	for _, operation := range []string{ownerBootstrapPath, ownerPublishPath} {
+		t.Run(operation, func(t *testing.T) {
+			defer assert.PushTester(t)()
+			f := prepareServeFixture(t)
+			choice := saveServeChoice(t, f, "completed")
+			s := setupPeerServe(t, f)
+			try.To2(onboarding.SaveIntroduction(s.store.Vault(), f.root, choice.Proposal.Bytes(), choice.Acceptance))
+			try.To1(onboarding.VerifyReceived(s.store.Vault(), f.root))
+			auth := serveAuthorization(t, s)
+			if operation == ownerPublishPath {
+				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", ownerBootstrapPath, []byte("{}")).Code, 200)
+			}
+			owner, peer := try.To2(bindNodeListeners(t.Context(), "127.0.0.1:0", s.peerAddress))
+			listener := &peerObservedListener{Listener: owner, closed: make(chan struct{})}
+			entered, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(release) }) }
+			defer unblock()
+			next := s.handler
+			s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				close(entered)
+				<-release
+				next.ServeHTTP(w, r)
+			})
+			ctx, cancel := context.WithCancel(t.Context())
+			done := make(chan struct{})
+			var result error
+			go func() {
+				result = runNodeServe(ctx, listener, peer, s, io.Discard)
+				close(done)
+			}()
+			defer func() { cancel(); unblock(); waitNodeServe(t, done) }()
+			response := make(chan peerHTTPResult, 1)
+			go func() {
+				response <- postDeviceHTTP(t.Context(), "http://"+owner.Addr().String()+operation, auth)
+			}()
+			waitNodeServe(t, entered)
+			cancel()
+			waitNodeServe(t, listener.closed)
+			select {
+			case <-done:
+				t.Fatal("service closed while signing request was admitted")
+			default:
+			}
+			assert.Equal(try.To1(device.InspectLocal(s.store.Vault(), f.root, f.child, nil)), device.Local{Authorized: operation == ownerPublishPath})
+			unblock()
+			waitNodeServe(t, done)
+			assert.NoError(result)
+			got := waitPeerHTTP(t, response)
+			assert.NoError(got.err)
+			assert.Equal(got.status, http.StatusOK)
+			if operation == ownerBootstrapPath {
+				assert.Equal(string(got.body), `{"authorized":true,"usable":true}`)
+			}
+			_, err := device.InspectLocal(s.store.Vault(), f.root, f.child, nil)
+			assert.ErrorIs(err, storage.ErrClosed)
+			reopened := try.To1(nodevault.OpenForNode(t.Context(), f.dir, f.storageKey, f.root, f.child))
+			defer func() { try.Out(reopened.Close()).Logf() }()
+			assert.Equal(try.To1(device.InspectLocal(reopened.Vault(), f.root, f.child, nil)), device.Local{Authorized: true})
+			current, found := try.To2(ads.ReadCurrentLocal(reopened.Vault(), f.root, f.child, time.Now()))
+			assert.Equal(found, operation == ownerPublishPath)
+			if found {
+				assertPublishedSummary(t, got.body, current, "http://"+peer.Addr().String()+"/peer/introduction")
+			}
+			try.To(reopened.Close())
+		})
 	}
-	assert.Equal(try.To1(device.InspectLocal(s.store.Vault(), f.root, f.child, nil)), device.Local{})
-	unblock()
-	waitNodeServe(t, done)
-	assert.NoError(result)
-	got := waitPeerHTTP(t, response)
-	assert.NoError(got.err)
-	assert.Equal(got.status, http.StatusOK)
-	assert.Equal(string(got.body), `{"authorized":true,"usable":true}`)
-	_, err := device.InspectLocal(s.store.Vault(), f.root, f.child, nil)
-	assert.ErrorIs(err, storage.ErrClosed)
-	reopened := try.To1(nodevault.OpenForNode(t.Context(), f.dir, f.storageKey, f.root, f.child))
-	defer func() { try.Out(reopened.Close()).Logf() }()
-	assert.Equal(try.To1(device.InspectLocal(reopened.Vault(), f.root, f.child, nil)), device.Local{Authorized: true})
-	try.To(reopened.Close())
 }
 
 func postDeviceHTTP(ctx context.Context, url, auth string) (result peerHTTPResult) {

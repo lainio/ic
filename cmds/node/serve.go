@@ -74,7 +74,14 @@ own evidence is Known. Success reports usability only at that call's probe.
 Startup/restart never bootstrap or probe; a repeated POST returns 409 without
 signing or writing, and does not establish current usability. After a lost
 response, inspection/retry must be explicit. Evidence credentials keep their
-old scope; no ad publication, trust, or other signing operation is authorized.
+old scope, as do device-only credentials.
+POST /owner/ads/publish with {} explicitly signs and stores a fresh local ad for
+this process's actual bound --peer-listen endpoint, after device bootstrap.
+The operational bearer now authorizes this signing request. No endpoint or other
+signing input is accepted. Slot 1, epoch 0, and a 15-minute TTL are fixed.
+A second POST replaces the current ad; startup never publishes or renews it.
+No peer ad serving, verified reachability, trust, or connection is created.
+After a lost response, do not automatically retry publication.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.
@@ -140,6 +147,7 @@ type nodeServe struct {
 	handler                   http.Handler
 	peerAddress               string
 	peerHandler               http.Handler
+	configurePublication      func(net.Listener)
 }
 
 // Validate all inputs before restoring the identity or opening persistent
@@ -191,7 +199,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.child = try.To1(handle.CBORPublicKey())
 	s.store = try.To1(nodevault.OpenForNode(ctx, dir, keyFile, root, s.child))
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
-	s.handler, s.headerFile = try.To2(ownerapi.NewDeviceCredentials(
+	s.handler, s.headerFile, s.configurePublication = try.To3(ownerapi.NewPublicationCredentials(
 		ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
 	))
 	if s.peerAddress != "" {
@@ -266,6 +274,11 @@ func runNodeServe(ctx context.Context, owner, peer net.Listener, s *nodeServe,
 // Each Serve owns one socket and performs bounded shutdown. Cancel the sibling
 // on any exit, retaining both results and joining both before closing the Store.
 func serveNodeListeners(ctx context.Context, owner, peer net.Listener, s *nodeServe) error {
+	// Both sockets are bound before either HTTP server starts. Freeze the actual
+	// peer endpoint (including the selected port), or disable publication.
+	if s.configurePublication != nil {
+		s.configurePublication(peer)
+	}
 	// Close after an unexpected Serve exit cancels connections but does not
 	// join active handlers. Drain admitted requests before releasing the Vault,
 	// and prevent a late HTTP goroutine from entering it after shutdown.

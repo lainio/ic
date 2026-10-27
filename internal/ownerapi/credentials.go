@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
@@ -60,8 +62,8 @@ func NewEvidenceCredentials(ctx context.Context, vault *storage.Vault,
 	)
 }
 
-// NewDeviceCredentials is the operational node-serve credential: it grants the
-// evidence routes plus POST /owner/device/bootstrap, an explicit durable first
+// NewDeviceCredentials grants the evidence routes plus
+// POST /owner/device/bootstrap, an explicit durable first
 // authorization of the already restored local software signer. It borrows that
 // signer exclusively for this route; construction never probes or bootstraps.
 // The caller must keep configuration fixed, serialize any external evidence or
@@ -73,6 +75,35 @@ func NewDeviceCredentials(ctx context.Context, vault *storage.Vault,
 	return newCredentials(ctx,
 		newDeviceHandler(vault, expectedRoot, expectedChild, signer), dir,
 	)
+}
+
+// NewPublicationCredentials grants the device routes plus exactly
+// POST /owner/ads/publish. Construction never probes, signs, or accesses Vault
+// state. The returned one-shot closure must receive this service's bound peer
+// listener before Serve starts; nil permanently disables publication. Until
+// wired, publication returns 409. The endpoint is copied from Addr, never HTTP
+// input, and cannot change during this invocation. The closure and publication
+// share the device mutation lock, including if accidentally called concurrently.
+// Caller ownership matches NewDeviceCredentials; never mount on a peer listener.
+func NewPublicationCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, signer key.Handle, dir string,
+) (http.Handler, string, func(net.Listener), error) {
+	h := &publicationHandler{deviceHandler: newDeviceHandler(vault, expectedRoot, expectedChild, signer)}
+	handler, file, err := newCredentials(ctx, h, dir)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	var once sync.Once
+	configure := func(peer net.Listener) {
+		once.Do(func() {
+			h.mutations.Lock()
+			defer h.mutations.Unlock()
+			if peer != nil {
+				h.endpoint = "http://" + peer.Addr().String() + "/peer/introduction"
+			}
+		})
+	}
+	return handler, file, configure, nil
 }
 
 func newCredentials(ctx context.Context, next http.Handler, dir string,

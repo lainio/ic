@@ -13,7 +13,7 @@ import (
 )
 
 // Only the operational owner surface borrows a signer. One service-scoped lock
-// serializes BootstrapLocal's preflight/probe/commit with Received/Known writes.
+// serializes bootstrap/publication preflight/sign/commit with Received/Known writes.
 // Read-only requests do not take it; no Vault transaction spans signing or I/O.
 type deviceHandler struct {
 	next        http.Handler
@@ -23,7 +23,7 @@ type deviceHandler struct {
 	mutations   sync.Mutex
 }
 
-func newDeviceHandler(vault *storage.Vault, root, child key.Public, signer key.Handle) http.Handler {
+func newDeviceHandler(vault *storage.Vault, root, child key.Public, signer key.Handle) *deviceHandler {
 	return &deviceHandler{
 		next: newEvidenceHandler(vault, root, child), vault: vault,
 		root: bytes.Clone(root), child: bytes.Clone(child), signer: signer,
