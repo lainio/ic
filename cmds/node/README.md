@@ -42,8 +42,9 @@ node's completed introduction (public keys, ancestor links and signatures) to
 **any local caller without a credential**. Without the flag, no peer socket
 exists and owner behavior is unchanged. The peer socket has no owner routes.
 Both servers finish before the Store closes. This is sender-side disclosure,
-not discovery, an ad, receiver Received/Known changes, present key control,
+not discovery, receiver Received/Known changes, present key control,
 mutual authentication, a connection, or chat.
+`GET /peer/ad` also discloses the explicitly published signed ad with only this node's completed evidence while unexpired and matching the actual bound endpoint; it never renews state or establishes verified reachability or device usability.
 
 The evidence credential also permits `POST /owner/introductions/fetch` with
 only `peer_url` in its JSON body. The Go node fetches that exact loopback

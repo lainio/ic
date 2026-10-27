@@ -174,8 +174,9 @@ func waitPeerHTTP(t *testing.T, done <-chan peerHTTPResult) peerHTTPResult {
 }
 
 func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
-	for _, unexpected := range []bool{false, true} {
-		t.Run(fmt.Sprint("unexpected=", unexpected), func(t *testing.T) {
+	for _, tc := range []struct{ unexpected, ad bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+		unexpected := tc.unexpected
+		t.Run(fmt.Sprint("unexpected=", unexpected, "/ad=", tc.ad), func(t *testing.T) {
 			defer assert.PushTester(t)()
 
 			f := prepareServeFixture(t)
@@ -183,6 +184,16 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			s := setupPeerServe(t, f)
 			owner, peer := try.To2(bindNodeListeners(t.Context(), "127.0.0.1:0", s.peerAddress))
 			assert.NotEqual(owner.Addr().String(), peer.Addr().String())
+			s.configurePublication(peer) // Install before wrapping or admitting requests.
+			var current ads.Current
+			if tc.ad {
+				auth := serveAuthorization(t, s)
+				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", "/owner/introductions", try.To1(onboarding.EncodeIntroduction(before))).Code, 200)
+				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", "/owner/introductions/verify", []byte("{}")).Code, 200)
+				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", ownerBootstrapPath, []byte("{}")).Code, 200)
+				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", ownerPublishPath, []byte("{}")).Code, 200)
+				current, _ = try.To2(ads.ReadCurrentLocal(s.store.Vault(), f.root, f.child, time.Now()))
+			}
 			listeners := []*peerObservedListener{
 				{Listener: owner, closed: make(chan struct{})},
 				{Listener: peer, closed: make(chan struct{})},
@@ -216,7 +227,11 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			ownerURL := "http://" + owner.Addr().String() + "/owner/status"
 			peerURL := "http://" + peer.Addr().String() + "/peer/introduction"
 			ownerResponse := peerHTTPRequest(t.Context(), ownerURL, authorization)
-			peerResponse := peerHTTPRequest(t.Context(), peerURL, "")
+			readURL := peerURL
+			if tc.ad {
+				readURL = "http://" + peer.Addr().String() + "/peer/ad"
+			}
+			peerResponse := peerHTTPRequest(t.Context(), readURL, "")
 			waitNodeServe(t, entered[0])
 			waitNodeServe(t, entered[1])
 			if unexpected {
@@ -256,7 +271,11 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			}
 			assert.NoError(b.err)
 			assert.Equal(b.status, http.StatusOK)
-			assert.DeepEqual(b.body, try.To1(onboarding.EncodeIntroduction(before)))
+			if tc.ad {
+				assertPeerAd(t, b.body, before, current)
+			} else {
+				assert.DeepEqual(b.body, try.To1(onboarding.EncodeIntroduction(before)))
+			}
 			assert.That(strings.Contains(output.String(), "owner status URL: "+ownerURL))
 			assert.That(strings.Contains(output.String(), "peer introduction URL: "+peerURL))
 			assert.ThatNot(strings.Contains(output.String(), authorization))

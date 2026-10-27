@@ -29,7 +29,11 @@ import (
 const ownerBootstrapPath = "/owner/device/bootstrap"
 
 func serveDeviceRequest(handler http.Handler, auth, method, path string, body []byte) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(method, path, bytes.NewReader(body))
+	var reader io.Reader
+	if len(body) != 0 {
+		reader = bytes.NewReader(body)
+	}
+	r := httptest.NewRequest(method, path, reader)
 	r.Header.Set("Authorization", auth)
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

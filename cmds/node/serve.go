@@ -56,8 +56,12 @@ Missing or invalid state fails without initialization or repair.
 GET /peer/introduction makes only this node's completed introduction path
 (public keys, ancestor links and signatures) available to any local caller,
 without a bearer token. Disabled by default; no peer socket exists otherwise.
-This is sender-side disclosure only, not discovery, an ad, present key control,
-receiver Received/Known changes, mutual authentication, a connection, or chat.
+GET /peer/ad publicly discloses the explicitly published signed ad with only
+this node's completed introduction, while unexpired and bound to this invocation's
+actual peer endpoint. GET never signs, renews, or changes saved state.
+This is sender-side disclosure only, not VerifyAd, verified reachability,
+discovery, present key control, receiver Received/Known changes,
+mutual authentication, a connection, or chat.
 
 Use the printed owner status URL and authorization header file in another
 terminal (keep the @):
@@ -80,7 +84,7 @@ this process's actual bound --peer-listen endpoint, after device bootstrap.
 The operational bearer now authorizes this signing request. No endpoint or other
 signing input is accepted. Slot 1, epoch 0, and a 15-minute TTL are fixed.
 A second POST replaces the current ad; startup never publishes or renews it.
-No peer ad serving, verified reachability, trust, or connection is created.
+Publication creates no verified reachability, trust, or connection.
 After a lost response, do not automatically retry publication.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
@@ -115,7 +119,7 @@ A new save uses the existing encrypted Vault and may fail if capacity is exhaust
 	cmd.Flags().String("listen", "127.0.0.1:0",
 		"Explicit loopback host and numeric port; localhost normalizes to 127.0.0.1; zero selects a free port")
 	cmd.Flags().String("peer-listen", "",
-		"Opt in to disclosing your completed introduction to any local caller; explicit loopback host and numeric port")
+		"Opt in to public completed introduction and current signed ad disclosure; explicit loopback host and numeric port")
 	for _, name := range []string{"dir", "unlock-file", "storage-key-file", "root"} {
 		try.To(cmd.MarkFlagRequired(name))
 	}
@@ -199,11 +203,23 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.child = try.To1(handle.CBORPublicKey())
 	s.store = try.To1(nodevault.OpenForNode(ctx, dir, keyFile, root, s.child))
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
-	s.handler, s.headerFile, s.configurePublication = try.To3(ownerapi.NewPublicationCredentials(
+	var configure func(net.Listener)
+	s.handler, s.headerFile, configure = try.To3(ownerapi.NewPublicationCredentials(
 		ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
 	))
 	if s.peerAddress != "" {
 		s.peerHandler = peerapi.NewHandler(s.store.Vault(), root, s.child)
+	}
+	var once sync.Once
+	// Install both endpoint-bound surfaces once, before either Serve starts.
+	s.configurePublication = func(peer net.Listener) {
+		once.Do(func() {
+			configure(peer)
+			if peer != nil {
+				s.peerHandler = peerapi.NewAdHandler(s.store.Vault(), root, s.child,
+					"http://"+peer.Addr().String()+"/peer/introduction")
+			}
+		})
 	}
 	return s, address, nil
 }

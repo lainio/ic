@@ -18,7 +18,10 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/ads"
+	"github.com/lainio/ic/internal/core/intro"
+	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/device"
+	"github.com/lainio/ic/internal/onboarding"
 	"github.com/lainio/ic/internal/peerapi"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -287,4 +290,74 @@ func TestPublicationExplicitReplacementAndLostResponse(t *testing.T) {
 	_, _, configure = publicationCredential(t, f.vault, root, root, signer)
 	configure(listener)
 	assert.Equal(signer.signs.Load(), int32(6)) // Reconstructing never probes or renews.
+}
+
+func TestPeerAdNeverUsesPublicationSignerOrEncryption(t *testing.T) {
+	defer assert.PushTester(t)()
+	f := newDeviceFixture(t)
+	root := key.New()
+	r := try.To1(root.CBORPublicKey())
+	signer := &deviceProbe{Handle: key.New()}
+	child := try.To1(signer.Handle.CBORPublicKey())
+	proposal := intro.New(key.Info{Public: r}).Introduce(root, key.Info{Public: child})
+	try.To1(onboarding.SignAfterStoredChoice(f.vault, signer, r, r, proposal))
+	choice, found := try.To2(onboarding.ReadStoredChoice(f.vault, r, child))
+	assert.That(found)
+	try.To2(onboarding.SaveIntroduction(f.vault, r, proposal.Bytes(), choice.Acceptance))
+	try.To1(onboarding.VerifyReceived(f.vault, r))
+	owner, auth, configure := publicationCredential(t, f.vault, r, child, signer)
+	listener := publicationListener(t)
+	configure(listener)
+	peer := peerapi.NewAdHandler(f.vault, r, child, "http://"+listener.Addr().String()+"/peer/introduction")
+	read := func(status int) []byte {
+		t.Helper()
+		defer f.unchanged(t)()
+		signs, publics := signer.signs.Load(), signer.publics.Load()
+		w := httptest.NewRecorder()
+		peer.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/peer/ad", nil))
+		assert.Equal(w.Code, status)
+		assert.Equal(signer.signs.Load(), signs)
+		assert.Equal(signer.publics.Load(), publics)
+		return bytes.Clone(w.Body.Bytes())
+	}
+	read(409)
+	assert.Equal(deviceRequest(owner, auth, "POST", bootstrapPath, "{}").Code, 200)
+	read(409)
+	assert.Equal(deviceRequest(owner, auth, "POST", publishPath, "{}").Code, 200)
+	current, found := try.To2(ads.ReadCurrentLocal(f.vault, r, child, time.Now()))
+	assert.That(found)
+	first := read(200)
+	// Historical signature disclosure does not probe present device liveness.
+	signer.sign = func([]byte) ([]byte, error) { return nil, errors.New("signer unavailable") }
+	f.lease.remaining.Store(0)
+	for range 3 {
+		assert.DeepEqual(read(200), first)
+	}
+	after, found := try.To2(ads.ReadCurrentLocal(f.vault, r, child, time.Now()))
+	assert.That(found)
+	assert.DeepEqual(try.To1(wire.Marshal(after)), try.To1(wire.Marshal(current)))
+	assert.Equal(deviceRequest(peer, auth, "POST", publishPath, "{}").Code, 404)
+	assert.Equal(deviceRequest(peer, auth, "POST", bootstrapPath, "{}").Code, 404)
+}
+
+func TestEveryOwnerCredentialExcludesPeerAd(t *testing.T) {
+	defer assert.PushTester(t)()
+	for _, constructor := range []func(context.Context, *storage.Vault, key.Public, key.Public, string) (http.Handler, string, error){
+		NewStatusCredentials, NewReadCredentials, NewEvidenceCredentials,
+		func(ctx context.Context, v *storage.Vault, root, child key.Public, dir string) (http.Handler, string, error) {
+			return NewDeviceCredentials(ctx, v, root, child, nil, dir)
+		},
+		func(ctx context.Context, v *storage.Vault, root, child key.Public, dir string) (http.Handler, string, error) {
+			h, file, _, err := NewPublicationCredentials(ctx, v, root, child, nil, dir)
+			return h, file, err
+		},
+	} {
+		h, file := try.To2(constructor(t.Context(), nil, nil, nil, t.TempDir()))
+		auth := strings.TrimSpace(strings.TrimPrefix(string(try.To1(os.ReadFile(file))), "Authorization: "))
+		for _, method := range []string{"GET", "HEAD", "POST"} {
+			w := deviceRequest(h, auth, method, "/peer/ad", "")
+			assert.Equal(w.Code, 404)
+			assert.Equal(w.Body.String(), "Not Found\n")
+		}
+	}
 }
