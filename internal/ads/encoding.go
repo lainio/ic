@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ecdh"
 	"math"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -90,24 +91,53 @@ func decodeCurrent(
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, func(error) error { return ErrInvalidRecord })
 
+	current := try.To1(decodeAdShape(record, root, local))
+	// Local publications still require both the publisher's time range and
+	// independent signature authentication. Shape admission alone is not this.
+	assert.That(current.Payload.ExpiresUnixNano >= int64(TTL), ErrInvalidRecord)
+	digest := key.HashTagged(SignaturePurpose, try.To1(wire.Marshal(current.Payload)))
+	assert.That(current.Signature.Verify(local, digest[:]), ErrInvalidRecord)
+	return current, nil
+}
+
+// decodeAdShape admits only the development v1 layout under independent public
+// identities. It checks neither signature authenticity nor freshness/currentness.
+// A successful result must never be treated as VerifiedAd or reachability.
+func decodeAdShape(record []byte, root, subject key.Public) (_ Current, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, func(error) error { return ErrInvalidRecord })
+
 	assert.That(
 		len(record) > 0 && len(record) <= maxRecordBytes,
 		ErrInvalidRecord,
 	)
 	var current Current
-	try.To(wire.UnmarshalCanonical(&current, record))
+	assert.That(wire.UnmarshalCanonical(&current, record) == nil, ErrInvalidRecord)
 	ad := current.Payload
 	assert.That(ad.Version == 1 && ad.Slot == 1 && ad.Epoch == 0 &&
-		bytes.Equal(ad.Root, root) && bytes.Equal(ad.Node, local) &&
-		bytes.Equal(ad.Device, local) && len(ad.Token) == 32 &&
-		ad.ExpiresUnixNano >= int64(TTL), ErrInvalidRecord)
-	endpoint := try.To1(normalizeEndpoint(ad.PeerIntroductionURL))
-	assert.Equal(endpoint, ad.PeerIntroductionURL, ErrInvalidRecord)
-	// P-256 ASN.1 signatures fit in 72 bytes. Verify with the pinned key,
-	// never signer.Verify or a key selected from the stored record.
+		bytes.Equal(ad.Root, root) && bytes.Equal(ad.Node, subject) &&
+		bytes.Equal(ad.Device, subject) && len(ad.Token) == 32 &&
+		ad.ExpiresUnixNano >= 0, ErrInvalidRecord)
+	try.To(validatePublic(root))
+	try.To(validatePublic(subject))
+	assert.That(normalizedClaimEndpoint(ad.PeerIntroductionURL), ErrInvalidRecord)
+	// P-256 ASN.1 signatures fit in 72 bytes; contents remain untrusted here.
 	assert.That(len(current.Signature) > 0 && len(current.Signature) <= 72,
 		ErrInvalidRecord)
-	digest := key.HashTagged(SignaturePurpose, try.To1(wire.Marshal(ad)))
-	assert.That(current.Signature.Verify(local, digest[:]), ErrInvalidRecord)
 	return current, nil
+}
+
+// Receipt accepts only the normalizer's canonical literal loopback output.
+// Parse failures stay local: localhttp.Address traces its underlying errors,
+// which can include an untrusted address or port.
+func normalizedClaimEndpoint(value string) bool {
+	const prefix, path = "http://", "/peer/introduction"
+	if len(value) > maxEndpointBytes || !strings.HasPrefix(value, prefix) ||
+		!strings.HasSuffix(value, path) || strings.Contains(value, "%") {
+		return false
+	}
+	address := strings.TrimSuffix(strings.TrimPrefix(value, prefix), path)
+	parsed, err := netip.ParseAddrPort(address)
+	return err == nil && parsed.Port() != 0 && parsed.Addr().IsLoopback() &&
+		value == prefix+netip.AddrPortFrom(parsed.Addr().Unmap(), parsed.Port()).String()+path
 }

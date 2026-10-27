@@ -1,5 +1,6 @@
-// Package ads publishes one local software signer's endpoint hint. A signed
-// local ad is not reader-verified reachability, device liveness, trust, or a PW.
+// Package ads publishes one local software signer's endpoint hint and retains
+// untrusted received claims. Neither is reader-verified reachability, device
+// liveness, trust, or a PW.
 package ads
 
 import (

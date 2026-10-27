@@ -56,6 +56,7 @@ type vaultFixture struct {
 	vault *storage.Vault
 	lease *testLease
 	path  string
+	db    *storage.Database
 }
 
 func newVault(t *testing.T) vaultFixture {
@@ -79,7 +80,7 @@ func newVault(t *testing.T) vaultFixture {
 	vault := try.To1(
 		db.OpenVault(t.Context(), storage.VaultID{1}, storage.KeyID{7}, lease),
 	)
-	return vaultFixture{vault, lease, path}
+	return vaultFixture{vault: vault, lease: lease, path: path, db: db}
 }
 
 func (f vaultFixture) unchanged(t *testing.T, fn func()) {
