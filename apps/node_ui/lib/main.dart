@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'publication_section.dart';
 import 'status_client.dart';
 
 void main() => runApp(const IntroTreeApp());
@@ -35,6 +36,15 @@ typedef VerifyReceived = Future<IntroductionVerification> Function(
   String headerPath,
 );
 
+typedef BootstrapDevice = Future<DeviceAuthorization> Function(
+  String url,
+  String headerPath,
+);
+typedef PublishAd = Future<AdPublication> Function(
+  String url,
+  String headerPath,
+);
+
 class IntroTreeApp extends StatelessWidget {
   const IntroTreeApp({
     super.key,
@@ -45,6 +55,8 @@ class IntroTreeApp extends StatelessWidget {
     this.listIntroductions,
     this.fetchIntroduction,
     this.verifyReceived,
+    this.bootstrapDevice,
+    this.publishAd,
   });
 
   final ReadStatus? readStatus;
@@ -54,6 +66,8 @@ class IntroTreeApp extends StatelessWidget {
   final ListIntroductions? listIntroductions;
   final FetchIntroduction? fetchIntroduction;
   final VerifyReceived? verifyReceived;
+  final BootstrapDevice? bootstrapDevice;
+  final PublishAd? publishAd;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -75,6 +89,8 @@ class IntroTreeApp extends StatelessWidget {
       listIntroductions: listIntroductions,
       fetchIntroduction: fetchIntroduction,
       verifyReceived: verifyReceived,
+      bootstrapDevice: bootstrapDevice,
+      publishAd: publishAd,
     ),
   );
 }
@@ -89,6 +105,8 @@ class StatusScreen extends StatefulWidget {
     this.listIntroductions,
     this.fetchIntroduction,
     this.verifyReceived,
+    this.bootstrapDevice,
+    this.publishAd,
   });
 
   final ReadStatus? readStatus;
@@ -98,6 +116,8 @@ class StatusScreen extends StatefulWidget {
   final ListIntroductions? listIntroductions;
   final FetchIntroduction? fetchIntroduction;
   final VerifyReceived? verifyReceived;
+  final BootstrapDevice? bootstrapDevice;
+  final PublishAd? publishAd;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -117,6 +137,12 @@ class _StatusScreenState extends State<StatusScreen> {
   bool _listing = false;
   bool _fetching = false;
   bool _verifying = false;
+  bool _authorizing = false;
+  bool _publishing = false;
+  DeviceAuthorization? _authorized;
+  StatusFailure? _authorizationFailure;
+  AdPublication? _published;
+  StatusFailure? _publicationFailure;
   IntroductionVerification? _verified;
   StatusFailure? _verifyFailure;
   int _verifyRevision = 0;
@@ -137,6 +163,10 @@ class _StatusScreenState extends State<StatusScreen> {
   void _inputChanged(String _) {
     setState(() {
       _inputRevision++;
+      _authorized = null;
+      _authorizationFailure = null;
+      _published = null;
+      _publicationFailure = null;
       _introductions = null;
       _listFailure = null;
       _choice = null;
@@ -166,6 +196,70 @@ class _StatusScreenState extends State<StatusScreen> {
     _verifyRevision++;
     _verified = null;
     _verifyFailure = null;
+  }
+
+  Future<void> _authorize() async {
+    if (_loading) return;
+    final revision = _inputRevision;
+    setState(() {
+      _loading = true;
+      _authorizing = true;
+      _authorized = null;
+      _authorizationFailure = null;
+    });
+    DeviceAuthorization? authorized;
+    StatusFailure? failure;
+    try {
+      authorized = await (widget.bootstrapDevice ?? _client.bootstrapDevice)(
+        _url.text,
+        _headerPath.text,
+      );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.bootstrapUnknown;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _authorizing = false;
+      if (revision == _inputRevision) {
+        _authorized = authorized;
+        _authorizationFailure = failure;
+      }
+    });
+  }
+
+  Future<void> _publish() async {
+    if (_loading) return;
+    final revision = _inputRevision;
+    setState(() {
+      _loading = true;
+      _publishing = true;
+      _published = null;
+      _publicationFailure = null;
+    });
+    AdPublication? published;
+    StatusFailure? failure;
+    try {
+      published = await (widget.publishAd ?? _client.publishAd)(
+        _url.text,
+        _headerPath.text,
+      );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.publishUnknown;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _publishing = false;
+      if (revision == _inputRevision) {
+        _published = published;
+        _publicationFailure = failure;
+      }
+    });
   }
 
   Future<void> _verify() async {
@@ -596,6 +690,19 @@ class _StatusScreenState extends State<StatusScreen> {
                   Semantics(liveRegion: true, child: _verifyResult(theme)),
                   const SizedBox(height: 16),
                   Semantics(liveRegion: true, child: _listResult(theme)),
+                  const SizedBox(height: 32),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  PublicationSection(
+                    authorizing: _authorizing,
+                    publishing: _publishing,
+                    authorized: _authorized,
+                    published: _published,
+                    authorizationFailure: _authorizationFailure,
+                    publicationFailure: _publicationFailure,
+                    onAuthorize: _loading ? null : _authorize,
+                    onPublish: _loading ? null : _publish,
+                  ),
                 ],
               ),
             ),
@@ -613,7 +720,9 @@ class _StatusScreenState extends State<StatusScreen> {
         !_saving &&
         !_listing &&
         !_fetching &&
-        !_verifying) {
+        !_verifying &&
+        !_authorizing &&
+        !_publishing) {
       final action = _copying ? 'Copying introduction' : 'Reading status';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,

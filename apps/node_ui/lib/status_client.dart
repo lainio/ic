@@ -37,6 +37,31 @@ class IntroductionVerification {
   final List<String> knownSubjects;
 }
 
+/// A receipt for durable authorization and this request's usability check.
+class DeviceAuthorization {
+  const DeviceAuthorization({required this.authorized, required this.usable});
+
+  final bool authorized;
+  final bool usable;
+}
+
+/// A publication receipt, not a poll of the node's current advertisement.
+class AdPublication {
+  const AdPublication({
+    required this.published,
+    required this.slot,
+    required this.epoch,
+    required this.expiresUnixNano,
+    required this.peerIntroductionUrl,
+  });
+
+  final bool published;
+  final int slot;
+  final int epoch;
+  final int expiresUnixNano;
+  final String peerIntroductionUrl;
+}
+
 // Only these fixed messages cross into the UI; exceptions and bodies do not.
 enum StatusFailure implements Exception {
   invalidUrl('Use the full local owner status URL printed by node serve.'),
@@ -75,6 +100,30 @@ enum StatusFailure implements Exception {
   ),
   verifyInvalidResponse(
     'Invalid verification response; outcome is unknown. Click Verify received introductions again to check safely.',
+  ),
+  bootstrapUnavailable(
+    'Local device authorization is unavailable on the local owner service.',
+  ),
+  bootstrapRejected(
+    'Local device authorization was refused: the device may already be authorized, own introduction verification may be missing, or the signer may be unusable. This response does not identify which condition applies.',
+  ),
+  bootstrapUnknown(
+    'Local device authorization outcome is unconfirmed. The authorization may have been saved.',
+  ),
+  bootstrapInvalidResponse(
+    'Invalid local device authorization response; outcome is unconfirmed. The authorization may have been saved.',
+  ),
+  publishUnavailable(
+    'Advertisement publication is unavailable on the local owner service.',
+  ),
+  publishRejected(
+    'Advertisement publication was refused. It requires a verified own introduction, an authorized usable signer, and node serve --peer-listen. This response does not identify which prerequisite failed.',
+  ),
+  publishUnknown(
+    'Advertisement publication outcome is unconfirmed. An advertisement may have been published. Another successful publication replaces it.',
+  ),
+  publishInvalidResponse(
+    'Invalid advertisement publication response; outcome is unconfirmed. An advertisement may have been published. Another successful publication replaces it.',
   ),
   notCompleted('The introduction is not yet completed.'),
   invalidIntroduction(
@@ -267,6 +316,80 @@ class StatusClient {
     }).toList();
   }
 
+  Future<DeviceAuthorization> bootstrapDevice(
+    String ownerStatusUrl,
+    String headerPath,
+  ) async {
+    final destination = _destination(ownerStatusUrl)
+        .replace(path: '/owner/device/bootstrap');
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        1024,
+        introduction: utf8.encode('{}'),
+      );
+      if (json.length != 2 ||
+          json['authorized'] != true ||
+          json['usable'] != true) {
+        throw StatusFailure.unexpected;
+      }
+      return const DeviceAuthorization(authorized: true, usable: true);
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.unreachable => StatusFailure.bootstrapUnknown,
+        StatusFailure.unexpected => StatusFailure.bootstrapInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
+  Future<AdPublication> publishAd(
+    String ownerStatusUrl,
+    String headerPath,
+  ) async {
+    final destination = _destination(ownerStatusUrl)
+        .replace(path: '/owner/ads/publish');
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        1024,
+        introduction: utf8.encode('{}'),
+      );
+      final slot = json['slot'];
+      final epoch = json['epoch'];
+      final expires = json['expires_unix_nano'];
+      final endpoint = json['peer_introduction_url'];
+      if (json.length != 5 ||
+          json['published'] != true ||
+          slot is! int ||
+          slot != 1 ||
+          epoch is! int ||
+          epoch != 0 ||
+          expires is! int ||
+          expires < 0 ||
+          expires > 0x7fffffffffffffff ||
+          endpoint is! String ||
+          !_publishedEndpoint(endpoint)) {
+        throw StatusFailure.unexpected;
+      }
+      return AdPublication(
+        published: true,
+        slot: slot,
+        epoch: epoch,
+        expiresUnixNano: expires,
+        peerIntroductionUrl: endpoint,
+      );
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.unreachable => StatusFailure.publishUnknown,
+        StatusFailure.unexpected => StatusFailure.publishInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> _request(
     Uri destination,
     String headerPath,
@@ -278,6 +401,8 @@ class StatusClient {
     final operationTimeout = requestTimeout ?? timeout;
     final fetching = destination.path == '/owner/introductions/fetch';
     final verifying = destination.path == '/owner/introductions/verify';
+    final bootstrapping = destination.path == '/owner/device/bootstrap';
+    final publishing = destination.path == '/owner/ads/publish';
 
     http.Client? transport;
     StreamIterator<List<int>>? body;
@@ -321,6 +446,12 @@ class StatusClient {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
           401 => StatusFailure.unauthorized,
+          404 when bootstrapping => StatusFailure.bootstrapUnavailable,
+          409 when bootstrapping => StatusFailure.bootstrapRejected,
+          _ when bootstrapping => StatusFailure.bootstrapUnknown,
+          404 when publishing => StatusFailure.publishUnavailable,
+          409 when publishing => StatusFailure.publishRejected,
+          _ when publishing => StatusFailure.publishUnknown,
           404 when verifying => StatusFailure.verifyUnavailable,
           400 ||
           409 ||
@@ -488,6 +619,21 @@ Uri _destination(String input) {
     port: port,
     path: '/owner/status',
   );
+}
+
+// Display data only. Unlike the owner input, this requires a literal address,
+// so no localhost normalization or destination derivation occurs here.
+bool _publishedEndpoint(String input) {
+  if (input.length > 1024) return false;
+  final match = RegExp(
+    r'^http://([0-9.]+|\[[0-9a-fA-F:]+\]):([0-9]+)/peer/introduction$',
+  ).firstMatch(input);
+  if (match == null || match.end != input.length) return false;
+  final port = int.tryParse(match[2]!);
+  if (port == null || port < 1 || port > 65535) return false;
+  var host = match[1]!;
+  if (host.startsWith('[')) host = host.substring(1, host.length - 1);
+  return InternetAddress.tryParse(host)?.isLoopback ?? false;
 }
 
 Future<String> _readAuthorization(String path) async {

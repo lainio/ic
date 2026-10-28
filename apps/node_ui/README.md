@@ -23,10 +23,10 @@ The credential file is limited to 1 KiB and status responses to 4 KiB.
 
 After a completed read, `Copy introduction` makes one authenticated GET to the
 fixed `/owner/introduction` sibling, with the same deadline and a 128 KiB limit.
-The fresh operational evidence credential authorizes these reads, the stateless
-check POST, and exactly the save/list/fetch/verify routes below. Existing read/status
-constructors keep their earlier scope. It grants no signing, trust, enrollment,
-peer access, other writes, or general permission for future owner POST operations.
+The evidence-only credential authorizes these reads, the stateless check POST,
+and the introduction save/list/fetch/verify routes below. Existing read/status
+constructors keep their earlier scope. The current node serve credential also
+authorizes the explicit device and advertisement actions described below.
 The button copies only after validating a three-field development JSON document:
 integer `version: 1`, `proposal`, and `acceptance` (standard padded base64).
 The proposal and detached acceptance are the exact saved evidence. The envelope
@@ -129,6 +129,25 @@ a committed promotion; there is no automatic retry, but another explicit click
 is safe. Locally verified evidence; no connection or trust created. This proves
 neither global parent uniqueness, current key possession, usable authorized
 devices, fresh ads, nor mutual pairwise state.
+
+`My node publication` adds two separate owner requests using the node's saved
+software signer: `Authorize local device` posts `{}` to
+`/owner/device/bootstrap`; `Publish advertisement` posts `{}` to
+`/owner/ads/publish`. Save and explicitly verify your own introduction first;
+publication also requires `node serve --peer-listen`. Each click makes only its
+one request, with the ordinary five-second deadline and a 1 KiB response limit.
+The node supplies the selectable advertised URL and UTC expiry. Flutter never
+contacts that URL. Publication announces an address, not a connection or trust;
+another successful publication replaces the previous ad.
+
+Authorization persists on the node across restarts; signer usability is observed
+only during the request. Publication remains available in a fresh UI without
+repeating authorization. A bootstrap 409 is a refusal, not confirmation of prior
+authorization or usability. Lost or invalid acknowledgements leave the outcome
+unconfirmed; there is no automatic retry or rollback. Receipts are not current
+state polls and are cleared on owner connection edits or app exit. Closing the
+UI does not undo committed operations. After a service restart, use its current
+owner URL/header; the UI does not save those settings.
 
 These are local acceptance observations, not membership, trust, delivery, or
 continuous connection monitoring. An unavailable service produces a failure;
