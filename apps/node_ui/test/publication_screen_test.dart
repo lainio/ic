@@ -512,11 +512,18 @@ void main() {
         MediaQuery.textScalerOf(tester.element(publishButton)).scale(14),
         28,
       );
-      // Start at the last preceding action; Tab reaches both new buttons.
+      // Tab traverses the receiver action before the publication controls.
       await tester.ensureVisible(verifyButton);
       Focus.of(tester.element(find.text('Verify received introductions')))
           .requestFocus();
       await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      expect(
+        Focus.of(tester.element(find.text('Fetch peer advertisement')))
+            .hasFocus,
+        isTrue,
+      );
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pumpAndSettle();
       expect(

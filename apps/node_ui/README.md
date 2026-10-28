@@ -87,8 +87,8 @@ one authenticated POST to `/owner/introductions/fetch` on the owner's validated
 origin, with exactly `{"peer_url":"..."}` (at most 2 KiB encoded). Only Go
 contacts the peer, validates evidence against its pinned Root, and saves it.
 Flutter receives no signing key and never sends owner credentials to the peer.
-Fetch has an eight-second deadline (Go's peer GET has five); other owner actions
-retain five seconds. The response is limited to 4 KiB. `Introduction received`
+Fetch has an eight-second deadline (Go's peer GET has five); ordinary local owner
+actions retain five seconds. The response is limited to 4 KiB. `Introduction received`
 or `Already received` shows the full selectable subject key and means Received
 evidence only, not `VerifyReceived`, present signing-key control, or trust.
 Fetch clears the displayed list without loading it. Lost or unexpected replies
@@ -148,6 +148,33 @@ unconfirmed; there is no automatic retry or rollback. Receipts are not current
 state polls and are cleared on owner connection edits or app exit. Closing the
 UI does not undo committed operations. After a service restart, use its current
 owner URL/header; the UI does not save those settings.
+
+The receiver's `Peer advertisement` section uses the same `Peer introduction URL`:
+
+1. After the peer publishes, click `Fetch peer advertisement`. Flutter replaces
+   only the terminal `/peer/introduction` with `/peer/ad` in the `peer_url` JSON
+   sent to the owner's `/owner/ads/fetch`. Go fetches the document and separately
+   saves introduction evidence and an **untrusted ReceivedAd claim**. The receipt
+   shows the full subject key and both change flags; it never promotes Known.
+2. If the subject is not already Known, use the existing separate
+   `Verify received introductions` action.
+3. Click `Verify advertisement` for the latest successful fetch's exact full key.
+   `/owner/ads/verify` checks preexisting Known and obtains a fresh online proof.
+   `Advertisement verified in this exchange` records a **historical VerifiedAd
+   snapshot**. An unchanged snapshot still required a fresh proof this time.
+
+Each click sends exactly one owner POST, rereads the current operational header,
+and uses an eight-second deadline with a 1 KiB response bound. Fetch requests are
+limited to 2 KiB; verification keys to 128 decoded bytes. Earlier evidence/device
+credentials do not grant these routes. Flutter never contacts a peer directly,
+retries automatically, or creates publisher state on the receiver. No status,
+list refresh, Known promotion, or ad verification is chained automatically.
+An ad-fetch attempt clears previous ad results and saved/Known list projections;
+owner or peer input edits also discard late ad results. Receiver actions preserve
+the publisher's separate receipt. A failed fetch can leave just the introduction
+saved; a lost verification acknowledgement can follow a committed snapshot.
+Neither receipt grants trust, a connection, or ongoing availability. Validity and
+reachability are not monitored; future `CreatePW` still needs fresh evidence.
 
 These are local acceptance observations, not membership, trust, delivery, or
 continuous connection monitoring. An unavailable service produces a failure;

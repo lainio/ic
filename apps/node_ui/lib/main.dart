@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'publication_section.dart';
+import 'received_ad_section.dart';
 import 'status_client.dart';
 
 void main() => runApp(const IntroTreeApp());
@@ -44,6 +45,16 @@ typedef PublishAd = Future<AdPublication> Function(
   String url,
   String headerPath,
 );
+typedef FetchPeerAd = Future<AdFetchReceipt> Function(
+  String url,
+  String headerPath,
+  String peerUrl,
+);
+typedef VerifyPeerAd = Future<AdVerificationReceipt> Function(
+  String url,
+  String headerPath,
+  String subjectPublicKeyHex,
+);
 
 class IntroTreeApp extends StatelessWidget {
   const IntroTreeApp({
@@ -57,6 +68,8 @@ class IntroTreeApp extends StatelessWidget {
     this.verifyReceived,
     this.bootstrapDevice,
     this.publishAd,
+    this.fetchPeerAd,
+    this.verifyPeerAd,
   });
 
   final ReadStatus? readStatus;
@@ -68,6 +81,8 @@ class IntroTreeApp extends StatelessWidget {
   final VerifyReceived? verifyReceived;
   final BootstrapDevice? bootstrapDevice;
   final PublishAd? publishAd;
+  final FetchPeerAd? fetchPeerAd;
+  final VerifyPeerAd? verifyPeerAd;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -91,6 +106,8 @@ class IntroTreeApp extends StatelessWidget {
       verifyReceived: verifyReceived,
       bootstrapDevice: bootstrapDevice,
       publishAd: publishAd,
+      fetchPeerAd: fetchPeerAd,
+      verifyPeerAd: verifyPeerAd,
     ),
   );
 }
@@ -107,6 +124,8 @@ class StatusScreen extends StatefulWidget {
     this.verifyReceived,
     this.bootstrapDevice,
     this.publishAd,
+    this.fetchPeerAd,
+    this.verifyPeerAd,
   });
 
   final ReadStatus? readStatus;
@@ -118,6 +137,8 @@ class StatusScreen extends StatefulWidget {
   final VerifyReceived? verifyReceived;
   final BootstrapDevice? bootstrapDevice;
   final PublishAd? publishAd;
+  final FetchPeerAd? fetchPeerAd;
+  final VerifyPeerAd? verifyPeerAd;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -139,6 +160,13 @@ class _StatusScreenState extends State<StatusScreen> {
   bool _verifying = false;
   bool _authorizing = false;
   bool _publishing = false;
+  bool _fetchingAd = false;
+  bool _verifyingAd = false;
+  AdFetchReceipt? _fetchedAd;
+  AdVerificationReceipt? _verifiedAd;
+  StatusFailure? _adFetchFailure;
+  StatusFailure? _adVerifyFailure;
+  int _adRevision = 0;
   DeviceAuthorization? _authorized;
   StatusFailure? _authorizationFailure;
   AdPublication? _published;
@@ -175,6 +203,7 @@ class _StatusScreenState extends State<StatusScreen> {
       _invalidateCheck();
       _invalidateFetch();
       _invalidateVerification();
+      _invalidateAdFetch();
     });
   }
 
@@ -196,6 +225,91 @@ class _StatusScreenState extends State<StatusScreen> {
     _verifyRevision++;
     _verified = null;
     _verifyFailure = null;
+  }
+
+  void _invalidateAdFetch() {
+    _fetchedAd = null;
+    _adFetchFailure = null;
+    _invalidateAdVerification();
+  }
+
+  void _invalidateAdVerification() {
+    _adRevision++;
+    _verifiedAd = null;
+    _adVerifyFailure = null;
+  }
+
+  Future<void> _fetchAd() async {
+    if (_loading) return;
+    setState(() {
+      _invalidateAdFetch();
+      _invalidateVerification();
+      // The introduction transaction can commit before the ad save fails.
+      _introductions = null;
+      _listFailure = null;
+      _loading = true;
+      _fetchingAd = true;
+    });
+    final revision = _adRevision;
+    AdFetchReceipt? receipt;
+    StatusFailure? failure;
+    try {
+      receipt = await (widget.fetchPeerAd ?? _client.fetchPeerAd)(
+        _url.text,
+        _headerPath.text,
+        _peerUrl.text,
+      );
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.adFetchUnknown;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _fetchingAd = false;
+      if (revision == _adRevision) {
+        _fetchedAd = receipt;
+        _adFetchFailure = failure;
+      }
+    });
+  }
+
+  Future<void> _verifyAd() async {
+    final subject = _fetchedAd?.subjectPublicKeyHex;
+    if (_loading || subject == null) return;
+    setState(() {
+      _invalidateAdVerification();
+      _loading = true;
+      _verifyingAd = true;
+    });
+    final revision = _adRevision;
+    AdVerificationReceipt? receipt;
+    StatusFailure? failure;
+    try {
+      final result = await (widget.verifyPeerAd ?? _client.verifyPeerAd)(
+        _url.text,
+        _headerPath.text,
+        subject,
+      );
+      if (!result.verified || result.subjectPublicKeyHex != subject) {
+        throw StatusFailure.adVerifyInvalidResponse;
+      }
+      receipt = result;
+    } on StatusFailure catch (error) {
+      failure = error;
+    } catch (_) {
+      failure = StatusFailure.adVerifyUnknown;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = false;
+      _verifyingAd = false;
+      if (revision == _adRevision) {
+        _verifiedAd = receipt;
+        _adVerifyFailure = failure;
+      }
+    });
   }
 
   Future<void> _authorize() async {
@@ -648,7 +762,10 @@ class _StatusScreenState extends State<StatusScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _peerUrl,
-                    onChanged: (_) => setState(_invalidateFetch),
+                    onChanged: (_) => setState(() {
+                      _invalidateFetch();
+                      _invalidateAdFetch();
+                    }),
                     autocorrect: false,
                     enableSuggestions: false,
                     decoration: const InputDecoration(
@@ -690,6 +807,17 @@ class _StatusScreenState extends State<StatusScreen> {
                   Semantics(liveRegion: true, child: _verifyResult(theme)),
                   const SizedBox(height: 16),
                   Semantics(liveRegion: true, child: _listResult(theme)),
+                  const SizedBox(height: 24),
+                  ReceivedAdSection(
+                    fetching: _fetchingAd,
+                    verifying: _verifyingAd,
+                    fetched: _fetchedAd,
+                    verified: _verifiedAd,
+                    fetchFailure: _adFetchFailure,
+                    verifyFailure: _adVerifyFailure,
+                    onFetch: _loading ? null : _fetchAd,
+                    onVerify: _loading ? null : _verifyAd,
+                  ),
                   const SizedBox(height: 32),
                   const Divider(),
                   const SizedBox(height: 16),
@@ -722,7 +850,9 @@ class _StatusScreenState extends State<StatusScreen> {
         !_fetching &&
         !_verifying &&
         !_authorizing &&
-        !_publishing) {
+        !_publishing &&
+        !_fetchingAd &&
+        !_verifyingAd) {
       final action = _copying ? 'Copying introduction' : 'Reading status';
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,

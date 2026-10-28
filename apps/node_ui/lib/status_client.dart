@@ -62,6 +62,32 @@ class AdPublication {
   final String peerIntroductionUrl;
 }
 
+/// Receipt of evidence and an untrusted ad claim, without Known promotion.
+class AdFetchReceipt {
+  const AdFetchReceipt({
+    required this.subjectPublicKeyHex,
+    required this.introductionCreated,
+    required this.adChanged,
+  });
+
+  final String subjectPublicKeyHex;
+  final bool introductionCreated;
+  final bool adChanged;
+}
+
+/// This exchange's result and historical snapshot change, never live status.
+class AdVerificationReceipt {
+  const AdVerificationReceipt({
+    required this.subjectPublicKeyHex,
+    required this.verified,
+    required this.changed,
+  });
+
+  final String subjectPublicKeyHex;
+  final bool verified;
+  final bool changed;
+}
+
 // Only these fixed messages cross into the UI; exceptions and bodies do not.
 enum StatusFailure implements Exception {
   invalidUrl('Use the full local owner status URL printed by node serve.'),
@@ -124,6 +150,57 @@ enum StatusFailure implements Exception {
   ),
   publishInvalidResponse(
     'Invalid advertisement publication response; outcome is unconfirmed. An advertisement may have been published. Another successful publication replaces it.',
+  ),
+  adPeerUrl(
+    'Paste the peer introduction URL ending exactly in /peer/introduction, without a query or fragment.',
+  ),
+  adFetchTooLarge('Advertisement fetch request exceeds the 2 KiB limit.'),
+  adFetchRejected('The node rejected the advertisement fetch request.'),
+  adFetchUnavailable(
+    'Advertisement fetch is unavailable on the owner service.',
+  ),
+  adFetchConflict(
+    'Advertisement receipt conflicted with saved evidence or a collection limit. Introduction evidence may already have been saved.',
+  ),
+  adFetchRemote(
+    'Advertisement fetch or peer evidence validation failed. Introduction evidence may already have been saved.',
+  ),
+  adFetchTimeout(
+    'Advertisement fetch timed out. Introduction evidence or the ad claim may already have been saved.',
+  ),
+  adFetchStorage(
+    'Local advertisement receipt failed. Introduction evidence or the ad claim may already have been saved.',
+  ),
+  adFetchUnknown(
+    'Advertisement fetch acknowledgement was not received. Introduction evidence or the ad claim may already have been saved.',
+  ),
+  adFetchInvalidResponse(
+    'Invalid advertisement fetch response. Introduction evidence or the ad claim may already have been saved.',
+  ),
+  adSubject(
+    'Use a full lowercase hexadecimal subject public key, at most 128 bytes.',
+  ),
+  adVerifyRejected('The node rejected the advertisement verification request.'),
+  adVerifyUnavailable(
+    'Advertisement verification is unavailable on the owner service.',
+  ),
+  adVerifyPrecondition(
+    'Advertisement verification prerequisites were not met. Known evidence may be missing, or the received ad may be missing, changed or expired. Verify received introductions may be needed.',
+  ),
+  adVerifyRemote(
+    'Advertisement verification failed to obtain a valid remote proof.',
+  ),
+  adVerifyTimeout(
+    'Advertisement verification timed out. A historical verified snapshot may already have been saved.',
+  ),
+  adVerifyStorage(
+    'Local advertisement verification failed. A historical verified snapshot may already have been saved.',
+  ),
+  adVerifyUnknown(
+    'Advertisement verification acknowledgement was not received. A historical verified snapshot may already have been saved.',
+  ),
+  adVerifyInvalidResponse(
+    'Invalid advertisement verification response. A historical verified snapshot may already have been saved.',
   ),
   notCompleted('The introduction is not yet completed.'),
   invalidIntroduction(
@@ -390,6 +467,80 @@ class StatusClient {
     }
   }
 
+  Future<AdFetchReceipt> fetchPeerAd(
+    String ownerStatusUrl,
+    String headerPath,
+    String peerIntroductionUrl,
+  ) async {
+    final destination = _destination(ownerStatusUrl)
+        .replace(path: '/owner/ads/fetch');
+    final bytes = _adFetchBytes(peerIntroductionUrl);
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        1024,
+        introduction: bytes,
+        requestTimeout: fetchTimeout,
+      );
+      if (json.length != 3 ||
+          !_adSubject(json['subject_public_key_hex']) ||
+          json['introduction_created'] is! bool ||
+          json['ad_changed'] is! bool) {
+        throw StatusFailure.unexpected;
+      }
+      return AdFetchReceipt(
+        subjectPublicKeyHex: json['subject_public_key_hex'] as String,
+        introductionCreated: json['introduction_created'] as bool,
+        adChanged: json['ad_changed'] as bool,
+      );
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.unreachable => StatusFailure.adFetchUnknown,
+        StatusFailure.unexpected => StatusFailure.adFetchInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
+  Future<AdVerificationReceipt> verifyPeerAd(
+    String ownerStatusUrl,
+    String headerPath,
+    String subjectPublicKeyHex,
+  ) async {
+    final destination = _destination(ownerStatusUrl)
+        .replace(path: '/owner/ads/verify');
+    if (!_adSubject(subjectPublicKeyHex)) throw StatusFailure.adSubject;
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        1024,
+        introduction: utf8.encode(
+          jsonEncode({'subject_public_key_hex': subjectPublicKeyHex}),
+        ),
+        requestTimeout: fetchTimeout,
+      );
+      if (json.length != 3 ||
+          json['subject_public_key_hex'] != subjectPublicKeyHex ||
+          json['verified'] != true ||
+          json['changed'] is! bool) {
+        throw StatusFailure.unexpected;
+      }
+      return AdVerificationReceipt(
+        subjectPublicKeyHex: subjectPublicKeyHex,
+        verified: true,
+        changed: json['changed'] as bool,
+      );
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.unreachable => StatusFailure.adVerifyUnknown,
+        StatusFailure.unexpected => StatusFailure.adVerifyInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> _request(
     Uri destination,
     String headerPath,
@@ -403,6 +554,8 @@ class StatusClient {
     final verifying = destination.path == '/owner/introductions/verify';
     final bootstrapping = destination.path == '/owner/device/bootstrap';
     final publishing = destination.path == '/owner/ads/publish';
+    final fetchingAd = destination.path == '/owner/ads/fetch';
+    final verifyingAd = destination.path == '/owner/ads/verify';
 
     http.Client? transport;
     StreamIterator<List<int>>? body;
@@ -446,6 +599,21 @@ class StatusClient {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
           401 => StatusFailure.unauthorized,
+          400 || 415 when fetchingAd => StatusFailure.adFetchRejected,
+          404 when fetchingAd => StatusFailure.adFetchUnavailable,
+          409 when fetchingAd => StatusFailure.adFetchConflict,
+          413 when fetchingAd => StatusFailure.adFetchTooLarge,
+          502 when fetchingAd => StatusFailure.adFetchRemote,
+          504 when fetchingAd => StatusFailure.adFetchTimeout,
+          500 when fetchingAd => StatusFailure.adFetchStorage,
+          _ when fetchingAd => StatusFailure.adFetchInvalidResponse,
+          400 || 413 || 415 when verifyingAd => StatusFailure.adVerifyRejected,
+          404 when verifyingAd => StatusFailure.adVerifyUnavailable,
+          409 when verifyingAd => StatusFailure.adVerifyPrecondition,
+          502 when verifyingAd => StatusFailure.adVerifyRemote,
+          504 when verifyingAd => StatusFailure.adVerifyTimeout,
+          500 when verifyingAd => StatusFailure.adVerifyStorage,
+          _ when verifyingAd => StatusFailure.adVerifyInvalidResponse,
           404 when bootstrapping => StatusFailure.bootstrapUnavailable,
           409 when bootstrapping => StatusFailure.bootstrapRejected,
           _ when bootstrapping => StatusFailure.bootstrapUnknown,
@@ -504,6 +672,10 @@ class StatusClient {
         if (verifying && !_verificationEnvelope(text)) {
           throw StatusFailure.unexpected;
         }
+        if ((fetchingAd || verifyingAd) &&
+            !_adEnvelope(text, verifying: verifyingAd)) {
+          throw StatusFailure.unexpected;
+        }
         final json = jsonDecode(text);
         if (json is! Map<String, dynamic>) throw StatusFailure.unexpected;
         return json;
@@ -534,6 +706,51 @@ class StatusClient {
     _closed = true;
     _cancel?.call();
   }
+}
+
+List<int> _adFetchBytes(String input) {
+  const suffix = '/peer/introduction';
+  if (input.length > 2048) throw StatusFailure.adFetchTooLarge;
+  final uri = Uri.tryParse(input);
+  if (input.isEmpty ||
+      !input.endsWith(suffix) ||
+      input.contains('?') ||
+      input.contains('#') ||
+      RegExp(r'\s').hasMatch(input) ||
+      uri == null ||
+      uri.scheme != 'http' ||
+      !uri.hasAuthority ||
+      uri.host.isEmpty ||
+      !uri.path.endsWith(suffix)) {
+    throw StatusFailure.adPeerUrl;
+  }
+  // Replace only the exact raw suffix. This is owner request data, never an
+  // HTTP destination. Go authoritatively validates the strict loopback URL.
+  final peerAd = '${input.substring(0, input.length - suffix.length)}/peer/ad';
+  final bytes = utf8.encode(jsonEncode({'peer_url': peerAd}));
+  if (bytes.length > 2048) throw StatusFailure.adFetchTooLarge;
+  return bytes;
+}
+
+bool _adSubject(dynamic value) =>
+    value is String &&
+    value.isNotEmpty &&
+    value.length <= 256 &&
+    value.length.isEven &&
+    !RegExp(r'[^0-9a-f]').hasMatch(value);
+
+// Validate the tiny flat envelope before jsonDecode can discard duplicates.
+// Accept any field order; types and subject binding are checked by the caller.
+bool _adEnvelope(String text, {required bool verifying}) {
+  final names = verifying
+      ? 'subject_public_key_hex|verified|changed'
+      : 'subject_public_key_hex|introduction_created|ad_changed';
+  final field = '"($names)"\\s*:\\s*(?:"[0-9a-f]+"|true|false)';
+  final match = RegExp('^\\s*\\{\\s*$field(?:\\s*,\\s*$field){2}\\s*\\}\\s*\$')
+      .firstMatch(text);
+  return match != null &&
+      match.end == text.length &&
+      RegExp(field).allMatches(text).map((m) => m[1]).toSet().length == 3;
 }
 
 // This small, flat response has exactly two fields, in either order. Check its
