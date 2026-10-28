@@ -80,34 +80,56 @@ func VerifyReceived(vault *storage.Vault, expectedRoot key.Public) (_ int, err e
 func ListKnownIntroductions(vault *storage.Vault, expectedRoot key.Public) (
 	_ []key.Public, err error,
 ) {
-	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
 	expectedRoot = bytes.Clone(expectedRoot)
-	subjects := make([]key.Public, 0)
+	var subjects []key.Public
 	try.To(vault.View(func(tx storage.ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
+		subjects = try.To1(listKnownIntroductions(tx, expectedRoot))
+		return nil
+	}))
+	return subjects, nil
+}
 
-		if !try.To1(tx.HasChild([]byte(knownNamespace))) {
-			return nil
-		}
-		known := try.To1(tx.Child([]byte(knownNamespace)))
-		var received storage.ReadNS
-		if try.To1(tx.HasChild([]byte(receivedNamespace))) {
-			received = try.To1(tx.Child([]byte(receivedNamespace)))
-		}
-		parents := make(map[string]key.Public)
-		return known.Each(func(subject, marker []byte) (err error) {
-			defer err2.Handle(&err, nil)
+// IsKnownIntroductionInTx uses the same full evidence/binding validation as
+// ListKnownIntroductions in the caller's transaction. It performs only local
+// reads and pure verification, never a reentrant Vault operation or signer
+// callback. All Known entries are validated even if subject is found early.
+// There is no implicit Root/self convention or promotion in this projection.
+func IsKnownIntroductionInTx(tx storage.ReadTx, expectedRoot, subject key.Public) (bool, error) {
+	subjects, err := listKnownIntroductions(tx, expectedRoot)
+	if err != nil {
+		return false, err
+	}
+	_, found := slices.BinarySearchFunc(subjects, subject, func(a, b key.Public) int { return bytes.Compare(a, b) })
+	return found, nil
+}
 
-			assert.That(len(subjects) < maxReceivedSubjects && received != nil, errInvalidKnown)
-			record, found := try.To2(received.Get(subject))
-			assert.That(found, errInvalidKnown)
-			binding := try.To1(receivedBinding(record, subject, expectedRoot, parents))
-			assert.That(bytes.Equal(marker, binding), errInvalidKnown)
-			subjects = append(subjects, bytes.Clone(subject))
-			return nil
-		})
+func listKnownIntroductions(tx storage.ReadTx, expectedRoot key.Public) (_ []key.Public, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+
+	subjects := make([]key.Public, 0)
+	if !try.To1(tx.HasChild([]byte(knownNamespace))) {
+		return subjects, nil
+	}
+	known := try.To1(tx.Child([]byte(knownNamespace)))
+	var received storage.ReadNS
+	if try.To1(tx.HasChild([]byte(receivedNamespace))) {
+		received = try.To1(tx.Child([]byte(receivedNamespace)))
+	}
+	parents := make(map[string]key.Public)
+	try.To(known.Each(func(subject, marker []byte) (err error) {
+		defer err2.Handle(&err, nil)
+
+		assert.That(len(subjects) < maxReceivedSubjects && received != nil, errInvalidKnown)
+		record, found := try.To2(received.Get(subject))
+		assert.That(found, errInvalidKnown)
+		binding := try.To1(receivedBinding(record, subject, expectedRoot, parents))
+		assert.That(bytes.Equal(marker, binding), errInvalidKnown)
+		subjects = append(subjects, bytes.Clone(subject))
+		return nil
 	}))
 	slices.SortFunc(subjects, func(a, b key.Public) int { return bytes.Compare(a, b) })
 	return subjects, nil

@@ -50,7 +50,7 @@ type currentProofPayload struct {
 // replacement or device loss can still occur after that read/return. now must
 // be trustworthy; there is no clock rollback protection or perpetual usability.
 //
-// The future receiver must generate its 32-byte challenge with crypto/rand.
+// The receiver must generate its 32-byte challenge with crypto/rand.
 // Length checking cannot establish unpredictability; no nonce is generated for
 // it or cached here. This function writes/seals nothing, performs no network
 // I/O, and implements no V19 transition, bootstrap, renewal, or promotion.
@@ -92,16 +92,17 @@ func ProveCurrentLocal(vault *storage.Vault, expectedRoot, expectedLocal key.Pub
 
 // VerifyCurrentProof authenticates the original canonical v1 ad and the proof
 // against independently supplied Root/subject keys, exact ad bytes, nonce, and
-// expiry. A future call site must obtain these expected identities from its own
+// expiry. Its call site must obtain these expected identities from its own
 // configuration and Known evidence, never from the ad. This is a pure check:
 // no storage, I/O, or VerifiedAd, Known, PW, trust, or peer-view state is created.
 //
 // Success alone establishes neither source currentness/authorization nor Known,
-// and MUST NOT serve as a standalone V19 VerifyAd implementation. Only a future
+// and MUST NOT serve as a standalone V19 VerifyAd implementation. Only an
 // online challenge with a fresh unpredictable receiver nonce tied to the exact
 // previously received claim can supply evidence of current signer control. That
-// owner workflow must check Known, freshness, and exact currentness before any
-// durable VerifiedAd transition. A signed unexpired ad may already be replaced.
+// receiver workflow (VerifyReceivedRemote) checks Known and freshness around the
+// online exchange before recording a historical VerifiedAd snapshot. A signed
+// unexpired ad may already be replaced; no durable marker grants currentness.
 //
 // A malicious key holder can sign without honestly reading local storage. This
 // signature proves neither global AuthenticAds membership, authenticated remote

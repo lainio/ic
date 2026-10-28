@@ -1,6 +1,6 @@
-// Package ads publishes one local software signer's endpoint hint and retains
-// untrusted received claims. Neither is reader-verified reachability, device
-// liveness, trust, or a PW.
+// Package ads publishes one local software signer's endpoint hint, retains
+// untrusted received claims, and explicitly verifies remote claims online.
+// Verified snapshots are historical evidence, not ongoing reachability or a PW.
 package ads
 
 import (
