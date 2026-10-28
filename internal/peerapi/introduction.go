@@ -1,4 +1,5 @@
-// Package peerapi provides only opt-in disclosure of this node's introduction.
+// Package peerapi provides opt-in public introduction/ad disclosure and bounded
+// current-ad challenge proofs. It provides no owner or receiver operations.
 package peerapi
 
 import (

@@ -91,20 +91,40 @@ func NewDeviceCredentials(ctx context.Context, vault *storage.Vault,
 func NewPublicationCredentials(ctx context.Context, vault *storage.Vault,
 	expectedRoot, expectedChild key.Public, signer key.Handle, dir string,
 ) (http.Handler, string, func(net.Listener), error) {
+	handler, file, bind, err := NewPublicationProofCredentials(ctx, vault,
+		expectedRoot, expectedChild, signer, dir)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	return handler, file, func(peer net.Listener) { bind(peer) }, nil
+}
+
+// NewPublicationProofCredentials retains NewPublicationCredentials' owner
+// routes and additionally supplies a narrow public proof capability. Call the
+// one-shot binder with the actual opt-in peer listener before either server
+// starts. Nil permanently disables publication and returns no prover. The peer
+// handler receives only the resulting capability, never this owner router,
+// credentials, or signer. Join both servers before closing borrowed resources.
+func NewPublicationProofCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, signer key.Handle, dir string,
+) (http.Handler, string, func(net.Listener) CurrentAdProver, error) {
 	h := &publicationHandler{deviceHandler: newDeviceHandler(vault, expectedRoot, expectedChild, signer)}
 	handler, file, err := newCredentials(ctx, h, dir)
 	if err != nil {
 		return nil, "", nil, err
 	}
 	var once sync.Once
-	configure := func(peer net.Listener) {
+	var prover CurrentAdProver
+	configure := func(peer net.Listener) CurrentAdProver {
 		once.Do(func() {
 			h.mutations.Lock()
 			defer h.mutations.Unlock()
 			if peer != nil {
 				h.endpoint = "http://" + peer.Addr().String() + "/peer/introduction"
+				prover = h.proveCurrentAd
 			}
 		})
+		return prover
 	}
 	return handler, file, configure, nil
 }

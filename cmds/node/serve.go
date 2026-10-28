@@ -59,9 +59,15 @@ without a bearer token. Disabled by default; no peer socket exists otherwise.
 GET /peer/ad publicly discloses the explicitly published signed ad with only
 this node's completed introduction, while unexpired and bound to this invocation's
 actual peer endpoint. GET never signs, renews, or changes saved state.
-This is sender-side disclosure only, not VerifyAd, verified reachability,
-discovery, present key control, receiver Received/Known changes,
-mutual authentication, a connection, or chat.
+These GETs are sender-side disclosure only, not VerifyAd, verified reachability,
+discovery, present key control, or receiver Received/Known changes.
+POST /peer/ad/proof accepts exactly version 1, that exact base64 ad, and a
+caller-generated 32-byte base64 challenge (JSON, at most 2 KiB). It offers any
+local caller a purpose-separated signature only while that ad is current and
+the publisher remains Known with an authorized usable signer. The response is
+ephemeral and changes no saved state; it is not receiver verification or trust.
+Neither disclosure nor a proof creates mutual authentication, a connection,
+or chat.
 
 Use the printed owner status URL and authorization header file in another
 terminal (keep the @):
@@ -119,7 +125,7 @@ A new save uses the existing encrypted Vault and may fail if capacity is exhaust
 	cmd.Flags().String("listen", "127.0.0.1:0",
 		"Explicit loopback host and numeric port; localhost normalizes to 127.0.0.1; zero selects a free port")
 	cmd.Flags().String("peer-listen", "",
-		"Opt in to public completed introduction and current signed ad disclosure; explicit loopback host and numeric port")
+		"Opt in to public introduction/ad disclosure and bounded current-ad challenge proofs; explicit loopback host and numeric port")
 	for _, name := range []string{"dir", "unlock-file", "storage-key-file", "root"} {
 		try.To(cmd.MarkFlagRequired(name))
 	}
@@ -143,7 +149,7 @@ func runServe(cmd *cobra.Command, args []string) (err error) {
 
 // Owns only this invocation's Store and temporary credentials. Persistent paths
 // are never cleanup inputs. Only the operational owner handler borrows the
-// restored signing handle; the separate peer handler remains signer-free.
+// restored signing handle; the peer handler gets only a bounded proof closure.
 type nodeServe struct {
 	store                     *nodevault.Store
 	child                     key.Public
@@ -203,8 +209,8 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.child = try.To1(handle.CBORPublicKey())
 	s.store = try.To1(nodevault.OpenForNode(ctx, dir, keyFile, root, s.child))
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
-	var configure func(net.Listener)
-	s.handler, s.headerFile, configure = try.To3(ownerapi.NewPublicationCredentials(
+	var configure func(net.Listener) ownerapi.CurrentAdProver
+	s.handler, s.headerFile, configure = try.To3(ownerapi.NewPublicationProofCredentials(
 		ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
 	))
 	if s.peerAddress != "" {
@@ -214,10 +220,10 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	// Install both endpoint-bound surfaces once, before either Serve starts.
 	s.configurePublication = func(peer net.Listener) {
 		once.Do(func() {
-			configure(peer)
+			prove := configure(peer)
 			if peer != nil {
-				s.peerHandler = peerapi.NewAdHandler(s.store.Vault(), root, s.child,
-					"http://"+peer.Addr().String()+"/peer/introduction")
+				s.peerHandler = peerapi.NewProofHandler(s.store.Vault(), root, s.child,
+					"http://"+peer.Addr().String()+"/peer/introduction", prove)
 			}
 		})
 	}

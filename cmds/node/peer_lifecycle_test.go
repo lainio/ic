@@ -17,6 +17,7 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/ads"
+	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/onboarding"
 )
 
@@ -174,9 +175,12 @@ func waitPeerHTTP(t *testing.T, done <-chan peerHTTPResult) peerHTTPResult {
 }
 
 func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
-	for _, tc := range []struct{ unexpected, ad bool }{{false, false}, {true, false}, {false, true}, {true, true}} {
+	for _, tc := range []struct{ unexpected, ad, proof bool }{
+		{false, false, false}, {true, false, false}, {false, true, false}, {true, true, false},
+		{false, true, true}, {true, true, true},
+	} {
 		unexpected := tc.unexpected
-		t.Run(fmt.Sprint("unexpected=", unexpected, "/ad=", tc.ad), func(t *testing.T) {
+		t.Run(fmt.Sprint("unexpected=", unexpected, "/ad=", tc.ad, "/proof=", tc.proof), func(t *testing.T) {
 			defer assert.PushTester(t)()
 
 			f := prepareServeFixture(t)
@@ -231,7 +235,20 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			if tc.ad {
 				readURL = "http://" + peer.Addr().String() + "/peer/ad"
 			}
-			peerResponse := peerHTTPRequest(t.Context(), readURL, "")
+			var peerResponse <-chan peerHTTPResult
+			var proofAd, nonce []byte
+			if tc.proof {
+				proofAd = try.To1(wire.Marshal(current))
+				nonce = peerProofNonce(t)
+				body := peerProofBody(t, proofAd, nonce)
+				response := make(chan peerHTTPResult, 1)
+				peerResponse = response
+				go func() {
+					response <- postPeerProofHTTP(t.Context(), "http://"+peer.Addr().String()+peerProofPath, "", body, false)
+				}()
+			} else {
+				peerResponse = peerHTTPRequest(t.Context(), readURL, "")
+			}
 			waitNodeServe(t, entered[0])
 			waitNodeServe(t, entered[1])
 			if unexpected {
@@ -271,7 +288,9 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			}
 			assert.NoError(b.err)
 			assert.Equal(b.status, http.StatusOK)
-			if tc.ad {
+			if tc.proof {
+				assertOnlineProof(t, b, f, proofAd, nonce)
+			} else if tc.ad {
 				assertPeerAd(t, b.body, before, current)
 			} else {
 				assert.DeepEqual(b.body, try.To1(onboarding.EncodeIntroduction(before)))
