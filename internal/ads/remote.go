@@ -26,11 +26,18 @@ var (
 // VerifyReceivedRemote performs one explicit receiver-side online challenge for
 // an already received ad. The Vault, Root, reader and subject must be configured
 // independently of the ad; the caller binds the Vault to that reader and Root.
-// The caller MUST serialize configuration, Known/Received evidence mutations
-// and verification across this whole operation (the future owner mutation lock).
-// Final transactional validation also rejects a replaced receipt or invalid Known
-// evidence. No transaction spans network I/O or a signing/verification callback;
-// transactional evidence checks use only local, pure signature verification.
+// The caller keeps service configuration immutable and joins admitted requests
+// before closing the Vault. Verification uses owned snapshots and MUST NOT hold
+// the publisher/proof mutation lock across network I/O: reciprocal verifications
+// need each other's inbound prover. Publication/bootstrap/proof retain their
+// own serialization. No Vault transaction spans network I/O or signer callbacks.
+//
+// The final Update atomically revalidates Known evidence, exact received bytes,
+// expiry/cancellation and the verified table. Concurrent proofs for the same ad
+// each use a fresh nonce; the serialized Update decides whether a write is needed.
+// Missing/invalid final evidence or a different receipt fails closed. Intervening
+// changes leaving the same valid final state are not tracked. Transactional
+// evidence checks use only local, pure signature verification.
 //
 // This is a scoped approximation of V19 VerifyAd for slot 1, epoch 0, Device ==
 // subject. The existing publisher proves currentness and authorized signer

@@ -52,6 +52,12 @@ before making conclusions about existing code.
 - `err2` also allows automatic error propagation and annotation. It brings
   automatic and runtime configurable (CLI flags) errors traces
 
+## Go conventions
+
+Prefer `range` loops when semantics match, including integer ranges for
+fixed-count loops. Preserve deliberate loop behavior and owner review edits;
+do not perform unrelated modernization.
+
 ## Git rules
 
 In unattended `codex exec` mode:

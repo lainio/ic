@@ -63,6 +63,8 @@ func TestServeRegistration(t *testing.T) {
 		"Startup/restart never bootstrap or probe", "Evidence credentials keep their",
 		"POST /owner/ads/publish", "actual bound --peer-listen endpoint", "startup never publishes",
 		"GET /peer/ad", "while unexpired", "GET never signs", "not VerifyAd",
+		"POST /owner/ads/verify", "subject_public_key_hex", "historical VerifiedAd",
+		"fresh online challenge", "receiver needs no --peer-listen",
 	} {
 		assert.That(strings.Contains(output.String(), text), text)
 	}

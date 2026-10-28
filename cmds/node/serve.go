@@ -92,6 +92,16 @@ signing input is accepted. Slot 1, epoch 0, and a 15-minute TTL are fixed.
 A second POST replaces the current ad; startup never publishes or renews it.
 Publication creates no verified reachability, trust, or connection.
 After a lost response, do not automatically retry publication.
+POST /owner/ads/verify accepts only subject_public_key_hex: the full lowercase
+CBOR public-key hex of an already Known subject with an already received ad.
+Its JSON body is limited to 1 KiB. It makes a fresh online challenge on every
+invocation, including an exact-ad retry, and saves only historical VerifiedAd
+evidence. Success returns that subject, verified: true, and changed: true/false.
+This is not ongoing reachability: the remote publication may change immediately.
+It never fetches missing evidence, promotes Known, bootstraps, or retries itself.
+The receiver needs no --peer-listen, local bootstrap, or local signing probe.
+Earlier publication/proof credentials retain their scope. After a lost response,
+verification history may already be committed; any retry must be explicit.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.
@@ -210,7 +220,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.store = try.To1(nodevault.OpenForNode(ctx, dir, keyFile, root, s.child))
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
 	var configure func(net.Listener) ownerapi.CurrentAdProver
-	s.handler, s.headerFile, configure = try.To3(ownerapi.NewPublicationProofCredentials(
+	s.handler, s.headerFile, configure = try.To3(ownerapi.NewVerificationCredentials(
 		ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
 	))
 	if s.peerAddress != "" {

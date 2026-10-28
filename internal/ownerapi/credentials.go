@@ -109,7 +109,28 @@ func NewPublicationProofCredentials(ctx context.Context, vault *storage.Vault,
 	expectedRoot, expectedChild key.Public, signer key.Handle, dir string,
 ) (http.Handler, string, func(net.Listener) CurrentAdProver, error) {
 	h := &publicationHandler{deviceHandler: newDeviceHandler(vault, expectedRoot, expectedChild, signer)}
-	handler, file, err := newCredentials(ctx, h, dir)
+	return newPublicationProofCredentials(ctx, h, h, dir)
+}
+
+// NewVerificationCredentials adds exactly POST /owner/ads/verify to the
+// publication/proof surface. The subject selects existing Known and ReceivedAd
+// evidence; each request performs a fresh online proof and records only history.
+// Verification needs no local signer probe, bootstrap or peer listener. Setup
+// never contacts peers. Configuration remains immutable; the caller must join
+// all admitted owner/peer requests before closing the borrowed Vault/signer.
+// The one-shot peer binder has the same contract as NewPublicationProofCredentials.
+func NewVerificationCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, signer key.Handle, dir string,
+) (http.Handler, string, func(net.Listener) CurrentAdProver, error) {
+	h := &publicationHandler{deviceHandler: newDeviceHandler(vault, expectedRoot, expectedChild, signer)}
+	return newPublicationProofCredentials(ctx, h, &verificationHandler{h}, dir)
+}
+
+// Share exactly one credential, publisher lock and endpoint-bound capability.
+func newPublicationProofCredentials(ctx context.Context, h *publicationHandler,
+	next http.Handler, dir string,
+) (http.Handler, string, func(net.Listener) CurrentAdProver, error) {
+	handler, file, err := newCredentials(ctx, next, dir)
 	if err != nil {
 		return nil, "", nil, err
 	}
