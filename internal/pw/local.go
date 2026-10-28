@@ -9,6 +9,9 @@ import (
 	"reflect"
 
 	"github.com/duo-labs/webauthn/protocol/webauthncose"
+	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
+	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/device"
 	"github.com/lainio/ic/internal/onboarding"
@@ -45,43 +48,45 @@ var (
 // integrate an actual deny-policy guard and independently authenticate BOTH
 // sides' live acceptance. CreatePW additionally requires a verified CURRENT ad,
 // usable remote device and no mutual PW; a historical VerifiedAd is insufficient.
-func CheckLocalAcceptor(vault *storage.Vault,
-	expectedRoot, expectedLocal, peer key.Public, signer key.Handle,
-) error {
-	if vault == nil || !validPublic(expectedRoot) ||
-		!validPublic(expectedLocal) || !validPublic(peer) ||
-		bytes.Equal(expectedLocal, peer) {
-		return ErrInvalidInput
-	}
+func CheckLocalAcceptor(
+	vault *storage.Vault,
+	expectedRoot, expectedLocal, peer key.Public,
+	signer key.Handle,
+) (err error) {
+	defer err2.Handle(&err, nil)
+	defer assert.PushAsserter(assert.Plain)()
+
+	assert.NotNil(vault, ErrInvalidInput)
+	assert.That(validPublic(expectedRoot), ErrInvalidInput)
+	assert.That(validPublic(expectedLocal), ErrInvalidInput)
+	assert.That(validPublic(peer), ErrInvalidInput)
+	assert.ThatNot(bytes.Equal(expectedLocal, peer), ErrInvalidInput)
+
 	expectedRoot = bytes.Clone(expectedRoot)
 	expectedLocal, peer = bytes.Clone(expectedLocal), bytes.Clone(peer)
 
 	// Always validate the whole collection, including for the Root convention.
 	// Finding either subject early must not hide another corrupt Known binding.
-	known, err := onboarding.ListKnownIntroductions(vault, expectedRoot)
-	if err != nil {
-		return ErrLocalState
-	}
+	known := try.Out1(onboarding.ListKnownIntroductions(vault, expectedRoot)).
+		Handle(retErrLocalState).
+		Val1
+
 	ownKnown, peerKnown := bytes.Equal(expectedRoot, expectedLocal), false
 	for _, subject := range known {
 		ownKnown = ownKnown || bytes.Equal(subject, expectedLocal)
 		peerKnown = peerKnown || bytes.Equal(subject, peer)
 	}
-	if !ownKnown || !peerKnown {
-		return ErrNotKnown
-	}
+	assert.That(ownKnown && peerKnown, ErrNotKnown)
 
-	state, err := device.InspectLocal(vault, expectedRoot, expectedLocal,
-		localSigner{signer})
-	if err != nil {
-		return ErrLocalState
-	}
-	if !state.Authorized {
-		return ErrUnauthorized
-	}
-	if !state.Usable {
-		return ErrUnusableSigner
-	}
+	state := try.Out1(device.InspectLocal(
+		vault, expectedRoot, expectedLocal, localSigner{signer}),
+	).
+		Handle(retErrLocalState).
+		Val1
+
+	assert.That(state.Authorized, ErrUnauthorized)
+	assert.That(state.Usable, ErrUnusableSigner)
+
 	return nil
 }
 
@@ -117,21 +122,19 @@ func validPublic(public key.Public) bool {
 // owner service's proof adapter does. This grants no new signer operation.
 type localSigner struct{ key.Handle }
 
-func (s localSigner) CBORPublicKey() ([]byte, error) {
-	if s.Handle == nil {
-		return nil, ErrUnusableSigner
-	}
+func (s localSigner) CBORPublicKey() (_ []byte, err error) {
+	defer err2.Handle(&err, nil)
+	defer assert.PushAsserter(assert.Plain)()
+
+	assert.INotNil(s.Handle, ErrUnusableSigner)
 	value := reflect.ValueOf(s.Handle)
 	switch value.Kind() {
 	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
-		if value.IsNil() {
-			return nil, ErrUnusableSigner
-		}
+		assert.ThatNot(value.IsNil(), ErrUnusableSigner)
 	}
-	public, err := s.Handle.CBORPublicKey()
-	if err != nil {
-		return nil, ErrUnusableSigner
-	}
+	public := try.Out1(s.Handle.CBORPublicKey()).
+		Handle(with(ErrUnusableSigner)).
+		Val1
 	return public, nil
 }
 
@@ -141,4 +144,12 @@ func (s localSigner) Sign(data []byte) ([]byte, error) {
 		return nil, ErrUnusableSigner
 	}
 	return signature, nil
+}
+
+func retErrLocalState(error) error { return ErrLocalState }
+
+func with(err error) func(error) error {
+	return func(error) error {
+		return err
+	}
 }
