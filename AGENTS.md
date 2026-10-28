@@ -17,12 +17,12 @@ copied there.
 
 Required semantic reference files:
 
-```text
+~~~text
 <SPEC_REPO>/docs/IntroTree_Model_Index.md
 <SPEC_REPO>/docs/contracts/IntroTree_StateSemantics_Contract.md
 <SPEC_REPO>/docs/contracts/IntroTree_Implementation_Action_Map.md
 <SPEC_REPO>/docs/contracts/IntroTree_Conformance_Test_Map.md
-```
+~~~
 
 If `SPEC_REPO` is not provided, stop and report that the TLA+ specification
 repository path is missing.
@@ -57,6 +57,24 @@ before making conclusions about existing code.
 Prefer `range` loops when semantics match, including integer ranges for
 fixed-count loops. Preserve deliberate loop behavior and owner review edits;
 do not perform unrelated modernization.
+
+- Prefer established `err2`, `try.To*` / `try.T*`, and specific `assert` idioms.
+  Error-returning callbacks own their named error and correct `err2.Handle`.
+  Keep recovery, compensation and synchronization visible; use scoped
+  `assert.Plain` only where needed. Do not add helper wrappers or generic
+  callbacks for style alone, or expand the assertion API.
+- Use `defer assert.PushTester(t)()` in assertion-based tests.
+  Report worker errors on the test goroutine; preserve deliberate panic/error
+  and exact-sentinel tests. Work in small, tested behavioral increments.
+  Prefer focused positive/negative tests and executable examples over prose;
+  examples may annotate errors and use normal assertion messages.
+- Separate meaningful phases with readable blank lines; keep acquisition and
+  cleanup together. Neither compress everything nor separate every statement.
+- Use `gofmt` and approximately 80-column semantic wrapping. Use installed
+  `golines` only on touched files if needed. Run `make lint` before and after
+  changes; never reformat the repository or loosen lint to obtain a green run.
+- Markdown uses inline code, semantic wrapping, and tilde fences.
+  Preserve intended behavior; avoid unrelated formatting or legacy cleanup.
 
 ## Git rules
 

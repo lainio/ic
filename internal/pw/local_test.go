@@ -18,7 +18,7 @@ import (
 	"github.com/lainio/ic/storage"
 )
 
-func TestLocalPreflightEmptyDenyProfileWithoutAdsOrPeer(t *testing.T) {
+func TestLocalPreflightAbsentDenyWithoutAdsOrPeer(t *testing.T) {
 	defer assert.PushTester(t)()
 	s := ready(t)
 	identity := try.To1(os.ReadFile(filepath.Join(s.local.dir, "identity.json")))
@@ -29,8 +29,7 @@ func TestLocalPreflightEmptyDenyProfileWithoutAdsOrPeer(t *testing.T) {
 		probes = append(probes, bytes.Clone(data))
 		return s.local.handle.Sign(data)
 	}}
-	// No peer server or remote API exists in this fixture. No Deny/Allow policy
-	// is implemented: success only exercises the restricted empty-Deny profile.
+	// No peer server or remote API exists; absent policy is an empty Deny set.
 	// Entire encrypted-file equality also excludes any new hidden namespace.
 	s.f.lease.remaining.Store(0)
 	s.check(t, probe, nil)
@@ -55,7 +54,7 @@ func assertNoRelationshipState(t *testing.T, vault *storage.Vault) {
 		defer err2.Handle(&err, nil)
 		for _, name := range []string{
 			"local-current-ad-v1", "received-ad-claims-v1", "verified-ad-claims-v1",
-			"pw", "trust", "deny",
+			"pw", "trust", "deny", "local-denied-peers-v1",
 		} {
 			assert.ThatNot(try.To1(tx.HasChild([]byte(name))))
 			_, found := try.To2(tx.Get([]byte(name)))

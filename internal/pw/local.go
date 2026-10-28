@@ -15,6 +15,7 @@ import (
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/device"
 	"github.com/lainio/ic/internal/onboarding"
+	"github.com/lainio/ic/internal/policy"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
@@ -22,6 +23,7 @@ import (
 var (
 	ErrInvalidInput   = errors.New("invalid local acceptor input")
 	ErrNotKnown       = errors.New("local acceptor requires own and peer Known introductions")
+	ErrDenied         = errors.New("local acceptor peer is denied")
 	ErrUnauthorized   = errors.New("local acceptor device is not authorized")
 	ErrUnusableSigner = errors.New("local acceptor signer is not usable")
 	ErrLocalState     = errors.New("invalid or unavailable local acceptor state")
@@ -30,9 +32,9 @@ var (
 // CheckLocalAcceptor checks local Known prerequisites and freshly probes the
 // already-authorized local software signer. Only exact local == expectedRoot
 // uses V19 Init's self-Known convention; the peer must always be in Known.
-// This is restricted to v0.1's empty-Deny profile: no active Deny representation
-// or DenyPeer/AllowPeer operation exists. It is NOT full V19 CanAccept,
-// MayAttemptVia, mutual acceptance, remote liveness, ad currentness, or trust.
+// Local denial is checked after Known eligibility and before any signer use.
+// This is a local CanAccept-prerequisite approximation, not remote consent,
+// MayAttemptVia, CreatePW, verified current reachability, or a relationship grant.
 //
 // The caller supplies independently pinned Root/local identities and an already
 // open Vault independently bound to that Root/reader. A Vault pointer does not
@@ -42,12 +44,12 @@ var (
 // No network I/O, signer creation, Vault writes, or PW/trust changes occur.
 //
 // Success is instantaneous and must never become a cached eligibility flag.
-// The caller coordinates evidence, authorization and signer changes if it needs
-// a consistent interval; no service lock or Vault transaction spans the probe.
-// A future handshake must reacquire guards at its decision/commit boundary,
-// integrate an actual deny-policy guard and independently authenticate BOTH
-// sides' live acceptance. CreatePW additionally requires a verified CURRENT ad,
-// usable remote device and no mutual PW; a historical VerifiedAd is insufficient.
+// Concurrent Deny/Known/device changes can invalidate it immediately; no service
+// lock or Vault transaction spans the probe. A future pairwise commit MUST
+// atomically recheck Deny/Known together with fresh device and remote proof,
+// independently authenticating BOTH sides' acceptance. CreatePW also needs a
+// verified CURRENT ad, usable remote device and no mutual PW; a historical
+// VerifiedAd is insufficient.
 func CheckLocalAcceptor(
 	vault *storage.Vault,
 	expectedRoot, expectedLocal, peer key.Public,
@@ -77,6 +79,12 @@ func CheckLocalAcceptor(
 		peerKnown = peerKnown || bytes.Equal(subject, peer)
 	}
 	assert.That(ownKnown && peerKnown, ErrNotKnown)
+
+	denied := try.Out1(policy.IsDenied(
+		vault, expectedRoot, expectedLocal, peer)).
+		Handle(retErrLocalState).
+		Val1
+	assert.ThatNot(denied, ErrDenied)
 
 	state := try.Out1(device.InspectLocal(
 		vault, expectedRoot, expectedLocal, localSigner{signer}),
