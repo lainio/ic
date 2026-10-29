@@ -19,6 +19,7 @@ import (
 	"github.com/lainio/ic/internal/ads"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/onboarding"
+	"github.com/lainio/ic/key"
 )
 
 func TestPeerServeLifecycle(t *testing.T) {
@@ -175,12 +176,14 @@ func waitPeerHTTP(t *testing.T, done <-chan peerHTTPResult) peerHTTPResult {
 }
 
 func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
-	for _, tc := range []struct{ unexpected, ad, proof bool }{
-		{false, false, false}, {true, false, false}, {false, true, false}, {true, true, false},
-		{false, true, true}, {true, true, true},
+	for _, tc := range []struct{ unexpected, ad, proof, challenge bool }{
+		{false, false, false, false}, {true, false, false, false},
+		{false, true, false, false}, {true, true, false, false},
+		{false, true, true, false}, {true, true, true, false},
+		{false, true, false, true}, {true, true, false, true},
 	} {
 		unexpected := tc.unexpected
-		t.Run(fmt.Sprint("unexpected=", unexpected, "/ad=", tc.ad, "/proof=", tc.proof), func(t *testing.T) {
+		t.Run(fmt.Sprint("unexpected=", unexpected, "/ad=", tc.ad, "/proof=", tc.proof, "/challenge=", tc.challenge), func(t *testing.T) {
 			defer assert.PushTester(t)()
 
 			f := prepareServeFixture(t)
@@ -190,6 +193,7 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			assert.NotEqual(owner.Addr().String(), peer.Addr().String())
 			s.configurePublication(peer) // Install before wrapping or admitting requests.
 			var current ads.Current
+			var requester key.Public
 			if tc.ad {
 				auth := serveAuthorization(t, s)
 				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", "/owner/introductions", try.To1(onboarding.EncodeIntroduction(before))).Code, 200)
@@ -197,6 +201,9 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", ownerBootstrapPath, []byte("{}")).Code, 200)
 				assert.Equal(serveDeviceRequest(s.handler, auth, "POST", ownerPublishPath, []byte("{}")).Code, 200)
 				current, _ = try.To2(ads.ReadCurrentLocal(s.store.Vault(), f.root, f.child, time.Now()))
+			}
+			if tc.challenge {
+				requester = saveChallengeRequester(t, s, f, true)
 			}
 			listeners := []*peerObservedListener{
 				{Listener: owner, closed: make(chan struct{})},
@@ -237,14 +244,20 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			}
 			var peerResponse <-chan peerHTTPResult
 			var proofAd, nonce []byte
-			if tc.proof {
+			challengeStart := time.Now()
+			if tc.proof || tc.challenge {
 				proofAd = try.To1(wire.Marshal(current))
 				nonce = peerProofNonce(t)
 				body := peerProofBody(t, proofAd, nonce)
+				path := peerProofPath
+				if tc.challenge {
+					body = peerChallengeBody(t, requester, proofAd)
+					path = peerChallengePath
+				}
 				response := make(chan peerHTTPResult, 1)
 				peerResponse = response
 				go func() {
-					response <- postPeerProofHTTP(t.Context(), "http://"+peer.Addr().String()+peerProofPath, "", body, false)
+					response <- postPeerProofHTTP(t.Context(), "http://"+peer.Addr().String()+path, "", body, false)
 				}()
 			} else {
 				peerResponse = peerHTTPRequest(t.Context(), readURL, "")
@@ -288,7 +301,9 @@ func TestPeerSocketsJoinBeforeStoreClose(t *testing.T) {
 			}
 			assert.NoError(b.err)
 			assert.Equal(b.status, http.StatusOK)
-			if tc.proof {
+			if tc.challenge {
+				assertPeerChallenge(t, b, challengeStart)
+			} else if tc.proof {
 				assertOnlineProof(t, b, f, proofAd, nonce)
 			} else if tc.ad {
 				assertPeerAd(t, b.body, before, current)

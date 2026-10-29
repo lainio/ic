@@ -68,6 +68,14 @@ the publisher remains Known with an authorized usable signer. The response is
 ephemeral and changes no saved state; it is not receiver verification or trust.
 Neither disclosure nor a proof creates mutual authentication, a connection,
 or chat.
+POST /peer/pw/challenge accepts version 1, requester_public_key_hex and this
+invocation's exact current base64 ad (JSON, at most 2 KiB). It issues a random
+32-byte nonce lasting 30 seconds, with at most 32 outstanding in memory.
+The requester selector must be locally Known and not denied. This signs nothing
+and authenticates no requester. There is no acceptance or consume endpoint,
+positive consent, PW, trust, or current remote reachability. Restart loses all
+pending challenges; any future acceptance must freshly verify requester key
+control, Known, Deny, device usability and the current ad.
 
 Use the printed owner status URL and authorization header file in another
 terminal (keep the @):
@@ -135,7 +143,7 @@ A new save uses the existing encrypted Vault and may fail if capacity is exhaust
 	cmd.Flags().String("listen", "127.0.0.1:0",
 		"Explicit loopback host and numeric port; localhost normalizes to 127.0.0.1; zero selects a free port")
 	cmd.Flags().String("peer-listen", "",
-		"Opt in to public introduction/ad disclosure and bounded current-ad challenge proofs; explicit loopback host and numeric port")
+		"Opt in to public introduction/ad disclosure, current-ad proofs and unsigned PW challenges; explicit loopback host and numeric port")
 	for _, name := range []string{"dir", "unlock-file", "storage-key-file", "root"} {
 		try.To(cmd.MarkFlagRequired(name))
 	}
@@ -223,6 +231,17 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.handler, s.headerFile, configure = try.To3(ownerapi.NewVerificationCredentials(
 		ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
 	))
+
+	ownerHandler := s.handler
+	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// This peer-only operation must not even challenge for owner credentials.
+		if r.URL.Path == "/peer/pw/challenge" {
+			w.Header().Set("Cache-Control", "no-store")
+			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			return
+		}
+		ownerHandler.ServeHTTP(w, r)
+	})
 	if s.peerAddress != "" {
 		s.peerHandler = peerapi.NewHandler(s.store.Vault(), root, s.child)
 	}
@@ -232,8 +251,11 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 		once.Do(func() {
 			prove := configure(peer)
 			if peer != nil {
+				endpoint := "http://" + peer.Addr().String() + "/peer/introduction"
 				s.peerHandler = peerapi.NewProofHandler(s.store.Vault(), root, s.child,
-					"http://"+peer.Addr().String()+"/peer/introduction", prove)
+					endpoint, prove)
+				s.peerHandler = peerapi.NewChallengeHandler(s.store.Vault(), root,
+					s.child, endpoint, s.peerHandler)
 			}
 		})
 	}
