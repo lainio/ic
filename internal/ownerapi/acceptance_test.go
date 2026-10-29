@@ -58,7 +58,7 @@ func newAcceptanceFixture(t *testing.T) acceptanceFixture {
 		f.root, f.child, f.signer, t.TempDir()))
 	f.owner = owner
 	f.publisher = owner.(*authenticatedStatusHandler).
-		next.(*verificationHandler).publicationHandler
+		next.(*acceptanceExchangeHandler).publicationHandler
 	f.auth = strings.TrimSpace(strings.TrimPrefix(
 		string(try.To1(os.ReadFile(file))), "Authorization: "))
 	adProver, accept := bind(f.listener)

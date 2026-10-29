@@ -81,7 +81,7 @@ The roles are reversed in the two proofs. Success is ephemeral evidence, not
 durable mutual consent, a live authenticated channel, PW, trust or VerifiedAd.
 Restart loses all pending challenges. A failure after consumption leaves the
 nonce spent; after a lost reply the outcome is unknown. A fresh challenge must
-be explicit. No requester client or automatic handshake is provided.
+be explicit. No automatic handshake is provided.
 
 Use the printed owner status URL and authorization header file in another
 terminal (keep the @):
@@ -116,6 +116,17 @@ It never fetches missing evidence, promotes Known, bootstraps, or retries itself
 The receiver needs no --peer-listen, local bootstrap, or local signing probe.
 Earlier publication/proof credentials retain their scope. After a lost response,
 verification history may already be committed; any retry must be explicit.
+POST /owner/pw/acceptance/exchange accepts only subject_public_key_hex: the
+canonical lowercase public-key hex of an already Known peer with matching
+ReceivedAd and historical VerifiedAd. Its JSON body is limited to 1 KiB.
+It performs one bounded challenge/acceptance exchange using this node's restored,
+authorized usable signer. Success returns only subject_public_key_hex and
+exchange_verified: true, meaning this invocation verified ephemeral proofs.
+It creates no PW, open pipe, trust or saved state, and proves no continuing
+consent or reachability. The requester needs no --peer-listen; the acceptor must
+have an active advertised peer endpoint. Earlier verification credentials retain
+their scope. Startup and inspection never exchange; lost owner or peer replies
+never cause automatic retries.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.
