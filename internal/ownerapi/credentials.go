@@ -126,6 +126,35 @@ func NewVerificationCredentials(ctx context.Context, vault *storage.Vault,
 	return newPublicationProofCredentials(ctx, h, &verificationHandler{h}, dir)
 }
 
+// NewAcceptanceCredentials preserves the verification owner's routes and
+// extends its one-shot peer binder with a narrow acceptance capability. Both
+// provers share that owner's installed signer, mutation lock and actual bound
+// endpoint. Nil permanently disables both. Neither setup nor binding signs.
+// Mount only the capabilities on the peer listener; join all admitted requests
+// before closing the borrowed Vault/signer. No owner acceptance route is added.
+func NewAcceptanceCredentials(ctx context.Context, vault *storage.Vault,
+	expectedRoot, expectedChild key.Public, signer key.Handle, dir string,
+) (http.Handler, string,
+	func(net.Listener) (CurrentAdProver, LocalAcceptanceProver), error,
+) {
+	h := &publicationHandler{
+		deviceHandler: newDeviceHandler(vault, expectedRoot, expectedChild, signer),
+	}
+	handler, file, bind, err := newPublicationProofCredentials(
+		ctx, h, &verificationHandler{h}, dir)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	configure := func(peer net.Listener) (CurrentAdProver, LocalAcceptanceProver) {
+		prove := bind(peer)
+		if prove == nil {
+			return nil, nil
+		}
+		return prove, h.proveLocalAcceptance
+	}
+	return handler, file, configure, nil
+}
+
 // Share exactly one credential, publisher lock and endpoint-bound capability.
 func newPublicationProofCredentials(ctx context.Context, h *publicationHandler,
 	next http.Handler, dir string,

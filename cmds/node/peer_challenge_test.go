@@ -207,7 +207,7 @@ func TestServePeerChallengeLifecycleAndRestart(t *testing.T) {
 			for _, route := range []string{
 				ownerPublishPath, ownerBootstrapPath, ownerAdVerifyPath,
 				"/owner/introductions", "/owner/introductions/verify",
-				"/peer/pw/accept", "/peer/pw/consume",
+				"/peer/pw/consume",
 			} {
 				refused := postPeerProofHTTP(
 					t.Context(),

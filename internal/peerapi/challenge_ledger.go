@@ -61,13 +61,13 @@ func (l *challengeLedger) issue(
 }
 
 // consumeChallenge checks only a nonce binding, atomically and at most once.
-// The future handler MUST first authenticate requester-owned key control with
+// The acceptance handler must first authenticate requester-owned key control with
 // pw.VerifyLocalAcceptanceProof(root, requester, local, nonce, requesterProof),
 // and obtain currentAd from a fresh local read under this handler's pinned
 // identities/endpoint. It MUST recheck Known, Deny, device usability and ad
 // currentness before signing, and bind the response to the live transcript.
 // Neither a nonce nor its consumption is bearer authority or acceptance.
-// This primitive is intentionally private and has no HTTP route.
+// This primitive is intentionally private and has no standalone HTTP route.
 func (h *challengeHandler) consumeChallenge(
 	requester key.Public,
 	currentAd, nonce []byte,

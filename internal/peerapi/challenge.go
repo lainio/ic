@@ -26,13 +26,15 @@ type challengeHandler struct {
 	endpoint    string
 	next        http.Handler
 	challenges  challengeLedger
+	accept      func(key.Public, []byte, []byte) (key.Signature, error)
 }
 
 // NewChallengeHandler adds only POST /peer/pw/challenge to the existing peer
 // handler. Construct once after binding the opted-in peer listener. It borrows
 // the Vault, receives no signer, and creates only bounded invocation memory.
 // A challenge is not requester authentication, consent, or any V19 authority
-// variable. There is no acceptance endpoint, outbound I/O, or modeled write.
+// variable. Without NewAcceptanceHandler there is no acceptance endpoint.
+// Neither handler performs outbound I/O or modeled writes.
 func NewChallengeHandler(vault *storage.Vault, root, local key.Public,
 	boundPeerIntroURL string, next http.Handler,
 ) http.Handler {
@@ -47,6 +49,10 @@ func NewChallengeHandler(vault *storage.Vault, root, local key.Public,
 }
 
 func (h *challengeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/peer/pw/accept" && h.endpoint != "" && h.accept != nil {
+		h.serveAcceptance(w, r)
+		return
+	}
 	if r.URL.Path != "/peer/pw/challenge" || h.endpoint == "" {
 		h.next.ServeHTTP(w, r)
 		return
@@ -124,20 +130,8 @@ func (h *challengeHandler) challengePreflight(
 	requester key.Public,
 	ad []byte,
 ) int {
-	current, found, err := ads.ReadCurrentLocal(
-		h.vault, h.root, h.local, time.Now())
-	if err != nil {
-		return http.StatusInternalServerError
-	}
-	if !found || current.Payload.PeerIntroductionURL != h.endpoint {
-		return http.StatusConflict
-	}
-	canonical, err := wire.Marshal(current)
-	if err != nil {
-		return http.StatusInternalServerError
-	}
-	if !bytes.Equal(canonical, ad) {
-		return http.StatusConflict
+	if status := h.currentChallengeAd(ad); status != 0 {
+		return status
 	}
 	known, err := onboarding.ListKnownIntroductions(h.vault, h.root)
 	if err != nil {
@@ -157,6 +151,25 @@ func (h *challengeHandler) challengePreflight(
 	}
 	// These momentary reads only reduce unnecessary issuance. A later exchange
 	// must recheck Known, Deny, current ad and device usability before signing.
+	return 0
+}
+
+func (h *challengeHandler) currentChallengeAd(ad []byte) int {
+	current, found, err := ads.ReadCurrentLocal(
+		h.vault, h.root, h.local, time.Now())
+	if err != nil {
+		return http.StatusInternalServerError
+	}
+	if !found || current.Payload.PeerIntroductionURL != h.endpoint {
+		return http.StatusConflict
+	}
+	canonical, err := wire.Marshal(current)
+	if err != nil {
+		return http.StatusInternalServerError
+	}
+	if !bytes.Equal(canonical, ad) {
+		return http.StatusConflict
+	}
 	return 0
 }
 
