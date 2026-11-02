@@ -1,5 +1,5 @@
 // Package pw provides local prerequisites for a future pairwise ceremony.
-// It implements no pairwise protocol or persistent relationship state.
+// It also stores owner-issued invitations, but no persistent relationship state.
 package pw
 
 import (

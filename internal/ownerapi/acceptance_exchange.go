@@ -15,6 +15,10 @@ type acceptanceExchangeHandler struct{ *verificationHandler }
 func (h *acceptanceExchangeHandler) ServeHTTP(
 	w http.ResponseWriter, r *http.Request,
 ) {
+	if r.URL.Path == invitationIssuePath || r.URL.Path == invitationRevokePath {
+		h.serveInvitation(w, r)
+		return
+	}
 	if r.URL.Path != "/owner/pw/acceptance/exchange" {
 		h.verificationHandler.ServeHTTP(w, r)
 		return

@@ -127,6 +127,22 @@ consent or reachability. The requester needs no --peer-listen; the acceptor must
 have an active advertised peer endpoint. Earlier verification credentials retain
 their scope. Startup and inspection never exchange; lost owner or peer replies
 never cause automatic retries.
+POST /owner/pw/invitations/issue accepts {"recipient_public_key_hex":null}
+for Any, or an exact canonical lowercase public-key hex string for Directed.
+This explicit bearer-authorized request stores one Active invitation in this
+node's encrypted Vault, with a fresh 32-byte ID and a fixed 15-minute server TTL.
+It returns invitation_id_hex, expires_unix_nano (UTC), audience, and
+recipient_public_key_hex. POST /owner/pw/invitations/revoke accepts exactly
+{"invitation_id_hex":"64 lowercase hex characters"} and returns revoked:
+true only when Active becomes Revoked; otherwise false without a write.
+Both JSON bodies are limited to 512 bytes. No client time or expiry is accepted.
+An existing invitation can never be replaced, including after expiry/revocation;
+a second issue returns 409. Startup, ads and peers never issue invitations.
+Neither operation needs --peer-listen. Earlier credentials retain their scope.
+Bearer possession authorizes the operation but does not establish human intent.
+The clock must be trusted; wall-clock rollback is not prevented. No redemption,
+authenticated invitation wire format, PW holding or trust is implemented here.
+After a lost response the committed row remains; no automatic retry occurs.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.

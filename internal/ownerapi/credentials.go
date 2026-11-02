@@ -129,6 +129,10 @@ func NewVerificationCredentials(ctx context.Context, vault *storage.Vault,
 // NewAcceptanceCredentials adds POST /owner/pw/acceptance/exchange to the
 // verification owner's routes: one ephemeral proof exchange selected only by
 // peer public key, with no durable state or requester peer listener required.
+// It also grants POST /owner/pw/invitations/issue and /revoke: explicit durable
+// Bob-local invitation operations sharing the service mutation lock. Issuance
+// does not require a peer listener and never occurs during setup or binding.
+// Bearer possession authorizes these requests; it does not prove human intent.
 // It extends the one-shot peer binder with a narrow acceptance capability. Both
 // provers share that owner's installed signer, mutation lock and actual bound
 // endpoint. Nil permanently disables both. Neither setup nor binding signs.
