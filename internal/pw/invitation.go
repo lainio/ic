@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lainio/err2"
+	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/key"
@@ -78,15 +79,15 @@ func IssueInvitation(vault *storage.Vault, root, target, recipient key.Public,
 func issueInvitation(vault *storage.Vault, root, target, recipient key.Public,
 	now time.Time,
 ) (_ Invitation, err error) {
+	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
-	if !validInvitationBinding(vault, root, target) ||
-		!validInvitationTime(now) ||
-		!validInvitationTime(now.Add(InvitationTTL)) ||
-		(recipient != nil && (!validPublic(recipient) ||
-			bytes.Equal(recipient, target))) {
-		return Invitation{}, ErrInvitationInput
-	}
+	assert.That(validInvitationBinding(vault, root, target), ErrInvitationInput)
+	assert.That(validInvitationTime(now), ErrInvitationInput)
+	assert.That(validInvitationTime(now.Add(InvitationTTL)), ErrInvitationInput)
+	assert.That(recipient == nil || validPublic(recipient), ErrInvitationInput)
+	assert.ThatNot(bytes.Equal(recipient, target), ErrInvitationInput)
+
 	row := Invitation{
 		Version: 1, ID: make([]byte, 32), Root: bytes.Clone(root),
 		Target: bytes.Clone(target), Audience: InvitationAny,
@@ -97,13 +98,12 @@ func issueInvitation(vault *storage.Vault, root, target, recipient key.Public,
 	if recipient != nil {
 		row.Audience = InvitationDirected
 	}
-	if _, err := rand.Read(row.ID); err != nil {
-		return Invitation{}, ErrInvitationState
-	}
+	_, err = rand.Read(row.ID)
+	assert.NoError(err, ErrInvitationState)
+
 	raw, err := wire.Marshal(row)
-	if err != nil {
-		return Invitation{}, ErrInvitationState
-	}
+	assert.NoError(err, ErrInvitationState)
+
 	err = vault.Update(func(tx storage.WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
 		_, found := try.To2(readInvitation(tx, row.Root, row.Target))
@@ -115,6 +115,7 @@ func issueInvitation(vault *storage.Vault, root, target, recipient key.Public,
 	if err == ErrInvitationIssued {
 		return Invitation{}, err
 	}
+	//	assert.That(err != nil, ErrInvitationState)
 	if err != nil {
 		return Invitation{}, ErrInvitationState
 	}
@@ -126,21 +127,20 @@ func issueInvitation(vault *storage.Vault, root, target, recipient key.Public,
 // or repair. Absence returns zero, false, nil; errors return zero, false, err.
 // Neither presence nor a time predicate is authorization to redeem anything.
 func ReadInvitation(vault *storage.Vault, root, target key.Public,
-) (Invitation, bool, error) {
+) (_ Invitation, _ bool, err error) {
+	defer err2.Handle(&err, nil)
+
 	if !validInvitationBinding(vault, root, target) {
 		return Invitation{}, false, ErrInvitationInput
 	}
 	root, target = bytes.Clone(root), bytes.Clone(target)
 	var row Invitation
 	var found bool
-	err := vault.View(func(tx storage.ReadTx) (err error) {
+	try.Out(vault.View(func(tx storage.ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		row, found = try.To2(readInvitation(tx, root, target))
 		return nil
-	})
-	if err != nil {
-		return Invitation{}, false, ErrInvitationState
-	}
+	})).Handle(func(error) error { return ErrInvitationState })
 	return row, found, nil
 }
 
@@ -176,37 +176,40 @@ func RevokeInvitation(vault *storage.Vault, root, target key.Public, id []byte,
 
 func readInvitation(tx storage.ReadTx, root, target key.Public,
 ) (_ Invitation, _ bool, err error) {
+	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
 	raw, found := try.To2(tx.Get([]byte(invitationKey)))
 	if !found {
 		return Invitation{}, false, nil
 	}
-	if len(raw) == 0 || len(raw) > maxInvitationBytes {
-		return Invitation{}, false, ErrInvitationState
-	}
+	assert.SNotEmpty(raw, 0, ErrInvitationState)
+	assert.SShorter(raw, maxInvitationBytes+1, ErrInvitationState)
+
 	var row Invitation
 	// Avoid tracing decoder diagnostics containing stored bytes or secrets.
-	if wire.DecMode.Unmarshal(raw, &row) != nil {
-		return Invitation{}, false, ErrInvitationState
-	}
-	canonical, encodeErr := wire.EncMode.Marshal(row)
-	if encodeErr != nil || !bytes.Equal(raw, canonical) || row.Version != 1 ||
-		len(row.ID) != 32 || !bytes.Equal(row.Root, root) ||
-		!bytes.Equal(row.Target, target) ||
-		row.ExpiresUnixNano < int64(InvitationTTL) {
-		return Invitation{}, false, ErrInvitationState
-	}
-	if row.State != InvitationActive && row.State != InvitationRevoked &&
-		row.State != InvitationConsumed {
-		return Invitation{}, false, ErrInvitationState
-	}
+	try.Out(wire.DecMode.Unmarshal(raw, &row)).Handle(func(error) error {
+		return ErrInvitationState
+	})
+	canonical := try.To1(wire.EncMode.Marshal(row))
+	assert.That(bytes.Equal(raw, canonical), ErrInvitationState)
+	assert.Equal(row.Version, 1, ErrInvitationState)
+	assert.SLen(row.ID, 32, ErrInvitationState)
+	assert.That(bytes.Equal(row.Root, root), ErrInvitationState)
+	assert.That(bytes.Equal(row.Target, target), ErrInvitationState)
+	assert.That(row.ExpiresUnixNano >= int64(InvitationTTL), ErrInvitationState)
+	assert.ThatNot(
+		row.State != InvitationActive &&
+			row.State != InvitationRevoked &&
+			row.State != InvitationConsumed,
+		ErrInvitationState,
+	)
+
 	audienceOK := (row.Audience == InvitationAny && row.Recipient == nil) ||
 		(row.Audience == InvitationDirected && validPublic(row.Recipient) &&
 			!bytes.Equal(row.Recipient, target))
-	if !audienceOK {
-		return Invitation{}, false, ErrInvitationState
-	}
+	assert.That(audienceOK, ErrInvitationState)
+
 	return row, true, nil
 }
 
