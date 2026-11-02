@@ -3,6 +3,7 @@ package nodevault
 import (
 	"bytes"
 	"fmt"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -57,7 +58,10 @@ func TestBobEstablishmentStoreRestart(t *testing.T) {
 			try.To1(onboarding.VerifyReceived(store.Vault(), f.binding.Root))
 			try.To1(device.BootstrapLocal(store.Vault(), f.binding.Root,
 				f.binding.Child, f.alice))
-			const endpoint = "http://127.0.0.1:12345/peer/introduction"
+			listener := httptest.NewUnstartedServer(nil)
+			defer listener.Close()
+			endpoint := "http://" + listener.Listener.Addr().String() +
+				"/peer/introduction"
 			ad := try.To1(ads.PublishLocal(store.Vault(), f.binding.Root,
 				f.binding.Child, f.alice, endpoint, time.Now()))
 			invitation := try.To1(pw.IssueInvitation(store.Vault(),
@@ -82,9 +86,19 @@ func TestBobEstablishmentStoreRestart(t *testing.T) {
 				assert.NoError(err)
 			}
 			before := readBobEstablishment(t, store.Vault())
+			var firstBody []byte
+			if allowance == 3 {
+				firstBody = bobHTTPReply(t, store, f, listener.Listener, raw)
+			}
 			try.To(store.Close())
 			store = try.To1(Open(t.Context(), f.state(), f.secret, f.binding))
 			assert.DeepEqual(readBobEstablishment(t, store.Vault()), before)
+			if allowance == 3 {
+				// The first HTTP result was dropped. Rebind the same actual
+				// endpoint after a real Store/bbolt reopen and retry exact bytes.
+				assert.DeepEqual(bobHTTPReply(t, store, f, listener.Listener, raw),
+					firstBody)
+			}
 			row, found := try.To2(
 				pw.ReadInvitation(
 					store.Vault(),

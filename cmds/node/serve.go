@@ -262,15 +262,19 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
 	var configure func(net.Listener) (
 		ownerapi.CurrentAdProver, ownerapi.LocalAcceptanceProver,
+		ownerapi.LocalEstablisher,
 	)
-	s.handler, s.headerFile, configure = try.To3(ownerapi.NewAcceptanceCredentials(
-		ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
-	))
+	s.handler, s.headerFile, configure = try.To3(
+		ownerapi.NewEstablishmentCredentials(
+			ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
+		),
+	)
 
 	ownerHandler := s.handler
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This peer-only operation must not even challenge for owner credentials.
-		if r.URL.Path == "/peer/pw/challenge" || r.URL.Path == "/peer/pw/accept" {
+		if r.URL.Path == "/peer/pw/challenge" ||
+			r.URL.Path == "/peer/pw/accept" || r.URL.Path == "/peer/pw/establish" {
 			w.Header().Set("Cache-Control", "no-store")
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
@@ -284,13 +288,16 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	// Install both endpoint-bound surfaces once, before either Serve starts.
 	s.configurePublication = func(peer net.Listener) {
 		once.Do(func() {
-			prove, accept := configure(peer)
+			prove, accept, establish := configure(peer)
 			if peer != nil {
 				endpoint := "http://" + peer.Addr().String() + "/peer/introduction"
 				s.peerHandler = peerapi.NewProofHandler(s.store.Vault(), root, s.child,
 					endpoint, prove)
 				s.peerHandler = peerapi.NewAcceptanceHandler(s.store.Vault(), root,
 					s.child, endpoint, accept, s.peerHandler)
+				s.peerHandler = peerapi.NewEstablishmentHandler(
+					establish, s.peerHandler,
+				)
 			}
 		})
 	}
