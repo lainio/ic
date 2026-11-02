@@ -43,8 +43,8 @@ var (
 // UTC instant in nonnegative int64 nanoseconds. Any has a nil Recipient;
 // Directed retains the exact canonical public key, without asserting Known.
 // There is no requester, attempt, acceptance, PWHeld, or Trust in this row.
-// Consumed is reserved for the revocation no-op boundary; this increment has
-// no production transition into it and defines no acceptance record format.
+// BobAccept writes Consumed atomically with separate acceptance and holding
+// records. Revocation of Consumed remains a no-op.
 type Invitation struct {
 	_               struct{} `cbor:",toarray"`
 	Version         uint8

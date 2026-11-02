@@ -128,6 +128,19 @@ func readAuthorization(vault *storage.Vault, binding []byte) (_ bool, err error)
 	return found, nil
 }
 
+// IsAuthorizedLocalInTx re-reads the exact durable software-device binding in
+// the caller's transaction. It never probes a signer or opens a nested View.
+// Usability must be checked separately under the caller's service lock.
+func IsAuthorizedLocalInTx(tx storage.ReadTx, root, local key.Public,
+) (bool, error) {
+	if tx == nil || len(root) == 0 || len(local) == 0 {
+		return false, ErrInvalidBinding
+	}
+	binding := binary.AppendUvarint([]byte{1}, uint64(len(root)))
+	binding = append(binding, root...)
+	return authorized(tx, append(binding, local...))
+}
+
 func authorized(tx storage.ReadTx, binding []byte) (_ bool, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)

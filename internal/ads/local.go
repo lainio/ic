@@ -173,3 +173,24 @@ func readStored(tx storage.ReadTx, root, local key.Public) (
 	}))
 	return current, true, nil
 }
+
+// ReadCurrentLocalInTx authenticates the current slot-1 record and checks its
+// expiry in the caller's transaction. It performs no nested View, signer call
+// or write. Known and device authorization/usability remain caller guards.
+func ReadCurrentLocalInTx(tx storage.ReadTx, root, local key.Public,
+	now time.Time,
+) (_ Current, _ bool, err error) {
+	defer err2.Handle(&err, nil)
+
+	if tx == nil {
+		return Current{}, false, ErrInvalidInput
+	}
+	try.To(validatePublic(root))
+	try.To(validatePublic(local))
+	try.To(validateTime(now))
+	current, found := try.To2(readStored(tx, root, local))
+	if !found || now.UnixNano() >= current.Payload.ExpiresUnixNano {
+		return Current{}, false, nil
+	}
+	return current, true, nil
+}
