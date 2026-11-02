@@ -140,9 +140,25 @@ An existing invitation can never be replaced, including after expiry/revocation;
 a second issue returns 409. Startup, ads and peers never issue invitations.
 Neither operation needs --peer-listen. Earlier credentials retain their scope.
 Bearer possession authorizes the operation but does not establish human intent.
-The clock must be trusted; wall-clock rollback is not prevented. No redemption,
-authenticated invitation wire format, PW holding or trust is implemented here.
+The clock must be trusted; wall-clock rollback is not prevented.
 After a lost response the committed row remains; no automatic retry occurs.
+POST /owner/pw/invitations/redeem accepts exactly target_public_key_hex,
+invitation_id_hex (64 lowercase hex characters), and audience (Any or Directed),
+in a JSON object limited to 512 bytes. Directed means this node's pinned identity.
+The target must be Known with matching received and verified signed ad evidence.
+This explicit operation saves one exact signed attempt before one bounded POST
+to the ad's /peer/pw/establish endpoint, then independently commits the returned
+acceptance and this node's local holding. Alice needs no --peer-listen.
+Bob's opt-in /peer/pw/establish commits his own half before returning the saved
+signed response. There is no third establishment ACK. Each Vault permits only
+one saved requester attempt and one local history/holding in this slice;
+conflicting peer/role/descriptor records are refused, never replaced.
+Success returns acceptance_saved: true and local_held: true/false, only retained
+local state, never PWOpen, shared readiness, current peer consent or Trust.
+Transport failure has unknown peer outcome; the exact attempt remains saved.
+Only an explicit owner retry resends it. A completed local retry reads history
+without contacting Bob or restoring a deleted holding. Earlier credentials
+and peer listeners do not expose redemption. No startup operation establishes.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.

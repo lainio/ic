@@ -1,5 +1,6 @@
 // Package pw provides local prerequisites for a future pairwise ceremony.
-// It also stores owner-issued invitations and Bob-local accepted holdings.
+// It also stores owner-issued invitations, exact requester attempts and
+// independently accepted local holdings.
 package pw
 
 import (

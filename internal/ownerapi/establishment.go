@@ -17,7 +17,9 @@ import (
 type LocalEstablisher func(request []byte) (acceptance []byte, err error)
 
 // NewEstablishmentCredentials adds a narrow peer establishment capability to
-// NewAcceptanceCredentials' unchanged owner routes and peer proof capabilities.
+// NewAcceptanceCredentials' owner routes and peer proof capabilities, plus
+// explicit POST /owner/pw/invitations/redeem for one saved requester attempt.
+// Earlier constructors do not grant redemption. Alice needs no peer listener.
 // Bind once with the actual opt-in listener before Serve. Nil permanently
 // disables all peer capabilities. Setup/binding never signs or writes the Vault.
 // The caller must join both servers before closing the borrowed Vault/signer.
@@ -30,7 +32,9 @@ func NewEstablishmentCredentials(ctx context.Context, vault *storage.Vault,
 		deviceHandler: newDeviceHandler(vault, root, local, signer),
 	}
 	handler, file, bind, err := newPublicationProofCredentials(
-		ctx, h, &acceptanceExchangeHandler{&verificationHandler{h}}, dir)
+		ctx, h, &redemptionHandler{
+			&acceptanceExchangeHandler{&verificationHandler{h}},
+		}, dir)
 	if err != nil {
 		return nil, "", nil, err
 	}

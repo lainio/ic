@@ -54,6 +54,39 @@ Received, without Known promotion. See `node serve --help` for the bounds.
 Review order: destination/client boundary in `internal/ownerapi/fetch.go`,
 Received-only save and credential routing, then focused two-Vault fetch tests.
 
+The operational `node serve` credential also permits explicit
+`POST /owner/pw/invitations/redeem`. Its exact JSON object contains
+`target_public_key_hex`, `invitation_id_hex` (64 lowercase hex characters),
+and `audience` (`Any` or `Directed`), limited to 512 bytes. Directed means the
+requester's pinned identity. The selected peer must already be Known and have
+matching received and verified signed ad evidence. The ad supplies the only
+permitted endpoint. Earlier credential constructors do not grant redemption.
+
+Redemption saves one canonical signed attempt in Alice's Vault before one
+five-second-bounded request to Bob's opt-in `POST /peer/pw/establish`. Bob's
+existing commit precedes his response; Alice then verifies it and atomically
+saves her acceptance history and local holding in her own Vault. No transaction
+or service lock spans HTTP, and no third establishment ACK is sent. A later
+Bob Deny cannot recall an already-sent response. Success reports
+`acceptance_saved: true` and `local_held: true/false`; this is retained local
+state, never shared readiness, current peer consent, `PWOpen`, or Trust.
+
+This slice permits **one saved requester attempt and one acceptance/holding per
+Vault**. Conflicting descriptors, peers or roles fail closed. The new
+`local-pw-attempt-v1` record contains the full signed request; existing bounded
+`local-pw-accepted-v1` and `local-pw-held-v1` formats are reused with exact role
+and request-digest checks. Existing Bob records are unchanged. There is no
+migration, catalog, replacement, cleanup or repair operation.
+
+Transport failure reports an unknown peer outcome and retains the attempt.
+Only a later explicit owner invocation can resend its exact bytes. After a
+local commit, owner retries read history without peer confirmation, a new
+establishment signature or encryption; history cannot recreate a deleted local
+half. Current local guards still apply, including exact ad evidence and local
+expiry. Clock rollback is not prevented. Alice needs no peer listener, and
+startup/ad discovery never starts redemption. These independent commits are the
+bounded invitation extension, not a V19 refinement or cryptographic proof.
+
 ## Create and inspect a saved identity
 
 Use an existing, trusted, user-owned parent outside this repository.

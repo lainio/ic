@@ -22,8 +22,9 @@ const (
 )
 
 // One immutable history record and an independently removable holding. Both
-// reference the exact signed request. No Alice state, Trust, pipe or first-use
-// observation is represented. The existing invitation row keeps its v1 format.
+// reference the exact signed request. The local role is checked against that
+// request; there is no Trust, pipe or first-use observation. The existing
+// invitation row keeps its v1 format.
 type acceptedRecord struct {
 	_        struct{} `cbor:",toarray"`
 	Version  uint8
@@ -114,7 +115,8 @@ func newRedemption(tx storage.ReadTx, p Establishment, endpoint string,
 		matchesInvitation(row, p), ErrEstablishment)
 	_, accepted := try.To2(tx.Get([]byte(acceptedKey)))
 	_, held := try.To2(tx.Get([]byte(heldKey)))
-	assert.That(!accepted && !held, ErrEstablishment)
+	_, attempting := try.To2(tx.Get([]byte(attemptKey)))
+	assert.That(!accepted && !held && !attempting, ErrEstablishment)
 	timeNow := try.To1(currentEstablishmentGuards(tx, p, endpoint, now))
 	assert.That(invitationBeforeExpiry(row, timeNow), ErrEstablishment)
 	return row, nil

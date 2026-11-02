@@ -39,7 +39,7 @@ func newEstablishmentOwner(t *testing.T) establishmentOwnerFixture {
 	)
 	f.owner = owner
 	f.publisher = owner.(*authenticatedStatusHandler).
-		next.(*acceptanceExchangeHandler).publicationHandler
+		next.(*redemptionHandler).publicationHandler
 	f.auth = strings.TrimSpace(strings.TrimPrefix(
 		string(try.To1(os.ReadFile(file))), "Authorization: "))
 	prove, accept, establish := bind(f.listener)

@@ -56,3 +56,31 @@ func readOnlyVaultDescriptor(t *testing.T, path string) func() {
 	try.To(unix.Dup3(int(readOnly.Fd()), fd, unix.O_CLOEXEC))
 	return restore
 }
+
+func TestRequesterBackendCommitFailure(t *testing.T) {
+	for _, phase := range []string{"save", "receive"} {
+		t.Run(phase, func(t *testing.T) {
+			defer assert.PushTester(t)()
+			f := newRequester(t, false)
+			var response []byte
+			if phase == "receive" {
+				response = f.response(t)
+			}
+			records := requesterRecords(t, f.alice.vault)
+			before := try.To1(os.ReadFile(f.alice.path))
+			restore := readOnlyVaultDescriptor(t, f.alice.path)
+			var err error
+			if phase == "save" {
+				_, err = f.save()
+			} else {
+				_, err = f.receive(response)
+			}
+			restore()
+			assert.Equal(err, ErrEstablishment)
+			assert.DeepEqual(try.To1(os.ReadFile(f.alice.path)), before)
+			assert.DeepEqual(requesterRecords(t, f.alice.vault), records)
+			f.alice.reopen(t)
+			assert.DeepEqual(requesterRecords(t, f.alice.vault), records)
+		})
+	}
+}
