@@ -1,15 +1,18 @@
 package pw_test
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -322,6 +325,132 @@ func TestDenyBobCannotRecallTransmittedFirstUse(t *testing.T) {
 	assert.Equal(err, pw.ErrFirstUse)
 	assert.SNil(response)
 	assert.DeepEqual(f.snapshot(t), before)
+}
+
+func TestDenyRequesterPreemptsInFlightFirstUseReady(t *testing.T) {
+	defer assert.PushTester(t)()
+	f := newFirstUseExchange(t)
+	assert.That(f.a.store.Vault() != f.b.store.Vault())
+	alice := exchangeHeldState(t, f.a.store.Vault())
+	bob := exchangeHeldState(t, f.b.store.Vault())
+	for _, records := range []map[string]map[string][]byte{alice, bob} {
+		assert.SNotEmpty(records["root"]["local-pw-accepted-v1"])
+		assert.SNotEmpty(records["root"]["local-pw-held-v1"])
+		assert.SNil(records["root"][deniedPolicyKey])
+	}
+	assert.SNotEmpty(alice["root"]["local-pw-attempt-v1"])
+	assert.SNil(alice["root"][aliceUseKey])
+	assert.SNil(bob["root"][bobUseKey])
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	body := []byte(`{"peer_public_key_hex":"` +
+		hex.EncodeToString(f.b.public) + `"}`)
+	var awaiting, committed, denied []byte
+	// Bob has committed his receipt and authorized his response. Capture
+	// both records, then commit Alice's owner Deny before forwarding it.
+	f.after = func() (err error) {
+		defer err2.Handle(&err, nil)
+		awaiting, err = readUseRecord(f.a.store.Vault(), aliceUseKey)
+		if err != nil {
+			return fmt.Errorf("Alice Await before Deny: %w", err)
+		}
+		committed, err = readUseRecord(f.b.store.Vault(), bobUseKey)
+		if err != nil {
+			return fmt.Errorf("Bob receipt before Deny: %w", err)
+		}
+		status, response, err := useHTTP(ctx,
+			f.aliceOwner.URL+ownerDenyPath, f.aliceAuth, body)
+		if err != nil {
+			return fmt.Errorf("Alice owner Deny: %w", err)
+		}
+		if status != http.StatusOK || string(response) != `{"changed":true}` {
+			return fmt.Errorf("Alice owner Deny: status %d, body %q",
+				status, response)
+		}
+		denied, err = readUseRecord(f.a.store.Vault(), deniedPolicyKey)
+		if err != nil {
+			return fmt.Errorf("Alice committed Deny: %w", err)
+		}
+		return nil
+	}
+	status, response := try.To2(f.post(ctx, ownerUsePath, []byte("{}")))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	assert.NoError(f.failure)
+	assert.Equal(status, http.StatusConflict)
+	assert.Equal(string(response),
+		"Local first use refused; peer outcome unknown\n")
+	assert.Equal(len(f.requests), 1)
+	assert.Equal(len(f.responses), 1)
+
+	var pending observedUseRecord
+	try.To(wire.UnmarshalCanonical(&pending, awaiting))
+	assert.Equal(pending.Version, 1)
+	assert.Equal(pending.State, "Await")
+	assert.SNil(pending.Response)
+	assert.DeepEqual(pending.Request, f.requests[0])
+	var receipt observedUseReceipt
+	try.To(wire.UnmarshalCanonical(&receipt, committed))
+	assert.Equal(receipt.Version, 1)
+	assert.DeepEqual(receipt.Request, pending.Request)
+	assert.SNotEmpty(receipt.Response)
+	var sent struct {
+		Version  int
+		Response []byte
+	}
+	try.To(json.Unmarshal(f.responses[0], &sent))
+	assert.Equal(sent.Version, 1)
+	assert.DeepEqual(sent.Response, receipt.Response)
+
+	// Verify the exact session, establishment and Bob signature independently
+	// of Alice's refusal: these valid bytes lost only her current permission.
+	var request pw.SignedFirstUse
+	try.To(wire.UnmarshalCanonical(&request, pending.Request))
+	var accepted observedUseReceipt
+	try.To(wire.UnmarshalCanonical(&accepted,
+		alice["root"]["local-pw-accepted-v1"]))
+	var establishment pw.SignedAccepted
+	try.To(wire.UnmarshalCanonical(&establishment, accepted.Response))
+	assert.DeepEqual(request.Payload.Established, establishment.Payload)
+	var signed pw.SignedFirstUseResponse
+	try.To(wire.UnmarshalCanonical(&signed, receipt.Response))
+	assert.Equal(signed.Payload.Version, 1)
+	assert.DeepEqual(signed.Payload.Request, request.Payload)
+	requestDigest := key.HashTagged("pw-first-use-request-digest/v1",
+		pending.Request)
+	assert.DeepEqual(signed.Payload.RequestDigest, requestDigest[:])
+	digest := key.HashTagged(pw.FirstUseResponsePurpose,
+		try.To1(wire.Marshal(signed.Payload)))
+	assert.That(signed.Signature.Verify(f.b.public, digest[:]))
+	assert.That(time.Now().UnixNano() < request.Payload.ExpiresUnixNano)
+
+	assert.SNotEmpty(denied)
+	assert.That(try.To1(policy.IsDenied(f.a.store.Vault(), f.root,
+		f.a.public, f.b.public)))
+	assert.ThatNot(try.To1(policy.IsDenied(f.b.store.Vault(), f.root,
+		f.b.public, f.a.public)))
+	// Only Alice's Await/Deny and Bob's one-time receipt were added. Both
+	// holdings and all establishment, invitation and unrelated bytes remain.
+	alice["root"][aliceUseKey] = awaiting
+	alice["root"][deniedPolicyKey] = denied
+	bob["root"][bobUseKey] = committed
+	assert.DeepEqual(exchangeHeldState(t, f.a.store.Vault()), alice)
+	assert.DeepEqual(exchangeHeldState(t, f.b.store.Vault()), bob)
+
+	// Re-delivery under Deny cannot write, create Ready or resurrect authority.
+	// No third ACK, retry or new session follows; neither receipt grants Trust
+	// or a shared persisted PWOpen.
+	before := f.snapshot(t)
+	ready, err := pw.ReceiveFirstUse(f.a.store.Vault(), f.root, f.a.public,
+		f.a.signer, sent.Response)
+	assert.Equal(err, pw.ErrFirstUse)
+	assert.ThatNot(ready)
+	assert.DeepEqual(f.snapshot(t), before)
+	assert.DeepEqual(exchangeHeldState(t, f.a.store.Vault()), alice)
+	assert.DeepEqual(exchangeHeldState(t, f.b.store.Vault()), bob)
+	assert.Equal(len(f.requests), 1)
+	assert.Equal(len(f.responses), 1)
 }
 
 func TestDenyAndDeleteAreDistinctLocalOperations(t *testing.T) {
