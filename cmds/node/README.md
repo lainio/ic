@@ -87,6 +87,81 @@ expiry. Clock rollback is not prevented. Alice needs no peer listener, and
 startup/ad discovery never starts redemption. These independent commits are the
 bounded invitation extension, not a V19 refinement or cryptographic proof.
 
+## Authenticated first use
+
+After Alice has independently accepted Bob's establishment response, her
+operational `node serve` credential permits `POST /owner/pw/first-use` with
+exactly `{}` (at most 64 bytes, including surrounding whitespace). This explicit
+operation sends one signed ping for the sole saved relationship. Startup,
+redemption, discovery and peer requests never initiate it. Older credential
+constructors retain their previous scopes. Alice needs no peer listener.
+
+The owner operation commits `Await` before a single outbound POST to the saved
+ad's `/peer/pw/first-use` endpoint. Bob's opted-in peer listener authenticates
+the request against his own accepted history and holding, then commits his
+one-time receipt before returning a separately signed response. Alice verifies
+the response against her saved request and commits `Ready` under her own
+current guards. Only then does her owner response report
+`{"local_ready":true}`. Bob never waits for another acknowledgment.
+
+Each endpoint checks its own current Known, non-Deny, authorized usable software
+device, exact acceptance and retained `PWHeld`. The original signed request and
+ad remain authenticated historical binding evidence. An expired public ad or
+consumed invitation does not demand renewal or re-establishment for first use.
+No current-ad lookup or remote policy oracle supplies authority. Existing
+establishment and retry guards remain stricter and unchanged.
+
+| Model operator | Go boundary and local effect |
+|---|---|
+| `SendFirstUse` | `pw.SaveFirstUse` commits Alice's exact signed request and `Await`; `pw.SendFirstUse` sends it after all locks are released. |
+| `BobFirstUse` / `BobCanUse` | `pw.BobFirstUse` authenticates, probes and signs under Bob's existing owner lock, rechecks durable guards in one update, and saves his exact receipt before returning response bytes. |
+| `ReceiveFirstUse` | `pw.ReceiveFirstUse` authenticates Bob's response, probes Alice's signer, and rechecks her guards, exact outstanding request and deadline in the `Ready` update. |
+| `ExpireFirstUse` | `pw.ExpireFirstUse` locally changes `Await`/`Ready` to `Expired` on explicit deadline evaluation or cancellation; evidence remains saved. No HTTP cancellation route or timer is added. |
+
+The session uses 32 random bytes from `crypto/rand` and a fixed 60-second UTC
+deadline. That lifetime is engineering policy, not a TLC-proved duration.
+Clock input is injectable in private action tests; HTTP callers cannot select
+it. Bob and Alice require `issued <= local now < expires`, without clock-skew
+allowance. Real-clock rollback is not prevented. Explicitly committed `Expired`
+cannot be revived even if the clock later moves backward.
+
+The two additive, encrypted v1 CBOR records are `local-pw-first-use-v1` (Alice's
+version, state, exact signed request and optional response) and
+`local-pw-use-seen-v1` (Bob's version, exact request and response). Absence of
+Alice's record denotes Idle; no earlier record format changes or migration is
+needed. A session cannot be replaced, including after failure or expiration.
+Bob refuses every duplicate without another write or success. An exact Alice
+Ready response duplicate is at most a guarded no-write observation; conflicting
+bytes, expiry and deleted holdings fail closed. History never restores a holding.
+
+Transport uses the existing bounded direct loopback HTTP policy: one five-second
+POST, version-1 JSON containing base64 canonical CBOR, at most 3 KiB per envelope
+and 2 KiB per signed body, no redirects, proxies or forwarded owner credentials,
+and `Cache-Control: no-store`. First-use request, response and request digest
+have separate signing/hash purposes. The request binds the complete established
+binding and original signed request digest; the response also binds the exact
+signed first-use request digest. `heldEvidence` is Alice's signed assertion,
+not access to her current Vault or proof of future consent.
+
+Network failure reports an unknown peer outcome with `Await` retained. There is
+no automatic retry, and another owner invocation cannot resend this session.
+Lost success may therefore leave Bob's receipt committed while Alice stays
+Await. `Ready` is historical local evidence: Bob may already have denied or
+deleted his half when an in-flight response arrives. Neither observation
+implies current mutual permission, a live transport connection, shared persisted
+`PWOpen`, Trust, V19 `StrongUsePW`, AKE, session keys or liveness. This remains
+one session per accepted attempt, not a V19 refinement or cryptographic proof.
+
+Conformance tests are the `FirstUse`/`SendFirstUse` tests in `internal/pw`,
+`internal/ownerapi`, `internal/peerapi` and `cmds/node`. They cover ordered
+two-Vault loopback commits, exact restart retention in real `nodevault` stores,
+lost responses, replay, deadline boundaries with deterministic action clocks,
+local guard changes during probing/signing, callback/encryption/Linux backend
+commit failures, lock ownership, strict envelopes and credential isolation.
+The node scenario compares surrounding logical state to exclude Trust, open
+state and unrelated mutations. No TLC run or broad power-loss/rollback proof
+is claimed.
+
 ## Create and inspect a saved identity
 
 Use an existing, trusted, user-owned parent outside this repository.

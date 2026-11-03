@@ -159,6 +159,19 @@ Transport failure has unknown peer outcome; the exact attempt remains saved.
 Only an explicit owner retry resends it. A completed local retry reads history
 without contacting Bob or restoring a deleted holding. Earlier credentials
 and peer listeners do not expose redemption. No startup operation establishes.
+POST /owner/pw/first-use accepts exactly {} (at most 64 bytes) after this node's
+independent acceptance. It commits Await for one random 32-byte session with a
+fixed 60-second UTC deadline before one signed ping to /peer/pw/first-use.
+Bob's opt-in peer route checks his own current guards and commits one receipt
+before returning a bound signed response. Alice records local Ready only after
+verification and her own current guards; success returns local_ready: true.
+An expired public ad or consumed invitation alone does not prevent retained use.
+Network failure reports an unknown peer outcome with Await retained. No automatic
+retry or replacement session is provided, even after expiry. Local expiry or
+cancellation is available through the narrow Go action, without a timer service.
+Older credentials keep their scope. Neither Ready nor Bob's receipt means current
+remote permission, a live connection, shared PWOpen, Trust, AKE or strong use.
+Wall-clock rollback is not prevented; there is no clock-skew allowance.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.
@@ -278,10 +291,10 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.credentialDir = try.To1(os.MkdirTemp("", "node-owner-status-"))
 	var configure func(net.Listener) (
 		ownerapi.CurrentAdProver, ownerapi.LocalAcceptanceProver,
-		ownerapi.LocalEstablisher,
+		ownerapi.LocalEstablisher, ownerapi.LocalFirstUser,
 	)
 	s.handler, s.headerFile, configure = try.To3(
-		ownerapi.NewEstablishmentCredentials(
+		ownerapi.NewFirstUseCredentials(
 			ctx, s.store.Vault(), root, s.child, handle, s.credentialDir,
 		),
 	)
@@ -290,7 +303,8 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	s.handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// This peer-only operation must not even challenge for owner credentials.
 		if r.URL.Path == "/peer/pw/challenge" ||
-			r.URL.Path == "/peer/pw/accept" || r.URL.Path == "/peer/pw/establish" {
+			r.URL.Path == "/peer/pw/accept" || r.URL.Path == "/peer/pw/establish" ||
+			r.URL.Path == "/peer/pw/first-use" {
 			w.Header().Set("Cache-Control", "no-store")
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
@@ -304,7 +318,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	// Install both endpoint-bound surfaces once, before either Serve starts.
 	s.configurePublication = func(peer net.Listener) {
 		once.Do(func() {
-			prove, accept, establish := configure(peer)
+			prove, accept, establish, firstUse := configure(peer)
 			if peer != nil {
 				endpoint := "http://" + peer.Addr().String() + "/peer/introduction"
 				s.peerHandler = peerapi.NewProofHandler(s.store.Vault(), root, s.child,
@@ -314,6 +328,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 				s.peerHandler = peerapi.NewEstablishmentHandler(
 					establish, s.peerHandler,
 				)
+				s.peerHandler = peerapi.NewFirstUseHandler(firstUse, s.peerHandler)
 			}
 		})
 	}
