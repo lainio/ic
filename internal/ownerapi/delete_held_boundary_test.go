@@ -92,6 +92,7 @@ func TestDeleteHeldAuthAndRoutingBeforeBody(t *testing.T) {
 
 func TestDeleteHeldEarlierCredentialsAndPeer(t *testing.T) {
 	defer assert.PushTester(t)()
+	operational, _ := deleteHeldCredential(t, nil, nil, nil, nil)
 	for _, constructor := range []func(context.Context, *storage.Vault,
 		key.Public, key.Public, string) (http.Handler, string, error){
 		NewStatusCredentials, NewReadCredentials, NewEvidenceCredentials,
@@ -136,6 +137,8 @@ func TestDeleteHeldEarlierCredentialsAndPeer(t *testing.T) {
 		)
 		auth := strings.TrimSpace(strings.TrimPrefix(
 			string(try.To1(os.ReadFile(file))), "Authorization: "))
+		assert.Equal(deviceRequest(operational, auth, "POST", denyPath,
+			`{"peer_public_key_hex":"00"}`).Code, 401)
 		for _, handler := range []http.Handler{h,
 			peerapi.NewHandler(nil, nil, nil),
 			peerapi.NewEstablishmentHandler(nil, http.NotFoundHandler()),
@@ -147,19 +150,21 @@ func TestDeleteHeldEarlierCredentialsAndPeer(t *testing.T) {
 			peerapi.NewAcceptanceHandler(nil, nil, nil, "", nil,
 				peerapi.NewHandler(nil, nil, nil)),
 		} {
-			for _, method := range []string{"POST", "GET"} {
-				r := httptest.NewRequest(
-					method,
-					deleteHeldPath,
-					nil,
-				)
-				r.Header.Set("Authorization", auth)
-				body := &ownerStatusUnreadBody{}
-				r.Body = io.NopCloser(body)
-				w := httptest.NewRecorder()
-				handler.ServeHTTP(w, r)
-				assert.Equal(w.Code, 404)
-				assert.Equal(body.reads, 0)
+			for _, path := range []string{deleteHeldPath, denyPath} {
+				for _, method := range []string{"POST", "GET"} {
+					r := httptest.NewRequest(
+						method,
+						path,
+						nil,
+					)
+					r.Header.Set("Authorization", auth)
+					body := &ownerStatusUnreadBody{}
+					r.Body = io.NopCloser(body)
+					w := httptest.NewRecorder()
+					handler.ServeHTTP(w, r)
+					assert.Equal(w.Code, 404)
+					assert.Equal(body.reads, 0)
+				}
 			}
 		}
 	}

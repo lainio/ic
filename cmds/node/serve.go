@@ -180,6 +180,14 @@ never deletes. Consumed invitations, signed attempt/acceptance and first-use
 history remain; duplicates cannot recreate the holding. Deny stays unchanged.
 This is held-half deletion, not full V19 trust/cache/view or live-pipe cleanup.
 Earlier credentials and every peer listener exclude this owner-only operation.
+POST /owner/policy/deny accepts exactly {"peer_public_key_hex":"<lowercase COSE
+ES256/P-256 key hex>"} (at most 512 bytes), using this service's pinned Vault and
+Root/local identity. The peer need not be Known. It returns changed: true after
+commit, or false for an exact retry without writes or encryption use. It needs
+no --peer-listen, signer probe or peer contact. Holding and signed history,
+including Await/Ready/Expired and useSeen, remain; current local guards refuse
+the denied peer. Already-transmitted bytes cannot be recalled at the other node.
+Only the operational owner bearer permits this route. No Allow route is provided.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.

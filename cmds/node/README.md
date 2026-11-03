@@ -213,6 +213,53 @@ cleanup,
 `ReopenPW`, strong use, replacement relationships or remote revocation. It adds
 no TLC run, V19 refinement claim or broad crash/backup rollback proof.
 
+## Local Deny
+
+The operational `node serve` owner bearer permits `POST /owner/policy/deny`,
+including without `--peer-listen`. Send exactly one JSON field:
+
+~~~json
+{"peer_public_key_hex":"<canonical lowercase COSE ES256/P-256 public key hex>"}
+~~~
+
+The complete body is limited to 512 bytes. Duplicate, unknown or alias fields,
+trailing JSON, invalid/noncanonical/self keys, query/fragment variants, content
+encoding and trailers are rejected. Root, local identity and Vault come only
+from the pinned service configuration. A peer need not already be Known.
+Earlier owner credentials and peer listeners do not expose the route.
+
+The existing `policy.DenyLocal` runs under the same owner mutation lock as
+invitation, acceptance, publication and first-use operations. Only the encrypted
+`local-denied-peers-v1` row changes, using its existing format and 32-peer bound.
+After commit and unlock, the response is `{"changed":true}`. An exact repeat
+returns `{"changed":false}` with zero Vault writes, seals or encryption usage,
+even with exhausted allowance. Denial makes no signer/device probe, peer request
+or background action. All responses are `no-store`; errors contain fixed status
+text: malformed input is 400, full policy is 409, unavailable/corrupt state is
+500 (method/media/body limits retain the existing 405/415/413 responses).
+
+| Invitation model responsibility | Local implementation and evidence |
+|---|---|
+| `ChangeBob(n, "Deny")` (205–211), `ChangeRequester(n, "Deny")` (213–219) | Owner-selected peer added only to the operating node's policy. Real independent Vault snapshots show all other records and peer files unchanged. |
+| `BobPermits` / `RequesterPermits` (55–62), `ExactRetry` (74–80), `BobCanUse` (169–174) | Existing guards reject new acceptance, exact reply, saved attempt, requester acceptance and first use when their own local policy denies. No alternate guard or state machine is added. |
+| `HistoryIsDurable` / `PolicyAndCrashSafety` | Consumed invitation, exact signed request/result, holding, Await/Ready/Expired and useSeen survive Deny and real `nodevault` restart. |
+| Checker-only `PWOpen` (308–325) | Persisted Ready remains historical evidence. No shared open flag or remote authorization query exists. |
+
+An already-transmitted acceptance or first-use response can still be accepted
+under the recipient's own unchanged guards. Bob Deny prevents his subsequent
+current-guard operations; it cannot recall bytes or mutate Alice's Vault.
+`DeleteHeldLocal` removes holding without writing Deny; Deny preserves holding
+and cannot reconstruct a deleted half. Combined Deny/Delete tests and repeated
+targeted denial are engineering behavior beyond the model's one-fault-per-Vault
+bound. No multi-peer proof follows.
+
+The `Deny` tests cover strict owner boundaries, exact no-write retries, storage
+failure/corruption, restart, local preemption, delayed responses and deterministic
+owner-lock/Vault ordering. This increment implements action-map section 3.1 and
+conformance matrix section 9's local Deny projection only. It adds no Allow,
+live-pipe closure, Trust, peer-view changes, StrongUse or AKE; it claims no full
+V19 `DenyPeer` refinement, TLC run or cryptographic proof.
+
 ## Create and inspect a saved identity
 
 Use an existing, trusted, user-owned parent outside this repository.

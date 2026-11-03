@@ -21,6 +21,7 @@ type LocalFirstUser func(request []byte) (response []byte, err error)
 // NewFirstUseCredentials extends only node serve's operational composition.
 // It also grants POST /owner/pw/holding/delete for the sole local holding;
 // deletion needs no peer listener and shares the existing mutation lock.
+// POST /owner/policy/deny selects only a peer, using the same local lock.
 // Earlier credentials retain their scopes. Bind once before serving; nil
 // permanently disables peer capabilities. Startup neither signs nor writes.
 func NewFirstUseCredentials(ctx context.Context, vault *storage.Vault,
@@ -63,6 +64,10 @@ func (h *publicationHandler) firstUseLocal(raw []byte) ([]byte, error) {
 type firstUseHandler struct{ *redemptionHandler }
 
 func (h *firstUseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == denyPath {
+		h.serveDeny(w, r)
+		return
+	}
 	if r.URL.Path == deleteHeldPath {
 		h.serveDeleteHeld(w, r)
 		return
