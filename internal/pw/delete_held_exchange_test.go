@@ -1,13 +1,16 @@
 package pw_test
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -134,6 +137,87 @@ func TestDeleteHeldBobOnlyAlreadyTransmittedAcceptance(t *testing.T) {
 	assert.SNil(response)
 	assert.Equal(pending.State, "Await")
 	assert.SNil(try.To1(readUseRecord(f.b.store.Vault(), bobUseKey)))
+}
+
+func TestDeleteBobCannotRecallTransmittedFirstUse(t *testing.T) {
+	defer assert.PushTester(t)()
+	f := newFirstUseExchange(t)
+	alice := exchangeHeldState(t, f.a.store.Vault())
+	bob := exchangeHeldState(t, f.b.store.Vault())
+	for _, records := range []map[string]map[string][]byte{alice, bob} {
+		assert.SNotEmpty(records["root"]["local-pw-accepted-v1"])
+		assert.SNotEmpty(records["root"]["local-pw-held-v1"])
+	}
+	assert.SNil(alice["root"][aliceUseKey])
+	assert.SNil(bob["root"][bobUseKey])
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	var awaiting, committed []byte
+	// Bob's reply/receipt has committed, but the fixture has not forwarded
+	// the response to Alice. Capture the records before the owner Delete.
+	f.after = func() (err error) {
+		defer err2.Handle(&err, nil)
+		awaiting = try.To1(readUseRecord(f.a.store.Vault(), aliceUseKey))
+		committed = try.To1(readUseRecord(f.b.store.Vault(), bobUseKey))
+		status, body := try.To2(useHTTP(ctx,
+			f.bobOwner.URL+deleteHoldingPath, f.bobAuth, []byte("{}")))
+		if status != http.StatusOK || string(body) != `{"deleted":true}` {
+			return fmt.Errorf("owner Delete: status %d, body %q", status, body)
+		}
+		return nil
+	}
+	status, body := try.To2(f.post(ctx, ownerUsePath, []byte("{}")))
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	assert.NoError(f.failure)
+	assert.Equal(status, http.StatusOK)
+	assert.Equal(string(body), `{"local_ready":true}`)
+	assert.Equal(len(f.requests), 1)
+	assert.Equal(len(f.responses), 1)
+
+	var pending observedUseRecord
+	try.To(wire.UnmarshalCanonical(&pending, awaiting))
+	assert.Equal(pending.State, "Await")
+	assert.SNil(pending.Response)
+	assert.DeepEqual(pending.Request, f.requests[0])
+	var receipt observedUseReceipt
+	try.To(wire.UnmarshalCanonical(&receipt, committed))
+	assert.Equal(receipt.Version, 1)
+	assert.DeepEqual(receipt.Request, pending.Request)
+	assert.SNotEmpty(receipt.Response)
+	var sent struct {
+		Version  int
+		Response []byte
+	}
+	try.To(json.Unmarshal(f.responses[0], &sent))
+	assert.Equal(sent.Version, 1)
+	assert.DeepEqual(sent.Response, receipt.Response)
+
+	// Only Alice's local historical Ready changes; her holding and all
+	// unrelated records retain their exact bytes under her unchanged guards.
+	pending.State, pending.Response = "Ready", receipt.Response
+	alice["root"][aliceUseKey] = try.To1(wire.Marshal(pending))
+	assert.DeepEqual(exchangeHeldState(t, f.a.store.Vault()), alice)
+	// Delete removes only Bob's holding. His accepted request/response, Deny
+	// set and committed one-time receipt must remain byte-identical.
+	delete(bob["root"], "local-pw-held-v1")
+	bob["root"][bobUseKey] = committed
+	assert.DeepEqual(exchangeHeldState(t, f.b.store.Vault()), bob)
+
+	// Ready implies neither mutual PWOpen nor Trust. Bob cannot return even
+	// his saved establishment success without a holding, or use it again.
+	before := f.snapshot(t)
+	response, err := pw.BobReply(f.b.store.Vault(), f.root, f.b.public,
+		f.b.signer, f.server.URL+"/peer/introduction",
+		alice["root"]["local-pw-attempt-v1"])
+	assert.Equal(err, pw.ErrEstablishment)
+	assert.SNil(response)
+	response, err = pw.BobFirstUse(f.b.store.Vault(), f.root, f.b.public,
+		f.b.signer, pending.Request)
+	assert.Equal(err, pw.ErrFirstUse)
+	assert.SNil(response)
+	assert.DeepEqual(f.snapshot(t), before)
 }
 
 func TestDeleteHeldTwoNodeHistoryRestartAndNoResurrection(t *testing.T) {
