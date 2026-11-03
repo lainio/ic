@@ -80,7 +80,7 @@ func (h *redemptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	// Local history is enough for an owner retry, even after test-only deletion.
+	// Local history is enough for an owner retry, even after held-half deletion.
 	// A lost owner acknowledgement cannot cause another peer confirmation.
 	encoded, err := json.Marshal(struct {
 		AcceptanceSaved bool `json:"acceptance_saved"`

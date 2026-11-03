@@ -162,6 +162,57 @@ The node scenario compares surrounding logical state to exclude Trust, open
 state and unrelated mutations. No TLC run or broad power-loss/rollback proof
 is claimed.
 
+## Local held-half deletion
+
+The operational `NewFirstUseCredentials` composition used by `node serve`
+adds exactly `POST /owner/pw/holding/delete` with `{}` and the existing owner
+bearer credential. The strict empty-object parser allows surrounding JSON
+whitespace, limits the body to 64 bytes, and rejects selectors and extra fields.
+No peer, Root, attempt, invitation, endpoint, clock or scope is supplied.
+Earlier credential constructors and every peer listener exclude this route.
+There is no requirement for `--peer-listen`; startup and binding never delete.
+
+`pw.DeleteHeldLocal` takes the already-bound local Vault and independently
+pinned Root/local configuration. Under the owner's existing mutation lock,
+one `Vault.Update` authenticates the accepted request/response, its role-specific
+consumed invitation or saved attempt, retained first-use observations, and the
+canonical holding digest. It deletes only `local-pw-held-v1`. A valid unused
+invitation or pending attempt can coexist with no holding; deletion then makes
+no change and does not prevent otherwise eligible later acceptance. Inconsistent
+or corrupt state fails closed without repair. No persistent format changes,
+new tombstones or migration are introduced.
+
+The response is `{"deleted":true}` only after durable commit, or
+`{"deleted":false}` for valid absent/already-deleted state. The mutation lock
+is released before response I/O. Failure returns the existing generic conflict
+response. No-op paths abort the update without backend bookkeeping. Even a
+successful deletion needs no encryption allowance: storage deletion performs
+no seal. No signer, current ad, expiry, device probe or remote query is needed.
+
+| Invitation model responsibility | Go evidence |
+|---|---|
+| `ChangeBob(n, "Delete")` / `ChangeRequester(n, "Delete")` | Only the caller's accepted holding is removed; the other Vault is unchanged. |
+| `HistoryIsDurable` / `PolicyAndCrashSafety` | Consumed invitation, signed attempt/acceptance, first-use observations and unrelated records retain their exact bytes across deletion/restart. |
+| `HistoryNeverResurrects` | Existing immutable acceptance prevents re-creation; Bob retry and current first-use guards reject missing holdings. |
+| Checker-only `PWOpen` | No shared flag is written. Retained `Ready`/`useSeen` is historical evidence and cannot override the local holding guard. |
+
+Already-transmitted acceptance may still let Alice accept under her own guards
+after Bob deletes; it cannot restore Bob. Alice cannot move from `Await` to
+`Ready` after deleting her half, even with a valid delayed response. Existing
+local expiry/cancellation remains available. `DenyLocal` retains the holding;
+deletion leaves Deny unchanged. Combined Deny-then-Delete tests are engineering
+evidence beyond the model's one-invalidation-per-Vault bound.
+
+The `DeleteHeld` tests in `internal/pw`, `internal/ownerapi` and `cmds/node`
+cover independent real `nodevault` stores, restart, exact state preservation,
+strict owner boundaries, both local commit orders, callback and Linux backend
+write failure, and zero encryption allowance. An injected seal failure after
+the pending deletion also rolls back; production deletion never seals. This
+increment does not implement full V19 `DeleteLocalPW` trust/cache/view/live-pipe
+cleanup,
+`ReopenPW`, strong use, replacement relationships or remote revocation. It adds
+no TLC run, V19 refinement claim or broad crash/backup rollback proof.
+
 ## Create and inspect a saved identity
 
 Use an existing, trusted, user-owned parent outside this repository.

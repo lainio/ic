@@ -172,6 +172,14 @@ cancellation is available through the narrow Go action, without a timer service.
 Older credentials keep their scope. Neither Ready nor Bob's receipt means current
 remote permission, a live connection, shared PWOpen, Trust, AKE or strong use.
 Wall-clock rollback is not prevented; there is no clock-skew allowance.
+POST /owner/pw/holding/delete accepts exactly {} (at most 64 bytes) and forgets
+only this Vault's single accepted local held half. It returns deleted: true only
+after commit, or false for valid absent/already-deleted state without a write.
+It needs no --peer-listen, usable signer, current ad or peer contact. Startup
+never deletes. Consumed invitations, signed attempt/acceptance and first-use
+history remain; duplicates cannot recreate the holding. Deny stays unchanged.
+This is held-half deletion, not full V19 trust/cache/view or live-pipe cleanup.
+Earlier credentials and every peer listener exclude this owner-only operation.
 The UI's explicit
 Copy introduction action copies a development JSON transfer document (version,
 base64 proposal, base64 acceptance), limited to 128 KiB; it is not a backup.
