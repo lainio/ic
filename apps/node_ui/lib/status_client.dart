@@ -244,6 +244,40 @@ enum StatusFailure implements Exception {
   redeemInvalidResponse(
     'Invalid redemption acknowledgement. Local redemption not confirmed; Bob’s outcome may be unknown.',
   ),
+  firstUseOwnerUrl(
+    'First use: no request sent. Use the full local owner status URL '
+    'printed by node serve.',
+  ),
+  firstUseCredentials(
+    'First use: no request sent. Use the current absolute owner.header '
+    'file path from node serve.',
+  ),
+  firstUseNotSent(
+    'First use: no request sent. The local owner request could not start.',
+  ),
+  firstUseUnavailable(
+    'First use not confirmed: owner credential, scope or route not accepted.',
+  ),
+  firstUseRejected('The owner service rejected the first-use request.'),
+  firstUseRefused(
+    'First use refused locally or its response was not accepted. '
+    'Bob’s outcome is unknown; this does not establish readiness '
+    'or make a retry safe.',
+  ),
+  firstUseRemote(
+    'First-use outcome unknown. The peer exchange failed; Alice’s saved '
+    'Await remains. Bob may have processed the request. The session '
+    'cannot be retried or replaced.',
+  ),
+  firstUseUnknown(
+    'First-use outcome unknown. No valid acknowledgement was received; '
+    'local or remote effects may remain. The session may be consumed '
+    'and a retry is not safe.',
+  ),
+  firstUseInvalidResponse(
+    'Invalid first-use acknowledgement; outcome unknown. Local or remote '
+    'effects may remain. The session may be consumed and a retry is not safe.',
+  ),
   invalidIntroduction(
     "Introduction could not be verified for this node's Root.",
   ),
@@ -641,6 +675,34 @@ class StatusClient {
     }
   }
 
+  Future<FirstUseReceipt> firstUse(
+    String ownerStatusUrl,
+    String headerPath,
+  ) async {
+    try {
+      final destination = _destination(ownerStatusUrl)
+          .replace(path: '/owner/pw/first-use');
+      final json = await _request(
+        destination,
+        headerPath,
+        1024,
+        introduction: utf8.encode('{}'),
+        requestTimeout: fetchTimeout,
+      );
+      if (json.length != 1 || json['local_ready'] != true) {
+        throw StatusFailure.unexpected;
+      }
+      return const FirstUseReceipt();
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.invalidUrl => StatusFailure.firstUseOwnerUrl,
+        StatusFailure.credentials => StatusFailure.firstUseCredentials,
+        StatusFailure.unexpected => StatusFailure.firstUseInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> _request(
     Uri destination,
     String headerPath,
@@ -651,7 +713,9 @@ class StatusClient {
     final issuing = destination.path == '/owner/pw/invitations/issue';
     final redeeming = destination.path == '/owner/pw/invitations/redeem';
     final pairing = issuing || redeeming;
+    final firstUse = destination.path == '/owner/pw/first-use';
     if (_closed || _cancel != null) {
+      if (firstUse) throw StatusFailure.firstUseNotSent;
       throw pairing ? StatusFailure.pairingNotSent : StatusFailure.unreachable;
     }
     final operationTimeout = requestTimeout ?? timeout;
@@ -668,7 +732,11 @@ class StatusClient {
     var finished = false;
     var dispatched = false;
 
-    StatusFailure transportFailure() => !pairing
+    StatusFailure transportFailure() => firstUse
+        ? (dispatched
+              ? StatusFailure.firstUseUnknown
+              : StatusFailure.firstUseNotSent)
+        : !pairing
         ? StatusFailure.unreachable
         : !dispatched
         ? StatusFailure.pairingNotSent
@@ -713,6 +781,11 @@ class StatusClient {
       if (response.statusCode != 200) {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
+          401 || 404 when firstUse => StatusFailure.firstUseUnavailable,
+          400 || 413 || 415 when firstUse => StatusFailure.firstUseRejected,
+          409 when firstUse => StatusFailure.firstUseRefused,
+          502 when firstUse => StatusFailure.firstUseRemote,
+          _ when firstUse => StatusFailure.firstUseUnknown,
           401 || 404 when issuing => StatusFailure.issueUnavailable,
           400 || 413 || 415 when issuing => StatusFailure.issueRejected,
           409 when issuing => StatusFailure.issueExists,
@@ -792,6 +865,9 @@ class StatusClient {
       if (finished) throw transportFailure();
       try {
         final text = utf8.decode(bytes);
+        if (firstUse && !firstUseResponseEnvelope(text)) {
+          throw StatusFailure.unexpected;
+        }
         if (pairing && !pairingResponseEnvelope(text, issuing: issuing)) {
           throw StatusFailure.unexpected;
         }

@@ -196,7 +196,7 @@ historical observation, never current reachability or a shared `PWOpen` flag.
 Invitations alone imply no PW or trust. The disabled composer cannot send.
 Graph and chat remain fixtures, including after successful live owner actions.
 
-## Live pairing (PW-Go-12)
+## Live pairing (PW-Go-12 / PW-Go-13)
 
 `Wallet demo` → `Live pairing` opens separate explicit owner controls. The owner
 screen remains the default. Its current status URL and header-file path are
@@ -234,8 +234,8 @@ Use two separate windows, configured for Bob's and Alice's respective nodes.
 Alice must already know Bob and have matching received and verified current ad
 evidence. Bob requires an opt-in `--peer-listen`; Alice needs no peer listener.
 There is only one saved requester attempt per Alice Vault. Conflicting target,
-invitation or audience is refused. These controls add no prerequisite wizard,
-first-use operation or messaging.
+invitation or audience is refused. These invitation controls add no prerequisite
+wizard or messaging; authenticated first use is a separate step below.
 
 `Acceptance saved locally` and `Local PW held: yes/no` are separate receipt
 observations. A false holding is not a usable relationship. Neither result
@@ -263,12 +263,55 @@ back by missing acknowledgements. There is no automatic retry. The presenter
 may explicitly repeat redemption with the same input using Go's durable exact
 attempt, subject to current guards, without a recovery guarantee.
 
-Pending submissions disable both operation buttons. Relevant input changes,
+Pending submissions disable the operation buttons. Relevant input changes,
 owner configuration changes and panel disposal invalidate receipts and late
 results; Bob-key edits invalidate clipboard confirmation. Each explicit action
 clears the older receipt for that operation. Closing the panel discards its
 in-memory inputs and receipts without undoing node operations. Startup, wallet
 switching, graph selection and opening/closing the panel perform no live action.
+
+### Step 3 — Authenticate first use (requester window)
+
+Use **Alice's actual requester node**, regardless of the selected wallet fixture.
+`Run first use` opens a short confirmation; Cancel sends nothing. Confirm sends
+one authenticated `POST /owner/pw/first-use` with exactly `{}` to this window's
+configured owner loopback origin. It rereads `owner.header`, uses direct transport
+without redirects, allows eight seconds for Go's five-second peer POST, and
+bounds the response to 1 KiB. Duplicate/extra fields, invalid types and
+`local_ready:false` are rejected before JSON decoding can erase duplicate keys.
+Go alone chooses the saved relationship, target, endpoint and signed material.
+No transient redemption receipt is required: Go checks its saved holding and
+current guards, including when the panel is reopened.
+
+**This is an explicit one-shot authenticated exchange, not chat.** Go commits
+Alice's `Await` before sending; Bob can independently commit his one-time receipt
+before Alice receives the response. Failure can consume the session. Missing
+acknowledgement does not undo remote effects. One session exists per accepted
+attempt; it cannot be retried or replaced after failure or expiry. After
+confirmation this panel offers no second submission, regardless of outcome.
+Reopening the UI cannot reset a consumed node session.
+
+Only the exact success envelope `{"local_ready":true}` displays
+`Authenticated first use completed` and the separate line
+`Local readiness: observed on this exchange (historical)`. This is Alice's local
+historical observation, never shared `PWOpen`, a live pipe, current Bob permission,
+Trust, a session key or usable text-message transport. Graph, readiness, trust
+and chat stay fixtures, and the sample composer remains disabled.
+
+409 reports local refusal or failed response acceptance without deciding whether
+Bob processed the request. 502 reports unknown outcome with Alice's `Await`
+retained. Timeout, disconnection, response loss and malformed success also report
+unknown outcome. Credential/scope/route rejection is separate from local URL or
+credential-read failures that dispatched no POST. Only fixed messages are shown.
+Owner configuration or panel identity changes and disposal discard pending/old
+receipts; late responses cannot restore them. State remains in memory only.
+Startup, issue and redemption never initiate first use or any chained action.
+
+The next check is a **disposable-Vault real two-node UI trial**, including a lost
+acknowledgement case on separate disposable state, before any text-message
+semantics or implementation. Mocked client/widget tests and a native build do
+not establish real two-node interoperability. This increment adds no messages,
+local Deny, Delete, Tor or automatic session recovery.
 
 ## Validate
 

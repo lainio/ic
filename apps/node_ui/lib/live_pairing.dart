@@ -28,23 +28,32 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
   final _document = TextEditingController();
   StatusClient? _issueClient;
   StatusClient? _redeemClient;
+  StatusClient? _firstUseClient;
   DirectedInvitationReceipt? _issued;
   RedemptionReceipt? _redeemed;
+  FirstUseReceipt? _firstUsed;
   String? _issueMessage;
   String? _redeemMessage;
   String? _copyMessage;
+  String? _firstUseMessage;
   int _issueRevision = 0;
   int _redeemRevision = 0;
   int _copyRevision = 0;
+  int _firstUseRevision = 0;
   bool _issuing = false;
   bool _redeeming = false;
   bool _copying = false;
+  bool _confirmingFirstUse = false;
+  bool _usingFirstUse = false;
+  // Never reset within this panel instance, even after configuration changes.
+  bool _firstUseConfirmed = false;
   bool _closed = false;
 
   bool get _configured =>
       widget.ownerStatusUrl.trim().isNotEmpty &&
       widget.headerPath.trim().isNotEmpty;
-  bool get _pending => _issuing || _redeeming;
+  bool get _pending =>
+      _issuing || _redeeming || _confirmingFirstUse || _usingFirstUse;
 
   void _invalidateIssue() {
     _issueRevision++;
@@ -62,6 +71,13 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
     _redeemClient?.close();
   }
 
+  void _invalidateFirstUse() {
+    _firstUseRevision++;
+    _firstUsed = null;
+    _firstUseMessage = null;
+    _firstUseClient?.close();
+  }
+
   @override
   void didUpdateWidget(covariant LivePairingScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -70,6 +86,7 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
         widget.createClient != oldWidget.createClient) {
       _invalidateIssue();
       _invalidateRedeem();
+      _invalidateFirstUse();
     }
   }
 
@@ -77,6 +94,82 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
       mounted && !_closed && revision == _issueRevision;
   bool _currentRedeem(int revision) =>
       mounted && !_closed && revision == _redeemRevision;
+  bool _currentFirstUse(int revision) =>
+      mounted && !_closed && revision == _firstUseRevision;
+
+  Future<void> _firstUse() async {
+    if (_pending || !_configured || _closed || _firstUseConfirmed) return;
+    final revision = _firstUseRevision;
+    StatusClient? client;
+    var invoked = false;
+    setState(() => _confirmingFirstUse = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          scrollable: true,
+          title: const Text('Authenticate first use?'),
+          content: Text(
+            'Send one authenticated exchange from Alice’s actual requester '
+            'node at this window’s owner service?\n\n'
+            '${widget.ownerStatusUrl}\n\n'
+            'This is not chat. Failure can consume its only session; a missing '
+            'acknowledgement does not undo remote effects.',
+          ),
+          actions: [
+            TextButton(
+              key: const ValueKey('cancel-first-use'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('confirm-first-use'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Confirm first use'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || _closed) return;
+      setState(() {
+        _confirmingFirstUse = false;
+        if (confirmed == true) _firstUseConfirmed = true;
+      });
+      // A dialog for an earlier owner must never authorize the new owner.
+      if (confirmed != true || !_currentFirstUse(revision) || !_configured) {
+        return;
+      }
+      setState(() => _usingFirstUse = true);
+      client = _firstUseClient = widget.createClient?.call() ?? StatusClient();
+      invoked = true;
+      final receipt = await client.firstUse(
+        widget.ownerStatusUrl,
+        widget.headerPath,
+      );
+      if (_currentFirstUse(revision)) setState(() => _firstUsed = receipt);
+    } catch (error) {
+      if (_currentFirstUse(revision)) {
+        setState(() {
+          _firstUseMessage =
+              (error is StatusFailure
+                      ? error
+                      : invoked
+                      ? StatusFailure.firstUseUnknown
+                      : StatusFailure.firstUseNotSent)
+                  .message;
+        });
+      }
+    } finally {
+      client?.close();
+      _firstUseClient = null;
+      if (mounted && !_closed) {
+        setState(() {
+          _confirmingFirstUse = false;
+          _usingFirstUse = false;
+        });
+      }
+    }
+  }
 
   Future<void> _issue() async {
     if (_pending || !_configured || _closed) return;
@@ -182,6 +275,7 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
     _closed = true;
     _invalidateIssue();
     _invalidateRedeem();
+    _invalidateFirstUse();
   }
 
   @override
@@ -369,6 +463,72 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
                       'recovery is not guaranteed. Closing this panel discards '
                       'receipts and does not undo node operations.',
                     ),
+                    const Divider(height: 32),
+                    Text(
+                      'Step 3 — Authenticate first use (requester window)',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Use Alice’s actual requester node and its owner '
+                      'configuration. The selected Alice/Bob fixture does not '
+                      'identify that node. Go checks the saved requester '
+                      'holding and current guards, even after this panel has '
+                      'been reopened without a redemption receipt.',
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      key: const ValueKey('first-use-warning'),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'One-shot authenticated exchange, not chat. Failure '
+                        'can consume the only session for this accepted '
+                        'attempt. A missing acknowledgement does not undo '
+                        'remote effects. No retry or replacement session is '
+                        'available after failure or expiry.',
+                        style: TextStyle(
+                          color: theme.colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      key: const ValueKey('run-first-use'),
+                      onPressed: _configured && !_pending && !_firstUseConfirmed
+                          ? _firstUse
+                          : null,
+                      child: Text(
+                        _usingFirstUse ? 'Authenticating…' : 'Run first use',
+                      ),
+                    ),
+                    if (_firstUseMessage != null) _message(_firstUseMessage!),
+                    if (_firstUsed != null) ...[
+                      _message('Authenticated first use completed'),
+                      const Text(
+                        'Local readiness: observed on this exchange '
+                        '(historical)',
+                        key: ValueKey('first-use-readiness'),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    const Text(
+                      'A successful receipt is Alice’s local historical '
+                      'observation only. It establishes no shared PWOpen, '
+                      'live pipe, current Bob permission, Trust, session key '
+                      'or usable text-message transport. Graph, readiness, '
+                      'trust and chat fixtures remain unchanged.',
+                    ),
+                    if (_firstUseConfirmed)
+                      _message(
+                        'First-use confirmation used in this panel. No second '
+                        'submission is available. Reopening cannot reset a '
+                        'consumed node session.',
+                      ),
                   ],
                 ),
               ),

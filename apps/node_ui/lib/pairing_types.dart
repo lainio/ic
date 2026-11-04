@@ -106,6 +106,14 @@ class RedemptionReceipt {
   final bool localHeld;
 }
 
+/// Alice's local historical observation, never current mutual readiness.
+class FirstUseReceipt {
+  const FirstUseReceipt();
+}
+
+bool firstUseResponseEnvelope(String text) =>
+    _exactObject(text, const {'local_ready': 'true'});
+
 const _hex = r'"[0-9a-f]+"';
 
 bool pairingResponseEnvelope(String text, {required bool issuing}) =>
