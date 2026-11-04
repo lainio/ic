@@ -180,6 +180,23 @@ These are local acceptance observations, not membership, trust, delivery, or
 continuous connection monitoring. An unavailable service produces a failure;
 there is no seeded demo data, polling, or automatic retry.
 
+## Wallet demo (UI-01)
+
+The owner screen remains the default. Its app-bar `Wallet demo` action opens
+an isolated dark relationship graph, starting with Alice's local fixture.
+Select Bob for the scripted conversation; the wallet switcher also offers an
+independently defined Bob fixture. At narrow widths, `Back to graph` returns
+from peer details. Use Tab and Enter to select identities with a keyboard.
+
+`DEMO DATA · UI CONCEPT` and `No live network` remain visible. Dashed violet
+paths are locally verified introduction evidence, solid cyan curves are local
+retained PW halves, and amber diamonds are separately assigned local trust.
+Layer controls only change visibility. Last readiness is a fictional historical
+observation, never current reachability or a shared `PWOpen` flag. Invitations
+alone imply no PW or trust. The disabled composer cannot send; the demo has no
+owner API calls, storage writes, credentials, or protocol transitions. It is not
+PW-Go-12 or a messaging/conformance implementation.
+
 ## Validate
 
 Using the installed Flutter SDK and provisioned package cache, in this directory:

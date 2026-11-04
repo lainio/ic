@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'publication_section.dart';
 import 'received_ad_section.dart';
 import 'status_client.dart';
+import 'wallet_demo.dart';
 
 void main() => runApp(const IntroTreeApp());
 
@@ -635,8 +636,28 @@ class _StatusScreenState extends State<StatusScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('IntroTree')),
+    final screen = Scaffold(
+      appBar: AppBar(
+        title: const Text('IntroTree'),
+        actions: [
+          FocusTraversalOrder(
+            order: const NumericFocusOrder(-1),
+            child: TextButton.icon(
+              key: const ValueKey('open-wallet-demo'),
+              onPressed: _loading
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const WalletDemoScreen(),
+                      ),
+                    ),
+              icon: const Icon(Icons.account_tree_outlined),
+              label: const Text('Wallet demo'),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
@@ -838,6 +859,8 @@ class _StatusScreenState extends State<StatusScreen> {
         ),
       ),
     );
+    // Keep the owner form's logical Tab sequence when the app bar is present.
+    return FocusTraversalGroup(policy: OrderedTraversalPolicy(), child: screen);
   }
 
   Widget _result(ThemeData theme) {
