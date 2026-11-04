@@ -1,13 +1,24 @@
 import 'package:flutter/material.dart';
 
+import 'live_pairing.dart';
+import 'status_client.dart';
 import 'wallet_demo_fixtures.dart';
 import 'wallet_demo_graph.dart';
 
-/// An isolated, in-memory presentation. It has no owner or transport callbacks.
+/// Fixture presentation with a separate explicit local-owner action route.
 class WalletDemoScreen extends StatefulWidget {
-  const WalletDemoScreen({super.key, this.fixtures});
+  const WalletDemoScreen({
+    super.key,
+    this.fixtures,
+    this.ownerStatusUrl = '',
+    this.headerPath = '',
+    this.createPairingClient,
+  });
 
   final List<WalletDemoFixture>? fixtures;
+  final String ownerStatusUrl;
+  final String headerPath;
+  final StatusClient Function()? createPairingClient;
 
   @override
   State<WalletDemoScreen> createState() => _WalletDemoScreenState();
@@ -135,6 +146,20 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
             ),
           ],
+        ),
+        FilledButton.icon(
+          key: const ValueKey('open-live-pairing'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => LivePairingScreen(
+                ownerStatusUrl: widget.ownerStatusUrl,
+                headerPath: widget.headerPath,
+                createClient: widget.createPairingClient,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.link),
+          label: const Text('Live pairing'),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -347,7 +372,8 @@ class _DemoNotice extends StatelessWidget {
           ),
         ),
         Text(
-          'No live network · fictional local fixtures, no messages sent',
+          'SCRIPTED GRAPH AND CHAT · fixtures, no messages sent. '
+          'Live pairing uses explicit owner submissions.',
           style: TextStyle(color: demoMuted, fontSize: 12),
         ),
       ],

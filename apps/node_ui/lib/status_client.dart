@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
+import 'pairing_types.dart';
+
 enum NodeChoice { unselected, pending, completed }
 
 class IntroductionCheck {
@@ -203,6 +205,45 @@ enum StatusFailure implements Exception {
     'Invalid advertisement verification response. A historical verified snapshot may already have been saved.',
   ),
   notCompleted('The introduction is not yet completed.'),
+  pairingOwnerUrl(
+    'No request sent. Use the full local owner status URL printed by node serve.',
+  ),
+  pairingCredentials(
+    'No request sent. Use the current absolute owner.header file path from node serve.',
+  ),
+  pairingNotSent('No request sent. The local owner request could not start.'),
+  issueInput(
+    'No request sent. Enter Alice’s full lowercase public key hex (at most 128 bytes).',
+  ),
+  redeemInput(
+    'No request sent. Paste exactly target_public_key_hex, invitation_id_hex (64 lowercase hex), and audience: Directed; at most 512 UTF-8 bytes.',
+  ),
+  issueUnavailable(
+    'Invitation issuance failed: owner credential, scope or route not accepted.',
+  ),
+  issueRejected('The owner service rejected the invitation input.'),
+  issueExists(
+    'An invitation row already exists in this Vault. No new invitation was issued; replacement is unavailable.',
+  ),
+  issueUnknown(
+    'Invitation outcome unknown. The invitation may have been committed; no automatic retry was made.',
+  ),
+  issueInvalidResponse(
+    'Invalid invitation acknowledgement; outcome unknown. The invitation may have been committed.',
+  ),
+  redeemUnavailable(
+    'Redemption failed: owner credential, scope or route not accepted.',
+  ),
+  redeemRejected('The owner service rejected the redemption input.'),
+  redeemUnknown(
+    'Local redemption not confirmed; Bob’s outcome may be unknown.',
+  ),
+  redeemRemote(
+    'Local redemption not confirmed; saved attempt retained and Bob’s outcome unknown.',
+  ),
+  redeemInvalidResponse(
+    'Invalid redemption acknowledgement. Local redemption not confirmed; Bob’s outcome may be unknown.',
+  ),
   invalidIntroduction(
     "Introduction could not be verified for this node's Root.",
   ),
@@ -541,6 +582,65 @@ class StatusClient {
     }
   }
 
+  Future<DirectedInvitationReceipt> issueDirectedInvitation(
+    String ownerStatusUrl,
+    String headerPath,
+    String recipientPublicKeyHex,
+  ) async {
+    if (!pairingPublicKeyHex(recipientPublicKeyHex)) {
+      throw StatusFailure.issueInput;
+    }
+    final destination = _pairingDestination(ownerStatusUrl, 'issue');
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        1024,
+        introduction: utf8.encode(
+          jsonEncode({'recipient_public_key_hex': recipientPublicKeyHex}),
+        ),
+      );
+      return DirectedInvitationReceipt.fromJson(json, recipientPublicKeyHex);
+    } on FormatException {
+      throw StatusFailure.issueInvalidResponse;
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.credentials => StatusFailure.pairingCredentials,
+        StatusFailure.unexpected => StatusFailure.issueInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
+  Future<RedemptionReceipt> redeemInvitation(
+    String ownerStatusUrl,
+    String headerPath,
+    DirectedRedemption input,
+  ) async {
+    final destination = _pairingDestination(ownerStatusUrl, 'redeem');
+    try {
+      final json = await _request(
+        destination,
+        headerPath,
+        1024,
+        introduction: utf8.encode(input.toJson()),
+        requestTimeout: fetchTimeout,
+      );
+      if (json.length != 2 ||
+          json['acceptance_saved'] != true ||
+          json['local_held'] is! bool) {
+        throw StatusFailure.unexpected;
+      }
+      return RedemptionReceipt(localHeld: json['local_held'] as bool);
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.credentials => StatusFailure.pairingCredentials,
+        StatusFailure.unexpected => StatusFailure.redeemInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> _request(
     Uri destination,
     String headerPath,
@@ -548,7 +648,12 @@ class StatusClient {
     List<int>? introduction,
     Duration? requestTimeout,
   }) async {
-    if (_closed || _cancel != null) throw StatusFailure.unreachable;
+    final issuing = destination.path == '/owner/pw/invitations/issue';
+    final redeeming = destination.path == '/owner/pw/invitations/redeem';
+    final pairing = issuing || redeeming;
+    if (_closed || _cancel != null) {
+      throw pairing ? StatusFailure.pairingNotSent : StatusFailure.unreachable;
+    }
     final operationTimeout = requestTimeout ?? timeout;
     final fetching = destination.path == '/owner/introductions/fetch';
     final verifying = destination.path == '/owner/introductions/verify';
@@ -561,16 +666,25 @@ class StatusClient {
     StreamIterator<List<int>>? body;
     final abandoned = Completer<Map<String, dynamic>>();
     var finished = false;
+    var dispatched = false;
+
+    StatusFailure transportFailure() => !pairing
+        ? StatusFailure.unreachable
+        : !dispatched
+        ? StatusFailure.pairingNotSent
+        : issuing
+        ? StatusFailure.issueUnknown
+        : StatusFailure.redeemUnknown;
 
     void cancel() {
       if (finished) return;
       finished = true;
-      abandoned.completeError(StatusFailure.unreachable);
+      abandoned.completeError(transportFailure());
     }
 
     Future<Map<String, dynamic>> perform() async {
       final authorization = await _readAuthorization(headerPath);
-      if (finished) throw StatusFailure.unreachable;
+      if (finished) throw transportFailure();
       transport =
           createClient?.call() ??
           IOClient(
@@ -588,16 +702,25 @@ class StatusClient {
         request.headers['Content-Type'] = 'application/json';
         request.bodyBytes = introduction;
       }
+      dispatched = true;
       final response = await transport!.send(request);
       if (finished) {
         // send() may finish after cancellation, including with a test client.
         await response.stream.listen(null).cancel();
-        throw StatusFailure.unreachable;
+        throw transportFailure();
       }
 
       if (response.statusCode != 200) {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
+          401 || 404 when issuing => StatusFailure.issueUnavailable,
+          400 || 413 || 415 when issuing => StatusFailure.issueRejected,
+          409 when issuing => StatusFailure.issueExists,
+          _ when issuing => StatusFailure.issueUnknown,
+          401 || 404 when redeeming => StatusFailure.redeemUnavailable,
+          400 || 413 || 415 when redeeming => StatusFailure.redeemRejected,
+          502 when redeeming => StatusFailure.redeemRemote,
+          _ when redeeming => StatusFailure.redeemUnknown,
           401 => StatusFailure.unauthorized,
           400 || 415 when fetchingAd => StatusFailure.adFetchRejected,
           404 when fetchingAd => StatusFailure.adFetchUnavailable,
@@ -666,9 +789,12 @@ class StatusClient {
         }
         bytes.addAll(chunk);
       }
-      if (finished) throw StatusFailure.unreachable;
+      if (finished) throw transportFailure();
       try {
         final text = utf8.decode(bytes);
+        if (pairing && !pairingResponseEnvelope(text, issuing: issuing)) {
+          throw StatusFailure.unexpected;
+        }
         if (verifying && !_verificationEnvelope(text)) {
           throw StatusFailure.unexpected;
         }
@@ -691,7 +817,7 @@ class StatusClient {
     } on StatusFailure {
       rethrow;
     } catch (_) {
-      throw StatusFailure.unreachable;
+      throw transportFailure();
     } finally {
       finished = true;
       deadline.cancel();
@@ -881,5 +1007,14 @@ Future<String> _readAuthorization(String path) async {
     }
   } catch (_) {
     throw StatusFailure.credentials;
+  }
+}
+
+Uri _pairingDestination(String input, String operation) {
+  try {
+    return _destination(input)
+        .replace(path: '/owner/pw/invitations/$operation');
+  } on StatusFailure {
+    throw StatusFailure.pairingOwnerUrl;
   }
 }

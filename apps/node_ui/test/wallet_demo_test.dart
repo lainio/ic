@@ -191,7 +191,7 @@ void main() {
         expect(keyed('last-readiness'), findsOneWidget);
         expect(keyed('local-trust'), findsOneWidget);
         expect(find.text('DEMO DATA · UI CONCEPT'), findsOneWidget);
-        expect(find.textContaining('No live network'), findsOneWidget);
+        expect(find.textContaining('SCRIPTED GRAPH AND CHAT'), findsOneWidget);
         expect(
           find.text('Scripted conversation · no live transport'),
           findsOneWidget,
@@ -323,7 +323,7 @@ void main() {
       await selectPeer(tester, 'bob');
       expect(keyed('relationship-graph'), findsNothing);
       expect(find.text('DEMO DATA · UI CONCEPT'), findsOneWidget);
-      expect(find.textContaining('No live network'), findsOneWidget);
+      expect(find.textContaining('SCRIPTED GRAPH AND CHAT'), findsOneWidget);
       await tester.ensureVisible(keyed('sample-composer'));
       expect(
         tester.widget<TextField>(keyed('sample-composer')).enabled,

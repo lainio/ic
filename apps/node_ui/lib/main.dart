@@ -71,6 +71,7 @@ class IntroTreeApp extends StatelessWidget {
     this.publishAd,
     this.fetchPeerAd,
     this.verifyPeerAd,
+    this.createPairingClient,
   });
 
   final ReadStatus? readStatus;
@@ -84,6 +85,7 @@ class IntroTreeApp extends StatelessWidget {
   final PublishAd? publishAd;
   final FetchPeerAd? fetchPeerAd;
   final VerifyPeerAd? verifyPeerAd;
+  final StatusClient Function()? createPairingClient;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -109,6 +111,7 @@ class IntroTreeApp extends StatelessWidget {
       publishAd: publishAd,
       fetchPeerAd: fetchPeerAd,
       verifyPeerAd: verifyPeerAd,
+      createPairingClient: createPairingClient,
     ),
   );
 }
@@ -127,6 +130,7 @@ class StatusScreen extends StatefulWidget {
     this.publishAd,
     this.fetchPeerAd,
     this.verifyPeerAd,
+    this.createPairingClient,
   });
 
   final ReadStatus? readStatus;
@@ -140,6 +144,7 @@ class StatusScreen extends StatefulWidget {
   final PublishAd? publishAd;
   final FetchPeerAd? fetchPeerAd;
   final VerifyPeerAd? verifyPeerAd;
+  final StatusClient Function()? createPairingClient;
 
   @override
   State<StatusScreen> createState() => _StatusScreenState();
@@ -633,6 +638,20 @@ class _StatusScreenState extends State<StatusScreen> {
     super.dispose();
   }
 
+  void _openWalletDemo() {
+    final url = _url.text;
+    final headerPath = _headerPath.text;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => WalletDemoScreen(
+          ownerStatusUrl: url,
+          headerPath: headerPath,
+          createPairingClient: widget.createPairingClient,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -644,13 +663,7 @@ class _StatusScreenState extends State<StatusScreen> {
             order: const NumericFocusOrder(-1),
             child: TextButton.icon(
               key: const ValueKey('open-wallet-demo'),
-              onPressed: _loading
-                  ? null
-                  : () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const WalletDemoScreen(),
-                      ),
-                    ),
+              onPressed: _loading ? null : _openWalletDemo,
               icon: const Icon(Icons.account_tree_outlined),
               label: const Text('Wallet demo'),
             ),

@@ -188,26 +188,100 @@ Select Bob for the scripted conversation; the wallet switcher also offers an
 independently defined Bob fixture. At narrow widths, `Back to graph` returns
 from peer details. Use Tab and Enter to select identities with a keyboard.
 
-`DEMO DATA · UI CONCEPT` and `No live network` remain visible. Dashed violet
-paths are locally verified introduction evidence, solid cyan curves are local
-retained PW halves, and amber diamonds are separately assigned local trust.
-Layer controls only change visibility. Last readiness is a fictional historical
-observation, never current reachability or a shared `PWOpen` flag. Invitations
-alone imply no PW or trust. The disabled composer cannot send; the demo has no
-owner API calls, storage writes, credentials, or protocol transitions. It is not
-PW-Go-12 or a messaging/conformance implementation.
+`DEMO DATA · UI CONCEPT` and `SCRIPTED GRAPH AND CHAT` remain visible. Dashed
+violet paths are locally verified introduction evidence, solid cyan curves are
+local retained PW halves, and amber diamonds are separately assigned local
+trust. Layer controls only change visibility. Last readiness is a fictional
+historical observation, never current reachability or a shared `PWOpen` flag.
+Invitations alone imply no PW or trust. The disabled composer cannot send.
+Graph and chat remain fixtures, including after successful live owner actions.
+
+## Live pairing (PW-Go-12)
+
+`Wallet demo` → `Live pairing` opens separate explicit owner controls. The owner
+screen remains the default. Its current status URL and header-file path are
+passed as a transient snapshot for this window; neither credentials nor settings
+are persisted. If either field is absent, submissions are disabled. Return to
+the owner screen to change configuration, then reopen the panel. Fixture names
+never identify the credential owner, select a signer or supply a public key.
+Use two separate windows, configured for Bob's and Alice's respective nodes.
+
+1. **Bob window:** enter Alice's full real lowercase COSE public-key hex and
+   explicitly click `Issue invitation`. This makes one authenticated JSON POST
+   to `/owner/pw/invitations/issue` with only `recipient_public_key_hex`.
+   **Only one invitation row may ever exist per Bob Vault**, even after expiry,
+   revocation or consumption. A second issue receives 409; there is no
+   replacement. The server sets a 15-minute lifetime. The validated committed
+   receipt shows the selectable invitation ID, Directed audience, exact recipient
+   and UTC expiry with nanosecond precision. It does not contain Bob's key.
+2. Optionally enter Bob's full real public key separately, **operator-supplied,
+   not confirmed by the issue receipt**. After a successful current issue,
+   `Copy manual redeem JSON` explicitly copies exactly the object below. This
+   is a manual clipboard convenience, not a signed invitation wire format.
+   The ID is sensitive eligibility material; share deliberately. Clipboard
+   history and other same-user applications are outside the app's control.
+3. **Alice window:** paste that JSON and explicitly click `Redeem invitation`.
+   The exact three-field shape, Directed audience and canonical lowercase hex
+   are checked locally, with a 512-byte UTF-8 input limit. One authenticated
+   POST goes to Alice's `/owner/pw/invitations/redeem`; Flutter never contacts
+   Bob's peer listener. Go uses Alice's locally verified ad to choose the endpoint
+   and remains authoritative for COSE, signatures, Root, evidence and acceptance.
+
+~~~json
+{"target_public_key_hex":"<operator-supplied Bob full public key hex>","invitation_id_hex":"<64 lowercase hex characters>","audience":"Directed"}
+~~~
+
+Alice must already know Bob and have matching received and verified current ad
+evidence. Bob requires an opt-in `--peer-listen`; Alice needs no peer listener.
+There is only one saved requester attempt per Alice Vault. Conflicting target,
+invitation or audience is refused. These controls add no prerequisite wizard,
+first-use operation or messaging.
+
+`Acceptance saved locally` and `Local PW held: yes/no` are separate receipt
+observations. A false holding is not a usable relationship. Neither result
+establishes current peer permission, readiness, a shared `PWOpen`, Trust,
+authenticated first use or chat. No response changes the scripted graph,
+readiness markers, trust or chat bubbles.
+
+Both requests reuse `StatusClient`'s validated loopback owner origin, fresh
+per-click `owner.header`, direct/no-proxy transport and no-redirect policy.
+Request bodies are at most 512 bytes and success responses at most 1 KiB.
+Issue has a five-second deadline; redeem has eight seconds, allowing Go's
+five-second peer exchange. Exact success envelopes reject duplicate/unknown
+fields, wrong types, noncanonical hex and mismatched issue recipients.
+Only fixed failure messages reach the UI; bodies, exceptions, invitation IDs
+and owner credentials are never logged. Credentials are never copied.
+
+Client validation and credential-read failures say that no request was sent.
+Issue 409 reports the existing invitation row without claiming a new issuance.
+400/413/415 report rejected input, and 401/404 report credential/scope or route
+failure. Redeem 409 leaves local redemption unconfirmed: it does not prove Bob
+refused. Redeem 502 explicitly reports the retained attempt and unknown peer
+outcome. Transport failure, timeout, 5xx, or malformed/mismatched success after
+submission leave the outcome unknown or unconfirmed; commits are not rolled
+back by missing acknowledgements. There is no automatic retry. The presenter
+may explicitly repeat redemption with the same input using Go's durable exact
+attempt, subject to current guards, without a recovery guarantee.
+
+Pending submissions disable both operation buttons. Relevant input changes,
+owner configuration changes and panel disposal invalidate receipts and late
+results; Bob-key edits invalidate clipboard confirmation. Each explicit action
+clears the older receipt for that operation. Closing the panel discards its
+in-memory inputs and receipts without undoing node operations. Startup, wallet
+switching, graph selection and opening/closing the panel perform no live action.
 
 ## Validate
 
 Using the installed Flutter SDK and provisioned package cache, in this directory:
 
-```sh
+~~~sh
 flutter pub get --offline
-dart format lib test
 flutter analyze --no-pub
 flutter test --no-pub
 flutter build linux --debug --no-pub
-```
+~~~
+
+Format touched Dart files only. Run the root `make lint` before and after changes.
 
 The generated application `pubspec.lock` is source; `.dart_tool`, build outputs,
 and Linux ephemeral files are ignored. Tests use temporary synthetic header
