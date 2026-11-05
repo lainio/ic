@@ -230,6 +230,32 @@ The node scenario compares surrounding logical state to exclude Trust, open
 state and unrelated mutations. No TLC run or broad power-loss/rollback proof
 is claimed.
 
+## Candidate local outgoing message
+
+PW-Msg-Go-01 projects only the PW-Msg-02 candidate's `CreateOutgoing` into a
+private `internal/pw` function. Under the existing owner mutation/signer lock,
+either participant can persist one immutable `local-pw-message-outgoing-v1`
+canonical CBOR record in its encrypted Vault: random UUIDv4-style ID, 1–1024
+UTF-8 bytes, sender/receiver role and exact accepted-request/history digests.
+The strict bound is **one outgoing message per Vault**, including Bob first;
+no inbox or message from Alice is required. This means `submitted locally`.
+
+Creation and exact repetition require authenticated accepted history, retained
+holding, own/peer Known, no local Deny and an authorized, freshly probed usable
+installed signer. Alice needs validated Ready or Expired retaining a verified
+response; Bob needs validated useSeen. These are historical local observations,
+not reachability or remote current permission. Ad/invitation expiry does not
+invalidate an accepted relationship. Exact repetition returns the saved bytes
+without a new message ID or write; conflicts/corruption fail closed. Missing
+records need no migration; unknown versions are refused, never overwritten.
+An uncertain result requires storage inspection, with no automatic retry.
+
+Authenticated wire bytes, inbound admission, receipts/ACKs (including late
+historical ACKs), transport, transport confidentiality, additional messages,
+general protocol concurrency and UI remain unimplemented. No endpoint, CLI or
+startup action exposes this function. This is a candidate local projection,
+not a messaging channel, V19 refinement or promotion of normative contracts.
+
 ## Local held-half deletion
 
 The operational `NewFirstUseCredentials` composition used by `node serve`
