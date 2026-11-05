@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/pw"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -52,13 +53,27 @@ func NewEstablishmentCredentials(ctx context.Context, vault *storage.Vault,
 
 func (h *publicationHandler) establishLocal(raw []byte) ([]byte, error) {
 	raw = bytes.Clone(raw)
+	stage, reason, retained := "guards", "undetermined", false
+	defer func() {
+		if retained {
+			glog.V(1).Info("intro_pw op=establish side=acceptor " +
+				"stage=reply result=retained")
+		} else {
+			glog.V(1).Infof("intro_pw op=establish side=acceptor "+
+				"stage=%s result=refused reason=%s", stage, reason)
+		}
+	}()
 	h.mutations.Lock()
 	defer h.mutations.Unlock()
 	if h.endpoint == "" {
+		reason = "peer_listener_unavailable"
 		return nil, pw.ErrEstablishment
 	}
 	row, found, err := pw.ReadInvitation(h.vault, h.root, h.child)
 	if err != nil || !found {
+		if err == nil {
+			reason = "invitation_unavailable"
+		}
 		return nil, pw.ErrEstablishment
 	}
 	switch row.State {
@@ -73,9 +88,13 @@ func (h *publicationHandler) establishLocal(raw []byte) ([]byte, error) {
 	case pw.InvitationConsumed:
 		// Never call BobAccept again, even for missing/corrupt saved history.
 	default:
+		reason = "invitation_incompatible"
 		return nil, pw.ErrEstablishment
 	}
 	// Initial delivery and retry use the identical guarded, read-only path.
 	// Commit has completed. A refused reply cannot roll that history back.
-	return pw.BobReply(h.vault, h.root, h.child, h.signer, h.endpoint, raw)
+	stage = "reply"
+	response, err := pw.BobReply(h.vault, h.root, h.child, h.signer, h.endpoint, raw)
+	retained = err == nil
+	return response, err
 }

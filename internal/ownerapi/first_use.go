@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/pw"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -104,18 +105,26 @@ func (h *firstUseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeStatusError(w, http.StatusBadRequest)
 		return
 	}
+	glog.V(1).Info("intro_pw op=first_use side=requester " +
+		"stage=request result=accepted")
 	saved, err := h.saveFirstUse(r.Context())
 	if err != nil {
 		writeStatusError(w, http.StatusConflict)
 		return
 	}
 	// Await has committed. No lock, transaction or signer call spans HTTP.
+	glog.V(1).Info("intro_pw op=first_use side=requester " +
+		"stage=peer_exchange result=started")
 	response, err := pw.SendFirstUse(r.Context(), saved)
 	if err != nil {
+		glog.V(1).Info("intro_pw op=first_use side=requester " +
+			"stage=peer_exchange result=unknown reason=undetermined")
 		http.Error(w, "First-use peer outcome unknown; Await retained",
 			http.StatusBadGateway)
 		return
 	}
+	glog.V(1).Info("intro_pw op=first_use side=requester " +
+		"stage=peer_exchange result=response_received")
 	if !h.receiveFirstUse(response) {
 		http.Error(w, "Local first use refused; peer outcome unknown",
 			http.StatusConflict)
@@ -130,6 +139,8 @@ func (h *firstUseHandler) saveFirstUse(
 	h.mutations.Lock()
 	defer h.mutations.Unlock()
 	if err := ctx.Err(); err != nil {
+		glog.V(1).Info("intro_pw op=first_use side=requester " +
+			"stage=await result=refused reason=request_canceled")
 		return pw.SavedFirstUse{}, err
 	}
 	return pw.SaveFirstUse(h.vault, h.root, h.child, h.signer)

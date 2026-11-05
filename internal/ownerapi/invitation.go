@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"unicode/utf8"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/pw"
 	"github.com/lainio/ic/key"
 )
@@ -49,8 +50,16 @@ func (h *acceptanceExchangeHandler) serveInvitation(
 		return
 	}
 	issue := r.URL.Path == invitationIssuePath
+	if issue {
+		glog.V(1).Info("intro_pw op=invitation_issue side=local " +
+			"stage=request result=accepted")
+	}
 	input, ok := readInvitationRequest(w, r, issue)
 	if !ok {
+		if issue {
+			glog.V(1).Info("intro_pw op=invitation_issue side=local " +
+				"stage=issue result=refused reason=input_invalid")
+		}
 		return
 	}
 	encoded, err := h.changeInvitation(input, issue)
@@ -70,7 +79,27 @@ func (h *acceptanceExchangeHandler) serveInvitation(
 }
 
 func (h *acceptanceExchangeHandler) changeInvitation(input []byte, issue bool,
-) ([]byte, error) {
+) (_ []byte, err error) {
+	committed := false
+	defer func() {
+		if !issue {
+			return
+		}
+		if committed {
+			glog.V(1).Info("intro_pw op=invitation_issue side=local " +
+				"stage=issue result=committed")
+			return
+		}
+		reason := "undetermined"
+		switch {
+		case errors.Is(err, pw.ErrInvitationInput):
+			reason = "input_invalid"
+		case errors.Is(err, pw.ErrInvitationIssued):
+			reason = "invitation_already_exists"
+		}
+		glog.V(1).Infof("intro_pw op=invitation_issue side=local "+
+			"stage=issue result=refused reason=%s", reason)
+	}()
 	h.mutations.Lock()
 	defer h.mutations.Unlock()
 	if !issue {
@@ -87,6 +116,7 @@ func (h *acceptanceExchangeHandler) changeInvitation(input []byte, issue bool,
 	if err != nil {
 		return nil, err
 	}
+	committed = true
 	var recipient *string
 	if row.Recipient != nil {
 		value := hex.EncodeToString(row.Recipient)

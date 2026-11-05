@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"unicode/utf8"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/pw"
 	"github.com/lainio/ic/key"
 )
@@ -50,9 +51,13 @@ func (h *redemptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	input, status := readRedemptionRequest(w, r)
 	if status != 0 {
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=request result=refused reason=input_invalid")
 		writeStatusError(w, status)
 		return
 	}
+	glog.V(1).Info("intro_pw op=redeem side=requester " +
+		"stage=request result=accepted")
 	saved, err := h.saveRedemption(r.Context(), input)
 	if err != nil {
 		writeStatusError(w, http.StatusConflict)
@@ -61,8 +66,12 @@ func (h *redemptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	held := saved.Held
 	if !saved.Accepted {
 		// No service/signer lock or Vault transaction survives this boundary.
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=peer_exchange result=started")
 		response, sendErr := pw.SendEstablish(r.Context(), saved)
 		if sendErr != nil {
+			glog.V(1).Info("intro_pw op=redeem side=requester " +
+				"stage=peer_exchange result=unknown reason=undetermined")
 			http.Error(
 				w,
 				"Establishment outcome unknown; saved attempt retained",
@@ -70,6 +79,8 @@ func (h *redemptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=peer_exchange result=response_received")
 		held, err = h.receiveRedemption(response)
 		if err != nil {
 			http.Error(
@@ -79,6 +90,9 @@ func (h *redemptionHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			)
 			return
 		}
+	} else {
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=acceptance result=retained")
 	}
 	// Local history is enough for an owner retry, even after held-half deletion.
 	// A lost owner acknowledgement cannot cause another peer confirmation.
@@ -99,6 +113,8 @@ func (h *redemptionHandler) saveRedemption(ctx context.Context,
 	h.mutations.Lock()
 	defer h.mutations.Unlock()
 	if err := ctx.Err(); err != nil {
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=attempt result=refused reason=request_canceled")
 		return pw.SavedAttempt{}, err
 	}
 	return pw.SaveAttempt(h.vault, h.root, h.child, input.target, h.signer,

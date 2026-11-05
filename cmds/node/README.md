@@ -87,6 +87,74 @@ expiry. Clock rollback is not prevented. Alice needs no peer listener, and
 startup/ad discovery never starts redemption. These independent commits are the
 bounded invitation extension, not a V19 refinement or cryptographic proof.
 
+## Local PW diagnostics
+
+Enable the existing glog stream separately in Alice's and Bob's terminals:
+
+~~~sh
+tdc --v=1 node serve --dir NODE_DIR --unlock-file NODE_UNLOCK_FILE \
+    --storage-key-file NODE_STORAGE_KEY_FILE --root ROOT_PUBLIC_KEY_HEX
+~~~
+
+This placement is exercised by `TestServePWDiagnosticsCLI`, which builds and
+launches the actual CLI and invokes bootstrap over HTTP. Bob also needs the
+existing `--peer-listen 127.0.0.1:0` option for publication and peer operations.
+Diagnostics go to stderr; the default verbosity remains quiet. Normal startup
+output, including the raw COSE public-key hex, is unchanged.
+
+**Device authorization is mandatory for initial PW establishment, not an
+optional UI enhancement.** Each node needs its own Known introduction evidence
+(or the pinned Root self case), explicit `/owner/device/bootstrap`, and an
+invocation-time usable signer. Stored authorization alone does not prove that
+the signer is usable. `already_authorized` does not perform a new signer probe.
+
+Example sanitized messages (glog's timestamp/source prefix omitted):
+
+~~~text
+intro_pw op=device_bootstrap side=local stage=authorization result=refused reason=own_introduction_not_known
+intro_pw op=redeem side=requester stage=attempt result=refused reason=device_not_authorized
+intro_pw op=redeem side=requester stage=attempt result=committed
+intro_pw op=redeem side=requester stage=peer_exchange result=started
+intro_pw op=establish side=acceptor stage=acceptance result=committed
+intro_pw op=establish side=acceptor stage=reply result=retained
+intro_pw op=redeem side=requester stage=acceptance result=committed
+intro_pw op=first_use side=requester stage=await result=committed
+intro_pw op=first_use side=requester stage=peer_exchange result=unknown reason=undetermined
+~~~
+
+Use the terminal/process to distinguish nodes: `requester` is Alice, `acceptor`
+is Bob, and `local` covers bootstrap, publication and invitation issue on the
+operating node. No identity or session correlator is logged. Concurrent owner
+operations can interleave; these lines are not a distributed trace.
+
+HTTP 409 remains intentionally ambiguous. For redemption, `stage=attempt`
+refusal stops before peer HTTP for that invocation; `stage=peer_exchange
+result=started` means the saved attempt reached the exchange call.
+`result=accepted` admits a request for processing only. `result=committed`
+follows successful Vault commit; `retained` reports existing exact state or a
+guarded read-only reply. Publication commit is not peer-side verification.
+First use separates Alice's `await`, Bob's `receipt`, and Alice's verified
+`ready` commit. None creates shared `PWOpen` or Trust.
+
+Proven establishment reasons include missing own/peer Known evidence,
+`device_not_authorized`, `signer_unusable`, `policy_deny`, missing/changed ad
+evidence, and incompatible invitation/attempt state. Some checks remain grouped:
+`ad_invalid_or_expired`, `ad_unavailable_or_mismatched`, and publication's
+`device_not_authorized_or_unusable`. First use identifies a failed signer probe
+and an already saved session; most first-use guards, Bob's saved-reply checks,
+and otherwise indistinguishable failures use `undetermined` at the actual
+stage. The stream adds no reads, signer probes, retries, or replacement state.
+
+An HTTP 502 or `peer_exchange result=unknown` cannot distinguish non-delivery,
+peer refusal, invalid response, or a lost reply after Bob committed. Alice's
+later local refusal also cannot undo or determine Bob's outcome. Bob's
+`response result=prepared` proves neither delivery nor Alice's acceptance or
+Ready; there is no third acknowledgement. `response_received` alone is not
+authenticated acceptance. Local Ready is historical: neither node learns the
+other's later Deny/delete from these logs. Never infer remote rollback or
+automatically retry; first use is one-shot and invitations/attempts cannot be
+replaced.
+
 ## Authenticated first use
 
 After Alice has independently accepted Bob's establishment response, her

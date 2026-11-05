@@ -2,8 +2,10 @@ package pw
 
 import (
 	"bytes"
+	"errors"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -20,6 +22,32 @@ const (
 	acceptedKey = "local-pw-accepted-v1"
 	heldKey     = "local-pw-held-v1"
 )
+
+// Private diagnostic causes survive transaction unwinding only. Public actions
+// still return the exact ErrEstablishment sentinel. Never log error text.
+type establishmentRefusal string
+
+func (e establishmentRefusal) Error() string { return string(e) }
+func (establishmentRefusal) Unwrap() error   { return ErrEstablishment }
+
+func establishmentReason(err error) string {
+	var refusal establishmentRefusal
+	if errors.As(err, &refusal) {
+		return string(refusal) // Constructed only from fixed codes below.
+	}
+	switch {
+	case errors.Is(err, ads.ErrNoReceivedClaim):
+		return "ad_evidence_missing"
+	case errors.Is(err, ads.ErrReceivedClaimChanged):
+		return "ad_evidence_changed"
+	case errors.Is(err, ads.ErrInvalidRecord):
+		return "ad_invalid_or_expired"
+	case errors.Is(err, device.ErrInvalidAuthorization):
+		return "device_authorization_invalid"
+	default:
+		return "undetermined"
+	}
+}
 
 // One immutable history record and an independently removable holding. Both
 // reference the exact signed request. The local role is checked against that
@@ -58,7 +86,11 @@ func bobAccept(vault *storage.Vault, root, local key.Public, signer key.Handle,
 	endpoint string, raw []byte, now func() time.Time,
 ) (err error) {
 	defer assert.PushAsserter(assert.Plain)()
-	defer err2.Handle(&err, func(error) error { return ErrEstablishment })
+	defer err2.Handle(&err, func(cause error) error {
+		glog.V(1).Infof("intro_pw op=establish side=acceptor "+
+			"stage=acceptance result=refused reason=%s", establishmentReason(cause))
+		return ErrEstablishment
+	})
 
 	assert.NotNil(vault, ErrEstablishment)
 	root, local, raw = bytes.Clone(root), bytes.Clone(local), bytes.Clone(raw)
@@ -71,7 +103,11 @@ func bobAccept(vault *storage.Vault, root, local key.Public, signer key.Handle,
 	state := try.To1(
 		device.InspectLocal(vault, root, local, localSigner{signer}),
 	)
-	assert.That(state.Authorized && state.Usable, ErrEstablishment)
+	assert.That(state.Authorized,
+		establishmentRefusal("device_not_authorized"))
+	assert.That(state.Usable, establishmentRefusal("signer_unusable"))
+	glog.V(1).Info("intro_pw op=establish side=acceptor " +
+		"stage=signer result=usable")
 	payload := acceptedPayload(request.Payload, raw)
 	digest := key.HashTagged(AcceptedPurpose, try.To1(wire.Marshal(payload)))
 	signature := try.To1((localSigner{signer}).Sign(bytes.Clone(digest[:])))
@@ -79,10 +115,13 @@ func bobAccept(vault *storage.Vault, root, local key.Public, signer key.Handle,
 		Payload: payload, Signature: bytes.Clone(signature),
 	}))
 	try.To(verifyAccepted(response, payload))
-	return vault.Update(func(tx storage.WriteTx) (err error) {
+	try.To(vault.Update(func(tx storage.WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
 		return commitAcceptance(tx, root, local, endpoint, raw, response, now)
-	})
+	}))
+	glog.V(1).Info("intro_pw op=establish side=acceptor " +
+		"stage=acceptance result=committed")
+	return nil
 }
 
 func commitAcceptance(tx storage.WriteTx, root, local key.Public,
@@ -112,13 +151,15 @@ func newRedemption(tx storage.ReadTx, p Establishment, endpoint string,
 
 	row, found := try.To2(readInvitation(tx, p.Root, p.Target))
 	assert.That(found && row.State == InvitationActive &&
-		matchesInvitation(row, p), ErrEstablishment)
+		matchesInvitation(row, p), establishmentRefusal("invitation_incompatible"))
 	_, accepted := try.To2(tx.Get([]byte(acceptedKey)))
 	_, held := try.To2(tx.Get([]byte(heldKey)))
 	_, attempting := try.To2(tx.Get([]byte(attemptKey)))
-	assert.That(!accepted && !held && !attempting, ErrEstablishment)
+	assert.That(!accepted && !held && !attempting,
+		establishmentRefusal("state_incompatible"))
 	timeNow := try.To1(currentEstablishmentGuards(tx, p, endpoint, now))
-	assert.That(invitationBeforeExpiry(row, timeNow), ErrEstablishment)
+	assert.That(invitationBeforeExpiry(row, timeNow),
+		establishmentRefusal("invitation_expired"))
 	return row, nil
 }
 
@@ -141,17 +182,20 @@ func currentEstablishmentGuards(tx storage.ReadTx, p Establishment,
 	peerKnown := try.To1(
 		onboarding.IsKnownIntroductionInTx(tx, p.Root, p.Requester),
 	)
-	assert.That((ownKnown || bytes.Equal(p.Root, p.Target)) &&
-		(peerKnown || bytes.Equal(p.Root, p.Requester)), ErrEstablishment)
+	assert.That(ownKnown || bytes.Equal(p.Root, p.Target),
+		establishmentRefusal("own_introduction_not_known"))
+	assert.That(peerKnown || bytes.Equal(p.Root, p.Requester),
+		establishmentRefusal("peer_not_known"))
 	assert.ThatNot(try.To1(policy.IsDeniedInTx(tx, p.Root, p.Target,
-		p.Requester)), ErrEstablishment)
+		p.Requester)), establishmentRefusal("policy_deny"))
 	assert.That(try.To1(device.IsAuthorizedLocalInTx(tx, p.Root, p.Target)),
-		ErrEstablishment)
+		establishmentRefusal("device_not_authorized"))
 	timeNow := now()
 	current, found := try.To2(ads.ReadCurrentLocalInTx(tx, p.Root, p.Target,
 		timeNow))
 	assert.That(endpoint != "" && found &&
 		current.Payload.PeerIntroductionURL == endpoint &&
-		bytes.Equal(try.To1(wire.Marshal(current)), p.Ad), ErrEstablishment)
+		bytes.Equal(try.To1(wire.Marshal(current)), p.Ad),
+		establishmentRefusal("ad_unavailable_or_mismatched"))
 	return timeNow, nil
 }

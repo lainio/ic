@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/device"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -67,10 +68,37 @@ func (h *deviceHandler) serveBootstrap(w http.ResponseWriter, r *http.Request) {
 	if !readEmptyObjectRequest(w, r) {
 		return
 	}
+	glog.V(1).Info("intro_pw op=device_bootstrap side=local " +
+		"stage=request result=accepted")
+	result, reason := "refused", "undetermined"
+	// Registered before Unlock: emit only after the service lock is released.
+	defer func() {
+		if result == "committed" {
+			glog.V(1).Info("intro_pw op=device_bootstrap side=local " +
+				"stage=authorization result=committed")
+			glog.V(1).Info("intro_pw op=device_bootstrap side=local " +
+				"stage=signer result=usable")
+		} else {
+			glog.V(1).Infof("intro_pw op=device_bootstrap side=local "+
+				"stage=authorization result=refused reason=%s", reason)
+		}
+	}()
 	h.mutations.Lock()
 	defer h.mutations.Unlock()
 	state, err := device.BootstrapLocal(h.vault, h.root, h.child, h.signer)
 	if err != nil {
+		switch {
+		case errors.Is(err, device.ErrNotKnown):
+			reason = "own_introduction_not_known"
+		case errors.Is(err, device.ErrAlreadyAuthorized):
+			reason = "already_authorized"
+		case errors.Is(err, device.ErrUnusableSigner):
+			reason = "signer_unusable"
+		case errors.Is(err, device.ErrInvalidAuthorization):
+			reason = "device_authorization_invalid"
+		case errors.Is(err, device.ErrInvalidBinding):
+			reason = "binding_invalid"
+		}
 		status := http.StatusInternalServerError
 		if errors.Is(err, device.ErrAlreadyAuthorized) || errors.Is(err, device.ErrNotKnown) ||
 			errors.Is(err, device.ErrUnusableSigner) {
@@ -79,6 +107,7 @@ func (h *deviceHandler) serveBootstrap(w http.ResponseWriter, r *http.Request) {
 		writeStatusError(w, status)
 		return
 	}
+	result = "committed"
 	encoded, err := json.Marshal(struct {
 		Authorized bool `json:"authorized"`
 		Usable     bool `json:"usable"`

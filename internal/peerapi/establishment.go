@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"unicode/utf8"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/pw"
 )
 
@@ -49,8 +50,12 @@ func NewEstablishmentHandler(
 			fail(status)
 			return
 		}
+		glog.V(1).Info("intro_pw op=establish side=acceptor " +
+			"stage=request result=accepted")
 		acceptance, err := establish(request)
 		if err != nil {
+			glog.V(1).Info("intro_pw op=establish side=acceptor " +
+				"stage=local result=refused reason=undetermined")
 			fail(http.StatusConflict)
 			return
 		}
@@ -68,6 +73,8 @@ func NewEstablishmentHandler(
 		}
 		// Both local transitions and the service lock have ended. A failed
 		// write cannot roll back consumption or trigger acceptance signing.
+		glog.V(1).Info("intro_pw op=establish side=acceptor " +
+			"stage=response result=prepared")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(document)

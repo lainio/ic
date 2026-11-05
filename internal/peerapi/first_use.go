@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/pw"
 )
 
@@ -48,8 +49,12 @@ func NewFirstUseHandler(
 			fail(http.StatusBadRequest)
 			return
 		}
+		glog.V(1).Info("intro_pw op=first_use side=acceptor " +
+			"stage=request result=accepted")
 		response, err := firstUse(request)
 		if err != nil {
+			glog.V(1).Info("intro_pw op=first_use side=acceptor " +
+				"stage=local result=refused reason=undetermined")
 			fail(http.StatusConflict)
 			return
 		}
@@ -67,6 +72,8 @@ func NewFirstUseHandler(
 		}
 		// The receipt committed and the service lock ended before these bytes.
 		// A failed write cannot roll back useSeen or trigger another success.
+		glog.V(1).Info("intro_pw op=first_use side=acceptor " +
+			"stage=response result=prepared")
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(document)

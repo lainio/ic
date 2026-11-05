@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -54,7 +55,11 @@ func saveAttempt(
 	now func() time.Time,
 ) (_ SavedAttempt, err error) {
 	defer assert.PushAsserter(assert.Plain)()
-	defer err2.Handle(&err, func(error) error { return ErrEstablishment })
+	defer err2.Handle(&err, func(cause error) error {
+		glog.V(1).Infof("intro_pw op=redeem side=requester "+
+			"stage=attempt result=refused reason=%s", establishmentReason(cause))
+		return ErrEstablishment
+	})
 
 	assert.That(vault != nil && validPublic(root) && validPublic(local) &&
 		validPublic(target) && !bytes.Equal(local, target) &&
@@ -79,7 +84,8 @@ func saveAttempt(
 			)
 			assert.That(matchesInvitation(Invitation{Root: p.Root,
 				Target: p.Target, ID: p.InvitationID, Audience: p.Audience,
-				Recipient: p.Recipient}, request.Payload), ErrEstablishment)
+				Recipient: p.Recipient}, request.Payload),
+				establishmentRefusal("attempt_incompatible"))
 		} else {
 			p.Ad = try.To1(requesterGuards(tx, p, now))
 		}
@@ -88,9 +94,14 @@ func saveAttempt(
 	try.To(vault.View(read)) // Reject denied/conflicting state before signing.
 	state := try.To1(device.InspectLocal(vault, p.Root, p.Requester,
 		localSigner{signer}))
-	assert.That(state.Authorized && state.Usable, ErrEstablishment)
+	assert.That(state.Authorized,
+		establishmentRefusal("device_not_authorized"))
+	assert.That(state.Usable, establishmentRefusal("signer_unusable"))
+	glog.V(1).Info("intro_pw op=redeem side=requester stage=signer result=usable")
 	try.To(vault.View(read)) // Recheck after the external signer probe.
 	if saved.request != nil {
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=attempt result=retained")
 		return saved, nil
 	}
 
@@ -109,6 +120,8 @@ func saveAttempt(
 		try.To1(requesterGuards(tx, p, now))
 		return tx.Put([]byte(attemptKey), raw)
 	}))
+	glog.V(1).Info("intro_pw op=redeem side=requester " +
+		"stage=attempt result=committed")
 	return attemptSnapshot(raw, p.Ad, false, false), nil
 }
 
@@ -126,7 +139,11 @@ func receiveAcceptance(vault *storage.Vault, root, local key.Public,
 	signer key.Handle, response []byte, now func() time.Time,
 ) (_ bool, err error) {
 	defer assert.PushAsserter(assert.Plain)()
-	defer err2.Handle(&err, func(error) error { return ErrEstablishment })
+	defer err2.Handle(&err, func(cause error) error {
+		glog.V(1).Infof("intro_pw op=redeem side=requester "+
+			"stage=acceptance result=refused reason=%s", establishmentReason(cause))
+		return ErrEstablishment
+	})
 
 	assert.NotNil(vault, ErrEstablishment)
 	root, local = bytes.Clone(root), bytes.Clone(local)
@@ -143,9 +160,13 @@ func receiveAcceptance(vault *storage.Vault, root, local key.Public,
 	state := try.To1(
 		device.InspectLocal(vault, root, local, localSigner{signer}),
 	)
-	assert.That(state.Authorized && state.Usable, ErrEstablishment)
+	assert.That(state.Authorized,
+		establishmentRefusal("device_not_authorized"))
+	assert.That(state.Usable, establishmentRefusal("signer_unusable"))
 	if saved.Accepted {
 		try.To(vault.View(read))
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=acceptance result=retained")
 		return saved.Held, nil
 	}
 	updateErr := vault.Update(func(tx storage.WriteTx) (err error) {
@@ -159,9 +180,13 @@ func receiveAcceptance(vault *storage.Vault, root, local key.Public,
 		return nil
 	})
 	if updateErr == errRequesterUnchanged {
+		glog.V(1).Info("intro_pw op=redeem side=requester " +
+			"stage=acceptance result=retained")
 		return saved.Held, nil
 	}
 	try.To(updateErr)
+	glog.V(1).Info("intro_pw op=redeem side=requester " +
+		"stage=acceptance result=committed")
 	return true, nil
 }
 
@@ -215,7 +240,7 @@ func readRequester(tx storage.ReadTx, root, local key.Public,
 	history, accepted := try.To2(tx.Get([]byte(acceptedKey)))
 	holding, held := try.To2(tx.Get([]byte(heldKey)))
 	if !found {
-		assert.That(!accepted && !held, ErrEstablishment)
+		assert.That(!accepted && !held, establishmentRefusal("state_incompatible"))
 		return SavedAttempt{}, nil
 	}
 	var request SignedEstablishment
@@ -259,14 +284,17 @@ func requesterGuards(tx storage.ReadTx, p Establishment,
 	defer err2.Handle(&err, nil)
 	own := try.To1(onboarding.IsKnownIntroductionInTx(tx, p.Root, p.Requester))
 	peer := try.To1(onboarding.IsKnownIntroductionInTx(tx, p.Root, p.Target))
-	assert.That((own || bytes.Equal(p.Root, p.Requester)) &&
-		(peer || bytes.Equal(p.Root, p.Target)), ErrEstablishment)
+	assert.That(own || bytes.Equal(p.Root, p.Requester),
+		establishmentRefusal("own_introduction_not_known"))
+	assert.That(peer || bytes.Equal(p.Root, p.Target),
+		establishmentRefusal("peer_not_known"))
 	assert.ThatNot(try.To1(policy.IsDeniedInTx(tx, p.Root, p.Requester,
-		p.Target)), ErrEstablishment)
+		p.Target)), establishmentRefusal("policy_deny"))
 	assert.That(try.To1(device.IsAuthorizedLocalInTx(tx, p.Root, p.Requester)),
-		ErrEstablishment)
+		establishmentRefusal("device_not_authorized"))
 	ad := try.To1(ads.ReadEstablishmentAdInTx(tx, p.Root, p.Target, now()))
-	assert.That(p.Ad == nil || bytes.Equal(p.Ad, ad), ErrEstablishment)
+	assert.That(p.Ad == nil || bytes.Equal(p.Ad, ad),
+		establishmentRefusal("ad_evidence_changed"))
 	return ad, nil
 }
 

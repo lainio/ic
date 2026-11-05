@@ -6,6 +6,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -35,8 +36,13 @@ func SaveFirstUse(vault *storage.Vault, root, local key.Public,
 func saveFirstUse(vault *storage.Vault, root, local key.Public,
 	signer key.Handle, now func() time.Time,
 ) (_ SavedFirstUse, err error) {
+	reason := "undetermined"
 	defer assert.PushAsserter(assert.Plain)()
-	defer err2.Handle(&err, func(error) error { return ErrFirstUse })
+	defer err2.Handle(&err, func(error) error {
+		glog.V(1).Infof("intro_pw op=first_use side=requester "+
+			"stage=await result=refused reason=%s", reason)
+		return ErrFirstUse
+	})
 
 	assert.NotNil(vault, ErrFirstUse)
 	root, local = bytes.Clone(root), bytes.Clone(local)
@@ -46,13 +52,23 @@ func saveFirstUse(vault *storage.Vault, root, local key.Public,
 		established = try.To1(firstUseHistory(tx, root, local, true))
 		try.To(firstUseGuards(tx, established, true))
 		_, exists := try.To2(tx.Get([]byte(firstUseKey)))
+		if exists {
+			reason = "session_already_exists"
+		}
 		assert.ThatNot(exists, ErrFirstUse)
 		return nil
 	}))
 	state := try.To1(
 		device.InspectLocal(vault, root, local, localSigner{signer}),
 	)
+	if !state.Authorized {
+		reason = "device_not_authorized"
+	} else if !state.Usable {
+		reason = "signer_unusable"
+	}
 	assert.That(state.Authorized && state.Usable, ErrFirstUse)
+	glog.V(1).Info("intro_pw op=first_use side=requester " +
+		"stage=signer result=usable")
 	n := try.To1(firstUseTime(now()))
 	assert.That(n <= math.MaxInt64-int64(FirstUseLifetime), ErrFirstUse)
 	p := FirstUse{
@@ -73,6 +89,8 @@ func saveFirstUse(vault *storage.Vault, root, local key.Public,
 		defer err2.Handle(&err, nil)
 		return commitFirstUseAwait(tx, root, local, raw, now)
 	}))
+	glog.V(1).Info("intro_pw op=first_use side=requester " +
+		"stage=await result=committed")
 	saved := attemptSnapshot(nil, established.Binding.Ad, true, true)
 	return SavedFirstUse{request: raw, endpoint: saved.endpoint}, nil
 }
@@ -107,8 +125,13 @@ func BobFirstUse(vault *storage.Vault, root, local key.Public,
 func bobFirstUse(vault *storage.Vault, root, local key.Public,
 	signer key.Handle, raw []byte, now func() time.Time,
 ) (_ []byte, err error) {
+	reason := "undetermined"
 	defer assert.PushAsserter(assert.Plain)()
-	defer err2.Handle(&err, func(error) error { return ErrFirstUse })
+	defer err2.Handle(&err, func(error) error {
+		glog.V(1).Infof("intro_pw op=first_use side=acceptor "+
+			"stage=receipt result=refused reason=%s", reason)
+		return ErrFirstUse
+	})
 
 	assert.NotNil(vault, ErrFirstUse)
 	root, local, raw = bytes.Clone(root), bytes.Clone(local), bytes.Clone(raw)
@@ -121,7 +144,14 @@ func bobFirstUse(vault *storage.Vault, root, local key.Public,
 	state := try.To1(
 		device.InspectLocal(vault, root, local, localSigner{signer}),
 	)
+	if !state.Authorized {
+		reason = "device_not_authorized"
+	} else if !state.Usable {
+		reason = "signer_unusable"
+	}
 	assert.That(state.Authorized && state.Usable, ErrFirstUse)
+	glog.V(1).Info("intro_pw op=first_use side=acceptor " +
+		"stage=signer result=usable")
 	payload := firstUseResponsePayload(p, raw)
 	digest := key.HashTagged(
 		FirstUseResponsePurpose,
@@ -135,6 +165,8 @@ func bobFirstUse(vault *storage.Vault, root, local key.Public,
 		defer err2.Handle(&err, nil)
 		return commitFirstUseReceipt(tx, root, local, raw, response, now)
 	}))
+	glog.V(1).Info("intro_pw op=first_use side=acceptor " +
+		"stage=receipt result=committed")
 	return response, nil
 }
 
@@ -178,8 +210,13 @@ func ReceiveFirstUse(vault *storage.Vault, root, local key.Public,
 func receiveFirstUse(vault *storage.Vault, root, local key.Public,
 	signer key.Handle, response []byte, now func() time.Time,
 ) (_ bool, err error) {
+	reason := "undetermined"
 	defer assert.PushAsserter(assert.Plain)()
-	defer err2.Handle(&err, func(error) error { return ErrFirstUse })
+	defer err2.Handle(&err, func(error) error {
+		glog.V(1).Infof("intro_pw op=first_use side=requester "+
+			"stage=ready result=refused reason=%s", reason)
+		return ErrFirstUse
+	})
 
 	assert.NotNil(vault, ErrFirstUse)
 	root, local = bytes.Clone(root), bytes.Clone(local)
@@ -196,9 +233,18 @@ func receiveFirstUse(vault *storage.Vault, root, local key.Public,
 	state := try.To1(
 		device.InspectLocal(vault, root, local, localSigner{signer}),
 	)
+	if !state.Authorized {
+		reason = "device_not_authorized"
+	} else if !state.Usable {
+		reason = "signer_unusable"
+	}
 	assert.That(state.Authorized && state.Usable, ErrFirstUse)
+	glog.V(1).Info("intro_pw op=first_use side=requester " +
+		"stage=signer result=usable")
 	if record.State == useReady {
 		try.To(vault.View(read))
+		glog.V(1).Info("intro_pw op=first_use side=requester " +
+			"stage=ready result=retained")
 		return true, nil
 	}
 	updateErr := vault.Update(func(tx storage.WriteTx) (err error) {
@@ -207,6 +253,11 @@ func receiveFirstUse(vault *storage.Vault, root, local key.Public,
 	})
 	if updateErr != errRequesterUnchanged {
 		try.To(updateErr)
+		glog.V(1).Info("intro_pw op=first_use side=requester " +
+			"stage=ready result=committed")
+	} else {
+		glog.V(1).Info("intro_pw op=first_use side=requester " +
+			"stage=ready result=retained")
 	}
 	return true, nil
 }
