@@ -578,7 +578,7 @@ func TestServeLifecycle(t *testing.T) {
 					"node public key (hex): %x\n"+
 						"owner status URL: http://127.0.0.1:1234/owner/status\n"+
 						"authorization header file: %s\nstop with Ctrl+C\n",
-					f.child, s.headerFile))
+					[]byte(f.child), s.headerFile))
 			}
 			assert.Equal(listener.closes.Load(), int32(1))
 			assertServeClosed(t, s, f, before)

@@ -404,7 +404,7 @@ func runNodeServe(ctx context.Context, owner, peer net.Listener, s *nodeServe,
 		"node public key (hex): %x\n"+
 			"owner status URL: http://%s/owner/status\n"+
 			"authorization header file: %s\nstop with Ctrl+C\n",
-		s.child, owner.Addr().String(), s.headerFile,
+		[]byte(s.child), owner.Addr().String(), s.headerFile,
 	))
 	if peer != nil {
 		try.To1(fmt.Fprintf(out, "peer introduction URL: http://%s/peer/introduction\n",
