@@ -30,6 +30,8 @@ LABEL = re.compile(r"[a-z][a-z0-9-]{0,63}\Z")
 NAMES = ("root", "alice", "bob")
 SERVERS = ("root-alice", "root-bob", "alice", "bob")
 LIMIT = 128 * 1024
+CONFIG_LIMIT = 8192
+CONFIG_NAMES = ("alice", "bob")
 START_TIMEOUT = 20
 STOP_TIMEOUT = 8
 TTL_NS = 900 * 1_000_000_000
@@ -291,6 +293,7 @@ def server_args(run, label):
 
 class Run:
     def __init__(self, base, run_id):
+        self.config_identity = None  # Only this invocation may undo publication.
         self.base = base
         self.path = checked_path(base.path / run_id)
         private_stat(self.path.lstat(), directory=True)
@@ -833,6 +836,7 @@ def up(run):
     harness = Harness(run)
     try:
         harness.setup()
+        write_configs(run)
     except BaseException:
         with defer_interrupts():
             try:
@@ -840,9 +844,84 @@ def up(run):
                 require(all(value == "stopped" for value in results.values()),
                         "setup-failed-cleanup-incomplete")
             finally:
+                discard_configs(run)
                 run.manifest["state"] = "failed"
                 run.save()
         raise
+
+
+def config_snapshot(run, name):
+    node = run.manifest["nodes"][name]
+    return {"version": 1, "role": name,
+            "node_public_key_hex": node["public_key_hex"],
+            "owner_status_url": node["owner_url"],
+            "owner_header_file": node["header_file"]}
+
+
+def remove_config_directory(path, identity):
+    checked_path(path)
+    descriptor = os.open(path, DIRECTORY)
+    try:
+        info = os.fstat(descriptor)
+        private_stat(info, directory=True)
+        require([info.st_dev, info.st_ino] == identity, "config-directory-changed")
+        require(set(os.listdir(descriptor)) <= {n + ".json" for n in CONFIG_NAMES},
+                "unexpected-config-entry")
+        for name in os.listdir(descriptor):
+            private_stat(os.stat(name, dir_fd=descriptor, follow_symlinks=False))
+        remove_contents(descriptor, info.st_dev)
+        require(identity_stat(path) == identity, "config-directory-changed")
+        path.rmdir()
+    finally:
+        os.close(descriptor)
+
+
+def write_configs(run):
+    # Reload already recorded evidence, including independent keys/ports and
+    # exact serve output. No HTTP, credential reads or node operations here.
+    recorded = run.base.select(run.path.name)
+    require(recorded.manifest["state"] == "ready", "config-before-ready")
+    destination = run.path / "config"
+    require(not os.path.lexists(destination), "config-already-exists")
+    staging = run.path / "tmp" / (".config-" + uuid.uuid4().hex)
+    with defer_interrupts():
+        staging.mkdir(mode=0o700)
+        identity = identity_stat(staging)
+        try:
+            for name in CONFIG_NAMES:
+                value = config_snapshot(recorded, name)
+                require(len((json.dumps(value, sort_keys=True, indent=2) + "\n").encode())
+                        <= CONFIG_LIMIT,
+                        "config-too-large")
+                write_json(staging / (name + ".json"), value, new=True)
+            # Publish the pair together; never expose just one role's config.
+            os.rename(staging, destination)
+            run.config_identity = identity
+        except BaseException:
+            remove_config_directory(staging, identity)
+            raise
+
+
+def discard_configs(run):
+    if run.config_identity is not None:
+        remove_config_directory(run.path / "config", run.config_identity)
+        run.config_identity = None
+
+
+def validate_configs(run):
+    path = run.path / "config"
+    if not os.path.lexists(path):
+        return False  # Older and partial runs need no config directory.
+    checked_path(path)
+    private_stat(path.lstat(), directory=True)
+    require(set(os.listdir(path)) == {n + ".json" for n in CONFIG_NAMES},
+            "unexpected-config-entry")
+    for name in CONFIG_NAMES:
+        file = path / (name + ".json")
+        private_stat(file.lstat())  # Refuse FIFOs/devices before opening.
+        value = decode_json(read_private(file, CONFIG_LIMIT))
+        same(value, config_snapshot(run, name))
+    return True
 
 
 def utc(nanoseconds):
@@ -884,8 +963,15 @@ def status(run):
             print("Bob published ad expiry (server-issued):", utc(expiry))
     print("Stored receipts are historical; they do not prove ongoing reachability, "
           "authorization or current readiness.")
-    print("Alice = requester; Bob = invitation issuer/acceptor. "
-          "Configure the two Flutter windows manually with their own URL/header pairs.")
+    print("Alice = requester; Bob = invitation issuer/acceptor.")
+    if validate_configs(run):
+        for name in CONFIG_NAMES:
+            print(name.title() + " Flutter config:",
+                  run.path / "config" / (name + ".json"))
+        print("Launch snapshots only; not proof of current identity, availability, "
+              "invitation state or credential validity. Node restart makes them stale.")
+    else:
+        print("No Flutter config snapshots in this run.")
 
 
 def validate_tree(descriptor, device):
@@ -944,10 +1030,11 @@ def destroy(run, confirm):
         info = os.fstat(descriptor)
         require([info.st_dev, info.st_ino] == run.manifest["marker"]["identity"],
                 "run-directory-changed")
-        allowed = {"run.json", "manifest.json", "bin", "logs", "tmp",
+        allowed = {"run.json", "manifest.json", "bin", "logs", "tmp", "config",
                    *NAMES, *(name + ".unlock" for name in NAMES),
                    "alice.storage-key", "bob.storage-key"}
         require(set(os.listdir(descriptor)) <= allowed, "unexpected-run-entry")
+        validate_configs(run)
         validate_tree(descriptor, info.st_dev)
         remove_contents(descriptor, info.st_dev)
         require(identity_stat(run.path) == [info.st_dev, info.st_ino],
@@ -1025,9 +1112,12 @@ def main(argv=None):
         if args.command == "up" and run and run.manifest["state"] != "failed":
             try:
                 with defer_interrupts():
-                    results = down(run, force=True)
-                    run.manifest["state"] = "failed"
-                    run.save()
+                    try:
+                        results = down(run, force=True)
+                    finally:
+                        discard_configs(run)
+                        run.manifest["state"] = "failed"
+                        run.save()
                     require(all(value == "stopped" for value in results.values()),
                             "cleanup-incomplete")
             except (Exception, KeyboardInterrupt):

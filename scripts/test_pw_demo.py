@@ -537,9 +537,200 @@ class SequenceTests(PrivateTest):
     def execute(self, mutate=None):
         harness = FakeHarness(self.run, mutate)
         with mock.patch.object(demo, "process_state", return_value="running"), \
+                mock.patch.object(demo, "Harness", return_value=harness), \
+                mock.patch.object(demo, "stop_process", return_value="stopped"), \
                 mock.patch.object(demo.time, "time_ns", return_value=1_800_000_000_000_000_000):
-            harness.setup()
+            demo.up(self.run)
         return harness
+
+    def test_config_pair_exact_independent_private_and_down_retention(self):
+        self.execute()
+        directory = self.run.path / "config"
+        self.assertEqual(directory.stat().st_mode & 0o7777, 0o700)
+        self.assertEqual({p.name for p in directory.iterdir()},
+                         {"alice.json", "bob.json"})
+        before = {}
+        for name, port in (("alice", 10001), ("bob", 10003)):
+            path = directory / (name + ".json")
+            before[name] = path.read_bytes()
+            self.assertEqual(path.stat().st_mode & 0o7777, 0o600)
+            self.assertEqual(path.stat().st_nlink, 1)
+            value = demo.decode_json(before[name])
+            self.assertEqual(value, {
+                "version": 1, "role": name,
+                "node_public_key_hex": KEYS[name],
+                "owner_status_url": f"http://127.0.0.1:{port}/owner/status",
+                "owner_header_file": str(self.run.path / "tmp" /
+                                         f"node-owner-status-{port}/owner.header"),
+            })
+            self.assertTrue(Path(value["owner_header_file"]).is_absolute())
+            self.assertTrue(Path(value["owner_header_file"]).is_relative_to(self.run.path))
+            self.assertNotIn(b"Bearer", before[name])
+
+        with mock.patch.object(demo, "stop_process", return_value="stopped"):
+            demo.down(self.run)
+        for name in demo.CONFIG_NAMES:
+            header = Path(self.run.manifest["nodes"][name]["header_file"])
+            header.unlink()  # A stopped service may remove its credential.
+            self.assertEqual((directory / (name + ".json")).read_bytes(), before[name])
+        self.assertTrue(demo.validate_configs(self.base.select(self.run.path.name)))
+
+        other = self.base.allocate()
+        with mock.patch.object(demo, "stop_process", return_value="stopped"):
+            demo.destroy(self.run, self.run.path.name)
+        self.assertFalse(directory.exists())
+        self.assertTrue(other.path.exists())
+
+    def test_status_prints_absolute_config_paths_without_mutation_or_http(self):
+        self.execute()
+        files = {p: p.read_bytes() for p in self.run.path.rglob("*") if p.is_file()}
+        output = io.StringIO()
+        with mock.patch.object(demo, "Owner", side_effect=AssertionError("no HTTP")), \
+                mock.patch.object(demo, "process_state", return_value="stopped"), \
+                contextlib.redirect_stdout(output):
+            demo.status(self.base.select(self.run.path.name))
+        for name in demo.CONFIG_NAMES:
+            self.assertIn(str(self.run.path / "config" / (name + ".json")),
+                          output.getvalue())
+        self.assertIn("Alice = requester; Bob = invitation issuer/acceptor.",
+                      output.getvalue())
+        self.assertIn("Launch snapshots only", output.getvalue())
+        self.assertNotIn("Bearer", output.getvalue())
+        self.assertEqual(files, {p: p.read_bytes() for p in files})
+
+    def test_config_publication_requires_recorded_ready_and_refuses_rewrite(self):
+        with self.assertRaises(demo.DemoError):
+            demo.write_configs(self.run)
+        self.execute()
+        before = (self.run.path / "config/alice.json").read_bytes()
+        with self.assertRaisesRegex(demo.DemoError, "config-already-exists"):
+            demo.write_configs(self.run)
+        self.assertEqual((self.run.path / "config/alice.json").read_bytes(), before)
+        self.run = self.base.allocate()
+        self.execute()
+        self.assertNotEqual(self.run.path / "config/alice.json",
+                            next(p for p in self.base.path.glob("*/config/alice.json")
+                                 if p.read_bytes() == before))
+
+    def test_config_write_failure_or_interrupt_leaves_no_pair_or_staging(self):
+        for failure in (OSError("write failed"), KeyboardInterrupt()):
+            with self.subTest(failure=type(failure).__name__):
+                self.run = self.base.allocate()
+                real_write = demo.write_json
+
+                def write(path, value, new=False):
+                    if path.name == "bob.json":
+                        self.assertFalse((self.run.path / "config").exists())
+                        self.assertTrue((path.parent / "alice.json").exists())
+                        demo.create_file(path, b"partial")
+                        raise failure
+                    return real_write(path, value, new=new)
+
+                with mock.patch.object(demo, "write_json", side_effect=write):
+                    with self.assertRaises(type(failure)):
+                        self.execute()
+                self.assertEqual(self.base.select().manifest["state"], "failed")
+                self.assertFalse((self.run.path / "config").exists())
+                self.assertEqual(list((self.run.path / "tmp").glob(".config-*")), [])
+
+    def test_interrupt_after_config_publication_removes_pair(self):
+        publish = demo.write_configs
+
+        def interrupt(run):
+            publish(run)
+            raise KeyboardInterrupt
+
+        with mock.patch.object(demo, "write_configs", side_effect=interrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                self.execute()
+        self.assertFalse((self.run.path / "config").exists())
+        self.assertEqual(self.base.select().manifest["state"], "failed")
+
+    def test_config_generation_rechecks_independent_recorded_serve_identity(self):
+        self.execute()
+        demo.discard_configs(self.run)
+        self.run.manifest["nodes"]["bob"]["public_key_hex"] = KEYS["alice"]
+        self.run.save()
+        with self.assertRaises(demo.DemoError):
+            demo.write_configs(self.run)
+        self.assertFalse((self.run.path / "config").exists())
+
+    def test_failed_up_does_not_remove_preexisting_config(self):
+        directory = self.run.path / "config"
+        directory.mkdir(mode=0o700)
+        demo.create_file(directory / "alice.json", b"unrelated")
+        with self.assertRaisesRegex(demo.DemoError, "config-already-exists"):
+            self.execute()
+        self.assertEqual((directory / "alice.json").read_bytes(), b"unrelated")
+
+    def test_destroy_refuses_unsafe_or_unexpected_config(self):
+        for change in ("extra", "missing", "contents", "duplicate", "swapped",
+                       "directory", "fifo", "symlink", "hardlink", "parent-link",
+                       "file-mode", "execute-mode", "directory-mode"):
+            with self.subTest(change=change):
+                self.run = self.base.allocate()
+                self.execute()
+                directory = self.run.path / "config"
+                path = directory / "alice.json"
+                if change == "extra":
+                    demo.create_file(directory / "carol.json", b"{}")
+                elif change == "missing":
+                    path.unlink()
+                elif change == "contents":
+                    path.write_text('{"version": 1}')
+                elif change == "duplicate":
+                    path.write_bytes(path.read_bytes().replace(b'{', b'{"version":1,', 1))
+                elif change == "swapped":
+                    path.write_bytes((directory / "bob.json").read_bytes())
+                elif change == "directory":
+                    path.unlink()
+                    path.mkdir(mode=0o700)
+                elif change == "fifo":
+                    path.unlink()
+                    os.mkfifo(path, 0o600)
+                elif change == "symlink":
+                    path.unlink()
+                    path.symlink_to(directory / "bob.json")
+                elif change == "hardlink":
+                    os.link(path, self.parent / ("link-" + self.run.path.name))
+                elif change == "parent-link":
+                    moved = self.run.path / "tmp/config"
+                    directory.rename(moved)
+                    directory.symlink_to(moved, target_is_directory=True)
+                elif change == "file-mode":
+                    path.chmod(0o644)
+                elif change == "execute-mode":
+                    path.chmod(0o700)
+                else:
+                    directory.chmod(0o755)
+                with mock.patch.object(demo, "stop_process", return_value="stopped"):
+                    with self.assertRaises((demo.DemoError, OSError)):
+                        demo.destroy(self.run, self.run.path.name)
+                self.assertTrue((self.run.path / "run.json").exists())
+
+    def test_console_failure_after_publication_removes_configs(self):
+        real_print = print
+
+        def fail_ready(*args, **kwargs):
+            if args and args[0] == "READY_FOR_INVITATION":
+                raise BrokenPipeError
+            real_print(*args, **kwargs)
+
+        path = self.parent / "console-failure"
+        previous = signal.getsignal(signal.SIGTERM)
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        with mock.patch.object(demo, "Harness", FakeHarness), \
+                mock.patch.object(demo, "process_state", return_value="running"), \
+                mock.patch.object(demo, "stop_process", return_value="stopped"), \
+                mock.patch("builtins.print", side_effect=fail_ready), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(demo.main(["up", "--base-dir", str(path)]), 1)
+        base = demo.Base(path)
+        self.addCleanup(base.close)
+        run = base.select()
+        self.assertEqual(run.manifest["state"], "failed")
+        self.assertFalse((run.path / "config").exists())
 
     def test_exact_command_and_http_order_no_invitation_or_first_use(self):
         h = self.execute()
@@ -588,6 +779,7 @@ class SequenceTests(PrivateTest):
         self.assertEqual(self.run.manifest["stage"], "alice-known")
         self.assertFalse(any(r["stage"].endswith("-device")
                              for r in self.run.manifest["receipts"]))
+        self.assertFalse((self.run.path / "config").exists())
 
     def test_device_failure_is_mandatory(self):
         def mutate(name, path, result):
@@ -599,6 +791,7 @@ class SequenceTests(PrivateTest):
         self.assertEqual(self.run.manifest["stage"], "bob-device")
         self.assertFalse(any(r["stage"] == "bob-publish"
                              for r in self.run.manifest["receipts"]))
+        self.assertFalse((self.run.path / "config").exists())
 
     def test_serve_formatter_regression_and_remote_url_stop_setup(self):
         for field, replacement in (("public_key_hex", KEYS["alice"].encode().hex()),
@@ -639,6 +832,7 @@ class SequenceTests(PrivateTest):
                 with self.assertRaises(demo.DemoError):
                     self.execute(mutate)
                 self.assertNotEqual(self.run.manifest["state"], "ready")
+                self.assertFalse((self.run.path / "config").exists())
 
 
 @unittest.skipUnless(os.environ.get("PW_DEMO_LIVE") == "1",
@@ -669,7 +863,10 @@ class LiveSmoke(unittest.TestCase):
             try:
                 run = base.select()
                 self.assertEqual(run.manifest["state"], "ready")
+                self.assertTrue(demo.validate_configs(run))
                 for name in ("alice", "bob"):
+                    self.assertIn(str(run.path / "config" / (name + ".json")).encode(),
+                                  up.stdout)
                     self.assertEqual(demo.Owner(run, name).json("GET", "/owner/status"),
                                      {"choice": "completed"})
                 receipts = {r["stage"]: r["result"] for r in run.manifest["receipts"]}
@@ -695,6 +892,7 @@ class LiveSmoke(unittest.TestCase):
         try:
             run = base.select()
             self.assertEqual(run.manifest["state"], "down")
+            self.assertTrue(demo.validate_configs(run))
             for process in run.manifest["processes"].values():
                 self.assertEqual(demo.process_state(process), "stopped")
         finally:

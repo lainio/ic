@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'demo_config.dart';
 import 'publication_section.dart';
 import 'received_ad_section.dart';
 import 'status_client.dart';
 import 'wallet_demo.dart';
 
-void main() => runApp(const IntroTreeApp());
+void main(List<String> args) {
+  DemoConfig? config;
+  StartupFailure? failure;
+  try {
+    config = DemoConfig.fromArguments(args);
+  } on StartupFailure catch (error) {
+    failure = error;
+  }
+  runApp(IntroTreeApp(config: config, startupFailure: failure));
+}
 
 typedef ReadStatus = Future<NodeChoice> Function(String url, String headerPath);
 typedef ReadIntroduction = Future<String> Function(
@@ -60,6 +70,8 @@ typedef VerifyPeerAd = Future<AdVerificationReceipt> Function(
 class IntroTreeApp extends StatelessWidget {
   const IntroTreeApp({
     super.key,
+    this.config,
+    this.startupFailure,
     this.readStatus,
     this.readIntroduction,
     this.checkIntroduction,
@@ -74,6 +86,8 @@ class IntroTreeApp extends StatelessWidget {
     this.createPairingClient,
   });
 
+  final DemoConfig? config;
+  final StartupFailure? startupFailure;
   final ReadStatus? readStatus;
   final ReadIntroduction? readIntroduction;
   final CheckIntroduction? checkIntroduction;
@@ -99,26 +113,47 @@ class IntroTreeApp extends StatelessWidget {
         floatingLabelBehavior: FloatingLabelBehavior.always,
       ),
     ),
-    home: StatusScreen(
-      readStatus: readStatus,
-      readIntroduction: readIntroduction,
-      checkIntroduction: checkIntroduction,
-      saveIntroduction: saveIntroduction,
-      listIntroductions: listIntroductions,
-      fetchIntroduction: fetchIntroduction,
-      verifyReceived: verifyReceived,
-      bootstrapDevice: bootstrapDevice,
-      publishAd: publishAd,
-      fetchPeerAd: fetchPeerAd,
-      verifyPeerAd: verifyPeerAd,
-      createPairingClient: createPairingClient,
-    ),
+    home: startupFailure != null
+        ? Scaffold(
+            appBar: AppBar(title: const Text('IntroTree')),
+            body: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Startup configuration error'),
+                  const SizedBox(height: 12),
+                  SelectableText(startupFailure!.message),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Close this window and relaunch with valid settings.',
+                  ),
+                ],
+              ),
+            ),
+          )
+        : StatusScreen(
+            config: config,
+            readStatus: readStatus,
+            readIntroduction: readIntroduction,
+            checkIntroduction: checkIntroduction,
+            saveIntroduction: saveIntroduction,
+            listIntroductions: listIntroductions,
+            fetchIntroduction: fetchIntroduction,
+            verifyReceived: verifyReceived,
+            bootstrapDevice: bootstrapDevice,
+            publishAd: publishAd,
+            fetchPeerAd: fetchPeerAd,
+            verifyPeerAd: verifyPeerAd,
+            createPairingClient: createPairingClient,
+          ),
   );
 }
 
 class StatusScreen extends StatefulWidget {
   const StatusScreen({
     super.key,
+    this.config,
     this.readStatus,
     this.readIntroduction,
     this.checkIntroduction,
@@ -133,6 +168,7 @@ class StatusScreen extends StatefulWidget {
     this.createPairingClient,
   });
 
+  final DemoConfig? config;
   final ReadStatus? readStatus;
   final ReadIntroduction? readIntroduction;
   final CheckIntroduction? checkIntroduction;
@@ -193,10 +229,19 @@ class _StatusScreenState extends State<StatusScreen> {
   NodeChoice? _choice;
   StatusFailure? _failure;
   int _inputRevision = 0;
+  bool _configEdited = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _url.text = widget.config?.ownerStatusUrl ?? '';
+    _headerPath.text = widget.config?.ownerHeaderFile ?? '';
+  }
 
   void _inputChanged(String _) {
     setState(() {
       _inputRevision++;
+      _configEdited = true;
       _authorized = null;
       _authorizationFailure = null;
       _published = null;
@@ -685,6 +730,27 @@ class _StatusScreenState extends State<StatusScreen> {
                   const Text(
                     'Read saved acceptance state from your local node.',
                   ),
+                  if (widget.config case final config?) ...[
+                    const SizedBox(height: 16),
+                    if (_configEdited)
+                      const Text(
+                        'Configuration no longer matches edited owner settings.',
+                      )
+                    else ...[
+                      const Text(demoConfigAttribution),
+                      const SizedBox(height: 8),
+                      SelectableText('Configured role: ${config.roleLabel}'),
+                      const Text('Configured node public key (full COSE hex)'),
+                      SelectableText(config.publicKeyHex),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Launch snapshot only; no proof of current identity, '
+                        'availability, invitation state or credential validity. '
+                        'Node restart makes this configuration stale. '
+                        'Wallet demo, graph and chat remain fixtures.',
+                      ),
+                    ],
+                  ],
                   const SizedBox(height: 28),
                   TextField(
                     controller: _url,

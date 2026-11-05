@@ -49,11 +49,55 @@ verifies the ad for Bob's actual public key. Fetch alone is never Known or
 VerifiedAd. The harness records validated owner receipts in `manifest.json`;
 it does not inspect or modify encrypted Vault records.
 
-In the existing two Flutter windows, manually enter the **Alice** owner status
-URL and Alice `owner.header` path in one, and the **Bob** pair in the other.
-Use the full actual public keys printed by `status` to identify the windows.
-No supported per-window CLI configuration exists, so the harness does not
-launch Flutter. Header paths are printed; bearer contents are never printed.
+After successful setup, `up` publishes `RUN/config/alice.json` and
+`RUN/config/bob.json` together by an atomic directory rename. Both snapshots
+come only from the already checked manifest and startup output; generating
+them makes no additional HTTP, Vault, signing or device calls. `config` is
+0700 and both files are 0600. A failed or interrupted `up`, including failure
+while printing success, removes its new snapshots. Old runs are never rewritten.
+
+`up` and read-only `status` print both absolute config paths. Launch the
+bundled Flutter executable in two separate processes, using the appropriate
+path in each. From `apps/node_ui`, with cached offline dependencies on ARM64:
+
+~~~sh
+flutter build linux --debug --no-pub
+./build/linux/arm64/debug/bundle/ic_node_ui --config /absolute/RUN/config/alice.json
+~~~
+
+In a second terminal in the same package directory:
+
+~~~sh
+./build/linux/arm64/debug/bundle/ic_node_ui --config /absolute/RUN/config/bob.json
+~~~
+
+Use `build/linux/x64/debug/bundle/ic_node_ui` for an x64 build. These are
+executable arguments, not a `flutter run` forwarding form. The existing Linux
+runner forwards them to Dart and allows independent windows. The harness
+does not launch Flutter or change process supervision. See the
+[actual native launch check](../apps/node_ui/README.md#ui-02-verification)
+for the paths used during this increment.
+
+Each file has exactly these five fields (Bob uses his own checked values):
+
+~~~json
+{
+  "version": 1,
+  "role": "alice",
+  "node_public_key_hex": "<full actual COSE key from node info / serve>",
+  "owner_status_url": "http://127.0.0.1:<port>/owner/status",
+  "owner_header_file": "<absolute RUN/tmp/.../owner.header path>"
+}
+~~~
+
+Snapshots contain no bearer token, unlock/storage key, invitation ID or signed
+bytes. Paths themselves are not credentials. Flutter prefills `My node` and
+displays the selectable role and full key with **Configuration supplied by demo
+harness; not independently authenticated by Flutter.** Editing either owner
+field hides that identity association. Startup sends no owner requests and
+does not read the credential. Launch snapshots are not proof of current
+identity, availability, invitation state or credential validity. The fictional
+wallet switcher, graph and chat remain separate fixtures.
 
 Bob is the invitation **issuer/acceptor**; Alice is the **requester**.
 Use Bob's existing UI to issue an invitation, transfer it through the existing
@@ -85,6 +129,9 @@ Bob actual COSE public-key hex: <full actual Bob COSE hex>
 Bob Flutter owner status URL: http://127.0.0.1:39925/owner/status
 Bob Flutter owner.header file: /home/me/.ic-pw-demo/run-<id>/tmp/node-owner-status-<m>/owner.header
 Bob peer introduction URL: http://127.0.0.1:45635/peer/introduction
+Alice = requester; Bob = invitation issuer/acceptor.
+Alice Flutter config: /home/me/.ic-pw-demo/run-<id>/config/alice.json
+Bob Flutter config: /home/me/.ic-pw-demo/run-<id>/config/bob.json
 alice process: running
 bob process: running
 Historical receipt: alice-known at <UTC observation time>
@@ -111,11 +158,13 @@ DOWN; evidence retained: /home/me/.ic-pw-demo/run-<id>
 
 ## Diagnosis and cleanup
 
-`status` only reads the manifest, startup output and process identity. It does
+`status` only reads the manifest, startup output, configs and process identity. It does
 not probe HTTP or mutate a node. Stored owner URLs and header paths describe
 that invocation; graceful Go shutdown removes its temporary header files.
 `down` preserves the remaining directory, binary, logs, identity/state files
-and manifest. It is safe to repeat. It sends SIGINT only through pidfds after
+and manifest, including both config snapshots as historical artifacts.
+Restarting a node makes its old config stale; use a new run for the next trial.
+It is safe to repeat. It sends SIGINT only through pidfds after
 checking boot ID, process start time, UID, executable inode and exact command
 digest. It waits at most eight seconds per recorded server. A mismatch or
 shutdown timeout returns failure and prevents destruction; no unrelated PID
@@ -139,7 +188,11 @@ Go temporary credentials stay under `RUN/tmp`. Keep the whole run private.
 Deletion requires matching base/run markers, UID, directory inode, checkout,
 manifest and explicit run ID. It refuses symlinks, hardlinks, unexpected entry
 types, permissions, top-level entries, mount/device changes and ambiguous
-process ownership. Removal uses directory descriptors and never follows links
+process ownership. When `config` exists it must contain exactly `alice.json`
+and `bob.json`, both 0600 regular single-link files matching the manifest's
+five-field snapshots. Missing, extra or modified config content is refused.
+Older and partial runs without `config` remain supported.
+Removal uses directory descriptors and never follows links
 or runs a shell deletion command. These checks catch mistakes and unexpected
 state; they are not a security boundary against a malicious process running as
 the same user, which could forge markers or alter the checkout. Do not edit
@@ -168,3 +221,6 @@ as a pass. Child execution and build failures remain failures, with private
 logs. A live pass covers real CLI processes, sockets and setup receipts, not
 Flutter invitation redemption or authenticated first use. Those manual UI
 steps remain the presenter trial.
+
+The next research increment is to **specify real text messaging**. The existing
+one-shot authenticated first-use exchange is not a chat transport.

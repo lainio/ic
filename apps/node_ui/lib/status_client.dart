@@ -303,6 +303,15 @@ class StatusClient {
   void Function()? _cancel;
   bool _closed = false;
 
+  /// Syntax checks shared with startup; no file reads or network operations.
+  static void validateOwnerStatusUrl(String url) => _destination(url);
+
+  static void validateOwnerHeaderPath(String path) {
+    if (!path.startsWith('/') || path.split('/').last != 'owner.header') {
+      throw StatusFailure.credentials;
+    }
+  }
+
   Future<NodeChoice> read(String url, String headerPath) async {
     final json = await _request(_destination(url), headerPath, 4096);
     return switch (json['choice']) {
@@ -1058,9 +1067,7 @@ bool _publishedEndpoint(String input) {
 Future<String> _readAuthorization(String path) async {
   // The service prints this basename. Refuse identity/unlock/storage paths
   // without opening them, and do not follow a final symlink to another file.
-  if (!path.startsWith('/') || path.split('/').last != 'owner.header') {
-    throw StatusFailure.credentials;
-  }
+  StatusClient.validateOwnerHeaderPath(path);
   try {
     if (await FileSystemEntity.type(path, followLinks: false) !=
         FileSystemEntityType.file) {

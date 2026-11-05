@@ -5,7 +5,8 @@ The Linux/native application reads saved local acceptance state from an existing
 introduction, load saved subject keys, and explicitly verify received evidence. It requires
 a trusted same-machine loopback connection. Root can remain stopped.
 
-Paste only the printed owner status URL and absolute `owner.header` path.
+With no startup arguments, paste the printed owner status URL and absolute
+`owner.header` path. A disposable demo can prefill these via `--config` below.
 The app reads that header file afresh for each click; it never asks for identity
 unlock files, storage keys, identity data, or a Vault. Settings and credentials
 are not persisted across app exit.
@@ -14,6 +15,83 @@ are not persisted across app exit.
 `/owner/status` with an explicit port is accepted; `localhost` becomes
 `127.0.0.1` without DNS. Connections are direct, with no proxies or redirects.
 The credential file is limited to 1 KiB and status responses to 4 KiB.
+
+## Demo launch configuration (UI-02)
+
+For the next disposable two-node trial, run the
+[demo harness](../../scripts/README.md) and wait for `READY_FOR_INVITATION`.
+It prints two absolute paths: `RUN/config/alice.json` and
+`RUN/config/bob.json`. Alice is the **requester**; Bob is the **invitation
+issuer/acceptor**. Build once from this package with the installed SDK and
+offline cached dependencies:
+
+~~~sh
+flutter build linux --debug --no-pub
+./build/linux/arm64/debug/bundle/ic_node_ui --config /absolute/RUN/config/alice.json
+~~~
+
+Start the second process from this package in another terminal:
+
+~~~sh
+./build/linux/arm64/debug/bundle/ic_node_ui --config /absolute/RUN/config/bob.json
+~~~
+
+For an x64 build, the binary is `build/linux/x64/debug/bundle/ic_node_ui`.
+Use the installed **bundle** executable. The existing Linux runner passes its
+arguments directly to Dart and is already `G_APPLICATION_NON_UNIQUE`; neither
+native source nor process supervision changes. This is not an assumed
+`flutter run` argument-forwarding syntax.
+
+The only accepted argument forms are no arguments and exactly
+`--config /absolute/path/to/config.json`. The config is a UTF-8 JSON object,
+at most 8 KiB, with exactly these fields:
+
+| Field | Required value |
+| --- | --- |
+| `version` | Integer `1` |
+| `role` | `alice` or `bob` |
+| `node_public_key_hex` | Full canonical lowercase hex, even length, 1–128 bytes |
+| `owner_status_url` | Existing `StatusClient` loopback owner-status URL format |
+| `owner_header_file` | Canonical absolute path ending in `owner.header` |
+
+The harness supplies the actual full COSE bytes independently checked against
+each node's `info` and `serve` output. Flutter validates hex shape, not COSE
+cryptography, identity or key possession. Duplicate fields (including escaped
+aliases), unknown/missing fields, wrong types/versions/roles, extra arguments,
+malformed/oversized JSON and invalid owner settings fail closed. There is a
+visible startup error and no owner screen, fallback endpoint or owner request.
+Errors never display raw file contents or exception data.
+
+The config must be a same-user 0600 regular file with one hard link, in a
+same-user 0700 directory. Paths must be absolute and canonical, without symlinks
+in any component or untrusted writable ancestors; a system-owned sticky `/tmp`
+is allowed. The bounded reader uses the existing Linux libc through `dart:ffi`
+(`openat` with no-follow flags and descriptor `statx`) because `dart:io` does
+not expose ownership/link counts or no-follow opens. No package dependency,
+helper executable or native-runner edit is added. This reader supports Linux
+x64/ARM64 with `statx`; unavailable checks fail closed for `--config`.
+No-argument startup continues to use the existing manual flow.
+
+`My node` shows the selectable role and full real key, labeled exactly:
+**Configuration supplied by demo harness; not independently authenticated by
+Flutter.** These are launch configuration snapshots, not proof of current
+identity, service availability, invitation state or credential validity.
+Startup reads only the config; credentials are still read by `StatusClient`
+afresh on each explicit owner action. Neither settings nor credentials are
+persisted by Flutter. The config path itself is not a credential.
+
+Both owner fields remain editable. Any edit hides the supplied role/key and
+shows `Configuration no longer matches edited owner settings.`, even if the
+text is later restored. Live pairing continues to take a transient snapshot of
+the current owner fields. Wallet switching never selects the real endpoint;
+the wallet, graph and chat remain fictional fixtures. No owner request,
+pairing, first use, state refresh or messaging happens on launch.
+
+`down` retains configs as historical artifacts; restarting the node makes old
+settings stale. There is no refresh or repair path. Use a fresh disposable run
+for the next trial. The existing invitation and first-use demo remains unchanged.
+
+## Owner actions
 
 | Wire choice | Screen |
 | --- | --- |
@@ -307,11 +385,13 @@ Owner configuration or panel identity changes and disposal discard pending/old
 receipts; late responses cannot restore them. State remains in memory only.
 Startup, issue and redemption never initiate first use or any chained action.
 
-The next check is a **disposable-Vault real two-node UI trial**, including a lost
+The next trial is a **disposable-Vault real two-node UI trial**, including a lost
 acknowledgement case on separate disposable state, before any text-message
 semantics or implementation. Mocked client/widget tests and a native build do
 not establish real two-node interoperability. This increment adds no messages,
 local Deny, Delete, Tor or automatic session recovery.
+The next research increment is to **specify real text messaging**; first use
+is not a chat transport.
 
 ## Validate
 
@@ -331,6 +411,40 @@ and Linux ephemeral files are ignored. Tests use temporary synthetic header
 files and mock HTTP, with no node, NATS, Tor, or external service required.
 Flutter's test harness may use local IPC/loopback sockets. The native build
 does not launch or validate an interactive GUI.
+
+## UI-02 verification
+
+On 2026-11-05, the 40 socket-free Python tests passed (the opt-in smoke was
+skipped in that command). The separate `PW_DEMO_LIVE=1` smoke passed with real
+node setup, independent configs, printed paths and retention after `down`.
+`flutter analyze --no-pub`, all 274 tests with `flutter test --no-pub`, and
+`flutter build linux --debug --no-pub` passed using cached dependencies.
+
+These bundled executable invocations were exercised from this package on
+ARM64, with both processes alive concurrently:
+
+~~~sh
+trial_run=/tmp/ic-pw-demo-smoke-6hc_836e/runs/run-2fb2f8b75ee34c839ae5be0eb972e75a
+./build/linux/arm64/debug/bundle/ic_node_ui --config "$trial_run/config/alice.json"
+~~~
+
+~~~sh
+trial_run=/tmp/ic-pw-demo-smoke-6hc_836e/runs/run-2fb2f8b75ee34c839ae5be0eb972e75a
+./build/linux/arm64/debug/bundle/ic_node_ui --config "$trial_run/config/bob.json"
+~~~
+
+The debug runtime inspector confirmed `My node` and the harness attribution in
+both widget trees, with no startup error. The bounded probe stopped both UI
+processes afterward. These particular configs are **historical**: the smoke
+had already stopped the nodes, so this check makes no availability claim and
+performed no owner UI action. Use new configs from the next `up` for the trial.
+The native x64 binary was not built or run on this ARM64 host.
+
+The desktop reported read-only dconf and Mesa/EGL warnings. Screenshot capture
+was unavailable; runtime inspection and widget tests verified startup, without
+claiming a visual desktop review. Socket binding worked; no sandbox permissions
+or runner code were changed. This check did not repeat invitation redemption
+or authenticated first use.
 
 ## One interactive check
 
