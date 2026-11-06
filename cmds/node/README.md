@@ -324,6 +324,25 @@ Sender HTTP `Transmit`, explicit `sent` and receipt observation wiring remain
 the next increment; this operation writes no sender state and promotes no
 candidate semantics or normative contracts.
 
+PW-Msg-Go-07 adds private `saveMessageTransmit` and `sendMessageOnce`, with no
+owner action or UI wiring yet. Under the existing owner mutation/signer lock,
+current local guards and authenticated history authorize the exact prepared
+envelope; one canonical `local-pw-message-sent-v1` row binds its tagged digest.
+`sent` means an attempted send was authorized, never proof of dispatch or
+admission. An explicit permitted retry returns identical bytes without a write
+or seal. After releasing all locks and transactions, the client makes one POST
+to an explicit canonical numeric loopback HTTP `/peer/pw/message` URL using the
+Go-06 JSON shapes above (padded Base64). It bounds the exchange to five seconds,
+1 KiB response headers, 2 KiB response JSON and 640 decoded receipt bytes, with
+no redirect, proxy or automatic retry. Invalid preflight input is not dispatched;
+transport/response failure leaves the peer outcome unknown. A crash after the
+`sent` commit or a lost reply never rolls back history. HTTP 200 returns untrusted
+receipt bytes; only a separate Go-05 observation may save ACK, including after
+local Deny/Delete. Those changes block new attempts but cannot recall an already
+authorized snapshot. The routing hint grants no identity or permission, and
+plaintext is suitable only for a trusted-host disposable demo. This remains the
+PW-Msg-02 candidate, with no V19 refinement or normative contract promotion.
+
 ## Local held-half deletion
 
 The operational `NewFirstUseCredentials` composition used by `node serve`
