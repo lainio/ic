@@ -261,10 +261,23 @@ Restart or a lost result reuses identical saved bytes without another message
 signature or write, after current guards and a fresh signer-usability probe.
 Corruption/conflicts fail closed. Text is **not encrypted by this envelope**.
 This preparation does not advance `Transmit`, set `sent`, contact a peer or
-establish delivery, Trust or `PWOpen`. Receiver-local inbox admission is next;
-receipts/ACKs, transport, confidentiality, additional messages, general protocol
+establish delivery, Trust or `PWOpen`. Receipts/ACKs, transport,
+confidentiality, additional messages, general protocol
 concurrency and UI remain unimplemented. No endpoint, CLI or startup exposes
 this operation, and no distributed refinement or contract promotion is claimed.
+
+PW-Msg-Go-03 adds private `admitIncomingEnvelope`, projecting only the candidate's
+receiver-local `AcceptIncoming` under the same owner lock. Each receiver derives
+the peer's binding from its own authenticated acceptance and historical first
+use, verifies the unchanged v1 envelope, probes its installed signer outside
+transactions, and rechecks current durable guards before one inbox-row commit.
+The bounded `local-pw-message-inbox-v1` row retains exact envelope bytes; either
+participant may send first without a receiver outgoing message. Exact retries
+after reopen are read-only with no seal; conflicts and corrupt rows fail closed.
+Local Deny/Delete refuse even identical retries while preserving inbox history.
+The boolean outcome means only local durable admission, with no receipt or
+remote success guarantee; uncertain outcomes require explicit Vault inspection.
+Authenticated receipts are the next separate increment. No HTTP or UI is added.
 
 ## Local held-half deletion
 
