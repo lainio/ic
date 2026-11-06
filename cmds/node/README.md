@@ -261,8 +261,8 @@ Restart or a lost result reuses identical saved bytes without another message
 signature or write, after current guards and a fresh signer-usability probe.
 Corruption/conflicts fail closed. Text is **not encrypted by this envelope**.
 This preparation does not advance `Transmit`, set `sent`, contact a peer or
-establish delivery, Trust or `PWOpen`. ACK observation, transport,
-confidentiality, additional messages, general protocol
+establish delivery, Trust or `PWOpen`. Transport, confidentiality,
+additional messages, general protocol
 concurrency and UI remain unimplemented. No endpoint, CLI or startup exposes
 this operation, and no distributed refinement or contract promotion is claimed.
 
@@ -292,7 +292,22 @@ or seal. The pure verifier uses the trusted saved envelope and independently
 authenticated receiver binding; historical receipts remain verifiable after
 Deny/Delete without restoring permission. This is a receiver's assertion of
 prior commit, not proof of honest storage, sender observation or delivery.
-Sender-local `ObserveReceipt`, ACK/sent writes, transport and UI remain deferred.
+Sender-local observation is separate from issuance.
+
+PW-Msg-Go-05 adds private `observeMessageReceipt`, projecting only historical
+`ObserveReceipt` under the existing owner mutation lock. It authenticates local
+accepted/first-use history, outgoing bytes, the exact committed signed envelope
+and receiver receipt again inside one sender-local ACK transaction. The bounded
+canonical `local-pw-message-ack-v1` row preserves the first signed receipt bytes;
+equivalent valid signatures repeat read-only with no seal, including after
+reopen. Deny, holding deletion, lost Known/device authority or an unusable signer
+do not block this history-only write; no signer is needed and no permission or
+holding is restored. Corrupt or conflicting evidence fails closed. The receiver's
+assertion is not proof of honest remote storage or present permission. Tests
+cover both senders, late ACKs, isolation, signature variability, rollback and
+Linux backend/reopen behavior. No `sent`, transport or UI is added. The next
+separate increment is the explicit transport/`Transmit` boundary, not Flutter
+chat; no normative contract promotion or distributed refinement is claimed.
 
 ## Local held-half deletion
 

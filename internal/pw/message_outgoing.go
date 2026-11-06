@@ -135,6 +135,19 @@ func commitOutgoing(tx storage.WriteTx, root, local key.Public,
 
 func outgoingPrerequisites(tx storage.ReadTx, root, local key.Public,
 ) (_ outgoingBinding, err error) {
+	defer err2.Handle(&err, nil)
+
+	binding, p := try.To2(outgoingHistory(tx, root, local))
+	try.To(firstUseGuards(tx, p, binding.Requester))
+	return binding, nil
+}
+
+// outgoingHistory authenticates the local role, exact accepted establishment
+// and historical successful first use only. It reads no current Known, holding,
+// Deny or device authority and needs no signer. The accepted payload also lets
+// permission-requiring callers apply their existing guards without reparsing.
+func outgoingHistory(tx storage.ReadTx, root, local key.Public,
+) (_ outgoingBinding, _ Accepted, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
@@ -145,7 +158,6 @@ func outgoingPrerequisites(tx storage.ReadTx, root, local key.Public,
 	row, issued := try.To2(readInvitation(tx, root, local))
 	assert.That(!alice || !issued || row.State != InvitationConsumed,
 		errOutgoing)
-	try.To(firstUseGuards(tx, p, alice))
 	if alice {
 		record := try.To1(readFirstUse(tx, p))
 		assert.That((record.State == useReady || record.State == useExpired) &&
@@ -171,7 +183,7 @@ func outgoingPrerequisites(tx storage.ReadTx, root, local key.Public,
 	digest := key.HashTagged(outgoingHistoryPurpose, history)
 	return outgoingBinding{Root: p.Binding.Root, Sender: local, Receiver: peer,
 		Requester: alice, RequestDigest: p.RequestDigest,
-		AcceptedDigest: digest[:]}, nil
+		AcceptedDigest: digest[:]}, p, nil
 }
 
 func readOutgoing(tx storage.ReadTx, expected outgoingBinding, text string,
