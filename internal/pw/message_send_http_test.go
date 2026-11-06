@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -35,7 +36,8 @@ func messageSendServer(f *messageHTTPFixture, owner *sync.Mutex, drop bool,
 	) {
 		// The sending caller must have released its owner lock before HTTP.
 		owner.Lock()
-		owner.Unlock()
+		_ = owner.TryLock() // remove the warning of the empty block
+		owner.Unlock()      // But we must and can relese the lock
 		captured := httptest.NewRecorder()
 		f.peer.ServeHTTP(captured, r)
 		var err error
@@ -46,9 +48,7 @@ func messageSendServer(f *messageHTTPFixture, owner *sync.Mutex, drop bool,
 				err = conn.Close()
 			}
 		} else {
-			for name, values := range captured.Header() {
-				w.Header()[name] = values
-			}
+			maps.Copy(w.Header(), captured.Header())
 			w.WriteHeader(captured.Code)
 			_, err = w.Write(captured.Body.Bytes())
 		}
