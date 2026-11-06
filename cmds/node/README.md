@@ -261,7 +261,7 @@ Restart or a lost result reuses identical saved bytes without another message
 signature or write, after current guards and a fresh signer-usability probe.
 Corruption/conflicts fail closed. Text is **not encrypted by this envelope**.
 This preparation does not advance `Transmit`, set `sent`, contact a peer or
-establish delivery, Trust or `PWOpen`. Receipts/ACKs, transport,
+establish delivery, Trust or `PWOpen`. ACK observation, transport,
 confidentiality, additional messages, general protocol
 concurrency and UI remain unimplemented. No endpoint, CLI or startup exposes
 this operation, and no distributed refinement or contract promotion is claimed.
@@ -277,7 +277,22 @@ after reopen are read-only with no seal; conflicts and corrupt rows fail closed.
 Local Deny/Delete refuse even identical retries while preserving inbox history.
 The boolean outcome means only local durable admission, with no receipt or
 remote success guarantee; uncertain outcomes require explicit Vault inspection.
-Authenticated receipts are the next separate increment. No HTTP or UI is added.
+Receipt issuance is separate from admission. No HTTP or UI is added.
+
+PW-Msg-Go-04 adds private `issueMessageReceipt`, projecting only `ReturnReceipt`
+under the same owner mutation/signer lock. A prior exact authenticated inbox
+commit is mandatory. Receiver-local Known, holding, non-Deny, authorization and
+validated historical first use are rechecked before and after signing, with
+signer usability probes outside transactions. The canonical receipt is bounded
+to 640 bytes and signs the exact envelope hash, original ID and sender/receiver,
+Root, role and request/accepted-history digests using ES256/P-256 and
+`pw-message-receipt-auth/v1`. It contains no message text. Explicit repetition
+may produce different signatures over the same payload, with no Vault update
+or seal. The pure verifier uses the trusted saved envelope and independently
+authenticated receiver binding; historical receipts remain verifiable after
+Deny/Delete without restoring permission. This is a receiver's assertion of
+prior commit, not proof of honest storage, sender observation or delivery.
+Sender-local `ObserveReceipt`, ACK/sent writes, transport and UI remain deferred.
 
 ## Local held-half deletion
 
