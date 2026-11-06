@@ -373,8 +373,9 @@ Only the exact success envelope `{"local_ready":true}` displays
 `Authenticated first use completed` and the separate line
 `Local readiness: observed on this exchange (historical)`. This is Alice's local
 historical observation, never shared `PWOpen`, a live pipe, current Bob permission,
-Trust, a session key or usable text-message transport. Graph, readiness, trust
-and chat stay fixtures, and the sample composer remains disabled.
+Trust, a session key or ongoing text transport. Go now supports the bounded real
+local demo message below. Graph, readiness, trust and chat stay fixtures, and
+the sample composer remains disabled.
 
 409 reports local refusal or failed response acceptance without deciding whether
 Bob processed the request. 502 reports unknown outcome with Alice's `Await`
@@ -385,13 +386,51 @@ Owner configuration or panel identity changes and disposal discard pending/old
 receipts; late responses cannot restore them. State remains in memory only.
 Startup, issue and redemption never initiate first use or any chained action.
 
-The next trial is a **disposable-Vault real two-node UI trial**, including a lost
-acknowledgement case on separate disposable state, before any text-message
-semantics or implementation. Mocked client/widget tests and a native build do
-not establish real two-node interoperability. This increment adds no messages,
-local Deny, Delete, Tor or automatic session recovery.
-The next research increment is to **specify real text messaging**; first use
-is not a chat transport.
+### Real message: one per direction (PW-Msg-Go-10)
+
+After the existing invitation, redemption and successful first-use flow, open
+`Live pairing` in two independent windows using each node's own owner URL and
+header. The **REAL MESSAGE (ONE PER DIRECTION)** section is labeled
+**LIVE OWNER MESSAGE**. Either role can send first; these buttons also work
+after reopening the panel without its transient first-use confirmation.
+
+1. In Alice's window, enter one message (1–1024 UTF-8 bytes) and **Bob's**
+   numeric loopback peer-listener URL ending in `/peer/pw/message`, for example
+   `http://127.0.0.1:BOB_PEER_PORT/peer/pw/message`. Use the actual peer port,
+   not Bob's owner port. The startup config does not supply this routing hint.
+2. Click `Send one message`. Flutter makes one owner POST to
+   `/owner/pw/message/send`; only Go contacts the peer. A validated exact success
+   shows `Local acknowledgement saved`, meaning the sender saved a historical
+   ACK, without promising a live pipe or current remote availability.
+3. In Bob's window, click `Refresh received message`. One bodyless owner GET to
+   `/owner/pw/message/inbox` displays the actual validated text under
+   `Saved in this node’s Vault`, or `No message received locally` for an exact
+   empty response. To demonstrate the other direction, Bob can send his one
+   message to Alice's peer listener, then Alice explicitly refreshes.
+
+Each click rereads `owner.header` and closes its direct, nonredirecting client.
+Send allows eight seconds for Go's five-second exchange; inbox allows five.
+Requests/responses are bounded to 2 KiB, with strict UTF-8, exact JSON fields
+and `Cache-Control: no-store` validation. Invalid local input sends nothing.
+401/404 means owner credential/route unavailable. Send 400/409/413/415 means
+no peer dispatch, although preparation may remain. Send 502, timeout, response
+loss or invalid success leaves **unknown outcome**. Text is preserved and
+locked for explicit exact-text retries after uncertainty or local refusal;
+current Go guards may still refuse. No automatic retry occurs.
+
+Inbox 409 means history could not be validated, never an empty inbox. Pending
+or failed refreshes remove old displayed data. Reads remain available after
+local Deny/Delete if history validates; history grants no current permission,
+readiness, Trust or `PWOpen`. One outgoing and one incoming message per Vault
+remain the bound. Closing the panel discards its inputs/results, not Go state.
+After reopening, any retry still needs the original exact text.
+
+The routing hint is plaintext-sensitive: a malicious local endpoint can observe
+the message. There is no polling, multi-message chat, E2EE, anonymity or
+production transport security. Wallet/graph/chat fixtures remain **SCRIPTED**.
+The next priority is a disposable real two-window rehearsal and lecture-demo
+preparation. Mock HTTP/widget tests do not establish real two-node
+interoperability; this increment stops at Go-10.
 
 ## Validate
 

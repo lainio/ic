@@ -90,6 +90,24 @@ class AdVerificationReceipt {
   final bool changed;
 }
 
+/// The sender saved an exact historical ACK; this is not current reachability.
+class MessageSendReceipt {
+  const MessageSendReceipt();
+}
+
+/// Owned read-only historical evidence validated by this node's owner service.
+class MessageInbox {
+  const MessageInbox.empty() : messageIdHex = null, text = null;
+  const MessageInbox.saved({
+    required String this.messageIdHex,
+    required String this.text,
+  });
+
+  final String? messageIdHex;
+  final String? text;
+  bool get present => text != null;
+}
+
 // Only these fixed messages cross into the UI; exceptions and bodies do not.
 enum StatusFailure implements Exception {
   invalidUrl('Use the full local owner status URL printed by node serve.'),
@@ -278,6 +296,47 @@ enum StatusFailure implements Exception {
     'Invalid first-use acknowledgement; outcome unknown. Local or remote '
     'effects may remain. The session may be consumed and a retry is not safe.',
   ),
+  messageOwnerUrl(
+    'Message: no request sent. Use the full local owner status URL.',
+  ),
+  messageCredentials(
+    'Message: no request sent. Use the current absolute owner.header file path.',
+  ),
+  messageNotSent(
+    'Message: no request sent. The local owner request could not start.',
+  ),
+  messageInput('No request sent. Enter one message of 1–1024 UTF-8 bytes.'),
+  messagePeerUrl(
+    'No request sent. Enter the other node’s canonical numeric loopback '
+    'http://IP:PORT/peer/pw/message URL (at most 256 bytes), with a nonzero '
+    'port and no credentials, query or fragment.',
+  ),
+  messageRequestTooLarge(
+    'No request sent. Encoded message request exceeds 2 KiB.',
+  ),
+  messageUnavailable(
+    'Message send unavailable: owner credential, scope or route not accepted.',
+  ),
+  messageRefused(
+    'Message refused locally; no peer dispatch. Local preparation may be '
+    'retained. Any explicit retry must use the exact same text.',
+  ),
+  messageUnknown(
+    'Message outcome unknown. No valid local acknowledgement was received; '
+    'Go may already have saved partial state. An explicit retry must use the '
+    'exact same text and may still fail current Go guards.',
+  ),
+  messageRetryText(
+    'No request sent. An explicit retry must use the exact same text.',
+  ),
+  inboxUnavailable(
+    'Inbox unavailable: owner credential, scope or route not accepted.',
+  ),
+  inboxConflict(
+    'Saved inbox history could not be validated. This is not an empty inbox.',
+  ),
+  inboxFailed('Could not refresh the saved inbox. No fresh read is displayed.'),
+  inboxInvalidResponse('Invalid inbox response. No fresh read is displayed.'),
   invalidIntroduction(
     "Introduction could not be verified for this node's Root.",
   ),
@@ -712,6 +771,72 @@ class StatusClient {
     }
   }
 
+  Future<MessageSendReceipt> sendMessage(
+    String ownerStatusUrl,
+    String headerPath,
+    String text,
+    String peerMessageUrl,
+  ) async {
+    if (!_messageText(text)) throw StatusFailure.messageInput;
+    if (!_messagePeerUrl(peerMessageUrl)) throw StatusFailure.messagePeerUrl;
+    final bytes = utf8.encode(
+      jsonEncode({'text': text, 'peer_message_url': peerMessageUrl}),
+    );
+    if (bytes.length > 2048) throw StatusFailure.messageRequestTooLarge;
+    try {
+      await _request(
+        _destination(ownerStatusUrl).replace(path: '/owner/pw/message/send'),
+        headerPath,
+        2048,
+        introduction: bytes,
+        requestTimeout: fetchTimeout,
+      );
+      return const MessageSendReceipt();
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.invalidUrl => StatusFailure.messageOwnerUrl,
+        StatusFailure.credentials => StatusFailure.messageCredentials,
+        StatusFailure.unexpected => StatusFailure.messageUnknown,
+        _ => failure,
+      };
+    }
+  }
+
+  Future<MessageInbox> readMessageInbox(
+    String ownerStatusUrl,
+    String headerPath,
+  ) async {
+    try {
+      final json = await _request(
+        _destination(ownerStatusUrl).replace(path: '/owner/pw/message/inbox'),
+        headerPath,
+        2048,
+      );
+      if (json.length == 1 && json['present'] == false) {
+        return const MessageInbox.empty();
+      }
+      final id = json['message_id_hex'];
+      final text = json['text'];
+      if (json.length != 3 ||
+          json['present'] != true ||
+          id is! String ||
+          id.length != 32 ||
+          RegExp(r'[^0-9a-f]').hasMatch(id) ||
+          text is! String ||
+          !_messageText(text)) {
+        throw StatusFailure.unexpected;
+      }
+      return MessageInbox.saved(messageIdHex: id, text: text);
+    } on StatusFailure catch (failure) {
+      throw switch (failure) {
+        StatusFailure.invalidUrl => StatusFailure.messageOwnerUrl,
+        StatusFailure.credentials => StatusFailure.messageCredentials,
+        StatusFailure.unexpected => StatusFailure.inboxInvalidResponse,
+        _ => failure,
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> _request(
     Uri destination,
     String headerPath,
@@ -723,7 +848,10 @@ class StatusClient {
     final redeeming = destination.path == '/owner/pw/invitations/redeem';
     final pairing = issuing || redeeming;
     final firstUse = destination.path == '/owner/pw/first-use';
+    final sendingMessage = destination.path == '/owner/pw/message/send';
+    final readingInbox = destination.path == '/owner/pw/message/inbox';
     if (_closed || _cancel != null) {
+      if (sendingMessage || readingInbox) throw StatusFailure.messageNotSent;
       if (firstUse) throw StatusFailure.firstUseNotSent;
       throw pairing ? StatusFailure.pairingNotSent : StatusFailure.unreachable;
     }
@@ -741,7 +869,15 @@ class StatusClient {
     var finished = false;
     var dispatched = false;
 
-    StatusFailure transportFailure() => firstUse
+    StatusFailure transportFailure() => sendingMessage
+        ? (dispatched
+              ? StatusFailure.messageUnknown
+              : StatusFailure.messageNotSent)
+        : readingInbox
+        ? (dispatched
+              ? StatusFailure.inboxFailed
+              : StatusFailure.messageNotSent)
+        : firstUse
         ? (dispatched
               ? StatusFailure.firstUseUnknown
               : StatusFailure.firstUseNotSent)
@@ -790,6 +926,15 @@ class StatusClient {
       if (response.statusCode != 200) {
         await response.stream.listen(null).cancel();
         throw switch (response.statusCode) {
+          401 || 404 when sendingMessage => StatusFailure.messageUnavailable,
+          400 ||
+          409 ||
+          413 ||
+          415 when sendingMessage => StatusFailure.messageRefused,
+          _ when sendingMessage => StatusFailure.messageUnknown,
+          401 || 404 when readingInbox => StatusFailure.inboxUnavailable,
+          409 when readingInbox => StatusFailure.inboxConflict,
+          _ when readingInbox => StatusFailure.inboxFailed,
           401 || 404 when firstUse => StatusFailure.firstUseUnavailable,
           400 || 413 || 415 when firstUse => StatusFailure.firstUseRejected,
           409 when firstUse => StatusFailure.firstUseRefused,
@@ -857,7 +1002,11 @@ class StatusClient {
           .first
           .trim()
           .toLowerCase();
-      if (mediaType != 'application/json') {
+      if (mediaType != 'application/json' ||
+          ((sendingMessage || readingInbox) &&
+              (response.headers['cache-control']?.trim().toLowerCase() !=
+                      'no-store' ||
+                  response.headers.containsKey('content-encoding')))) {
         await response.stream.listen(null).cancel();
         throw StatusFailure.unexpected;
       }
@@ -874,6 +1023,10 @@ class StatusClient {
       if (finished) throw transportFailure();
       try {
         final text = utf8.decode(bytes);
+        if ((sendingMessage || readingInbox) &&
+            !_messageEnvelope(text, sending: sendingMessage)) {
+          throw StatusFailure.unexpected;
+        }
         if (firstUse && !firstUseResponseEnvelope(text)) {
           throw StatusFailure.unexpected;
         }
@@ -917,6 +1070,45 @@ class StatusClient {
     _closed = true;
     _cancel?.call();
   }
+}
+
+bool _messageText(String text) {
+  if (text.isEmpty || text.length > 1024) return false;
+  final bytes = utf8.encode(text);
+  // Reject unpaired UTF-16 surrogates rather than silently replacing input.
+  return bytes.length <= 1024 && utf8.decode(bytes) == text;
+}
+
+bool _messagePeerUrl(String input) {
+  if (input.length > 256) return false;
+  final match = RegExp(
+    r'^http://(127(?:\.[0-9]{1,3}){3}|\[::1\]):([1-9][0-9]{0,4})/peer/pw/message$',
+  ).firstMatch(input);
+  if (match == null || match.end != input.length) return false;
+  if (int.parse(match[2]!) > 65535) return false;
+  // ::1 is the only canonical IPv6 loopback; mapped IPv4 is not accepted by Go.
+  if (match[1] == '[::1]') return true;
+  return match[1]!.split('.').every((part) {
+    final number = int.parse(part);
+    return number <= 255 && number.toString() == part;
+  });
+}
+
+// Match complete JSON string tokens, so field-like text inside a message is
+// data. Validate unique literal field names BEFORE jsonDecode loses duplicates.
+bool _messageEnvelope(String text, {required bool sending}) {
+  const space = r'[ \t\r\n]*';
+  const string = r'"(?:[^"\\\x00-\x1f]|\\(?:["\\/bfnrt]|u[0-9a-fA-F]{4}))*"';
+  final field = sending
+      ? '"(local_acknowledgement_saved)"$space:${space}true'
+      : '"(present|message_id_hex|text)"$space:$space(?:$string|true|false)';
+  final repeats = sending ? 0 : 2;
+  final whole = RegExp(
+    '^$space\\{$space$field(?:$space,$space$field){0,$repeats}$space\\}$space\$',
+  ).firstMatch(text);
+  if (whole == null || whole.end != text.length) return false;
+  final fields = RegExp(field).allMatches(text).toList();
+  return fields.map((match) => match[1]).toSet().length == fields.length;
 }
 
 List<int> _adFetchBytes(String input) {

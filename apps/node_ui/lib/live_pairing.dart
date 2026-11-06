@@ -26,9 +26,20 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
   final _recipient = TextEditingController();
   final _bobKey = TextEditingController();
   final _document = TextEditingController();
+  final _messageText = TextEditingController();
+  final _peerMessageUrl = TextEditingController();
   StatusClient? _issueClient;
   StatusClient? _redeemClient;
   StatusClient? _firstUseClient;
+  StatusClient? _messageClient;
+  MessageSendReceipt? _messageSent;
+  MessageInbox? _inbox;
+  StatusFailure? _sendFailure;
+  StatusFailure? _inboxFailure;
+  String? _retryText;
+  int _messageRevision = 0;
+  bool _sendingMessage = false;
+  bool _readingInbox = false;
   DirectedInvitationReceipt? _issued;
   RedemptionReceipt? _redeemed;
   FirstUseReceipt? _firstUsed;
@@ -53,7 +64,12 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
       widget.ownerStatusUrl.trim().isNotEmpty &&
       widget.headerPath.trim().isNotEmpty;
   bool get _pending =>
-      _issuing || _redeeming || _confirmingFirstUse || _usingFirstUse;
+      _issuing ||
+      _redeeming ||
+      _confirmingFirstUse ||
+      _usingFirstUse ||
+      _sendingMessage ||
+      _readingInbox;
 
   void _invalidateIssue() {
     _issueRevision++;
@@ -78,6 +94,19 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
     _firstUseClient?.close();
   }
 
+  void _invalidateMessages() {
+    _messageRevision++;
+    _messageClient?.close();
+    _messageClient = null;
+    _messageSent = null;
+    _inbox = null;
+    _sendFailure = null;
+    _inboxFailure = null;
+    _retryText = null;
+    _sendingMessage = false;
+    _readingInbox = false;
+  }
+
   @override
   void didUpdateWidget(covariant LivePairingScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -87,6 +116,7 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
       _invalidateIssue();
       _invalidateRedeem();
       _invalidateFirstUse();
+      _invalidateMessages();
     }
   }
 
@@ -96,6 +126,96 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
       mounted && !_closed && revision == _redeemRevision;
   bool _currentFirstUse(int revision) =>
       mounted && !_closed && revision == _firstUseRevision;
+  bool _currentMessage(int revision) =>
+      mounted && !_closed && revision == _messageRevision;
+
+  Future<void> _sendMessage() async {
+    if (_pending || !_configured || _closed || _messageSent != null) return;
+    final text = _messageText.text;
+    if (_retryText != null && text != _retryText) {
+      setState(() => _sendFailure = StatusFailure.messageRetryText);
+      return;
+    }
+    final revision = ++_messageRevision;
+    setState(() {
+      _sendingMessage = true;
+      _sendFailure = null;
+    });
+    StatusClient? client;
+    var invoked = false;
+    try {
+      client = _messageClient = widget.createClient?.call() ?? StatusClient();
+      invoked = true;
+      final receipt = await client.sendMessage(
+        widget.ownerStatusUrl,
+        widget.headerPath,
+        text,
+        _peerMessageUrl.text,
+      );
+      if (_currentMessage(revision)) {
+        setState(() {
+          _messageSent = receipt;
+          _retryText = text;
+        });
+      }
+    } catch (error) {
+      if (_currentMessage(revision)) {
+        final failure = error is StatusFailure
+            ? error
+            : invoked
+            ? StatusFailure.messageUnknown
+            : StatusFailure.messageNotSent;
+        setState(() {
+          _sendFailure = failure;
+          // Even a local refusal can retain preparation. Preserve exact text
+          // for an explicit retry; Go's durable checks remain authoritative.
+          if (failure == StatusFailure.messageUnknown ||
+              failure == StatusFailure.messageRefused) {
+            _retryText = text;
+          }
+        });
+      }
+    } finally {
+      client?.close();
+      if (_currentMessage(revision)) {
+        _messageClient = null;
+        setState(() => _sendingMessage = false);
+      }
+    }
+  }
+
+  Future<void> _refreshInbox() async {
+    if (_pending || !_configured || _closed) return;
+    final revision = ++_messageRevision;
+    setState(() {
+      _readingInbox = true;
+      _inbox = null;
+      _inboxFailure = null;
+    });
+    StatusClient? client;
+    try {
+      client = _messageClient = widget.createClient?.call() ?? StatusClient();
+      final inbox = await client.readMessageInbox(
+        widget.ownerStatusUrl,
+        widget.headerPath,
+      );
+      if (_currentMessage(revision)) setState(() => _inbox = inbox);
+    } catch (error) {
+      if (_currentMessage(revision)) {
+        setState(() {
+          _inboxFailure = error is StatusFailure
+              ? error
+              : StatusFailure.inboxFailed;
+        });
+      }
+    } finally {
+      client?.close();
+      if (_currentMessage(revision)) {
+        _messageClient = null;
+        setState(() => _readingInbox = false);
+      }
+    }
+  }
 
   Future<void> _firstUse() async {
     if (_pending || !_configured || _closed || _firstUseConfirmed) return;
@@ -276,6 +396,7 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
     _invalidateIssue();
     _invalidateRedeem();
     _invalidateFirstUse();
+    _invalidateMessages();
   }
 
   @override
@@ -284,6 +405,8 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
     _recipient.dispose();
     _bobKey.dispose();
     _document.dispose();
+    _messageText.dispose();
+    _peerMessageUrl.dispose();
     super.dispose();
   }
 
@@ -330,7 +453,8 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
                     const SizedBox(height: 12),
                     const Text(
                       'SCRIPTED GRAPH AND CHAT remain fixtures. These actions '
-                      'do not update graph edges, readiness, trust or messages.',
+                      'do not update their graph edges, readiness, trust or '
+                      'sample messages. The live message section below is separate.',
                     ),
                     const Divider(height: 32),
                     Text(
@@ -520,7 +644,8 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
                       'A successful receipt is Alice’s local historical '
                       'observation only. It establishes no shared PWOpen, '
                       'live pipe, current Bob permission, Trust, session key '
-                      'or usable text-message transport. Graph, readiness, '
+                      'or ongoing text transport. Go supports a bounded real '
+                      'local demo message below. Graph, readiness, '
                       'trust and chat fixtures remain unchanged.',
                     ),
                     if (_firstUseConfirmed)
@@ -529,6 +654,114 @@ class _LivePairingScreenState extends State<LivePairingScreen> {
                         'submission is available. Reopening cannot reset a '
                         'consumed node session.',
                       ),
+                    const Divider(height: 32),
+                    Text(
+                      'REAL MESSAGE (ONE PER DIRECTION)',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'LIVE OWNER MESSAGE',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Either node can send first after successful first use. '
+                      'Go checks durable history and current local guards; '
+                      'reopening this panel does not require repeating first use. '
+                      'Each Vault retains only one outgoing and one incoming '
+                      'message. A second different message is unavailable.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const ValueKey('message-text'),
+                      controller: _messageText,
+                      enabled: !_pending,
+                      readOnly: _retryText != null,
+                      minLines: 3,
+                      maxLines: 5,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      decoration: const InputDecoration(
+                        labelText: 'One message · 1–1024 UTF-8 bytes',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const ValueKey('message-peer-url'),
+                      controller: _peerMessageUrl,
+                      enabled: !_pending && _messageSent == null,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      decoration: const InputDecoration(
+                        labelText: 'Other node’s peer message URL',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Use the other node’s numeric loopback peer-listener URL '
+                      'ending in /peer/pw/message, not its owner URL. Enter this '
+                      'demo routing hint manually; a malicious local endpoint '
+                      'can observe plaintext. Only Go contacts that endpoint.',
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton(
+                      key: const ValueKey('send-message'),
+                      onPressed:
+                          _configured && !_pending && _messageSent == null
+                          ? _sendMessage
+                          : null,
+                      child: Text(
+                        _sendingMessage
+                            ? 'Sending…'
+                            : _retryText != null
+                            ? 'Retry exact message'
+                            : 'Send one message',
+                      ),
+                    ),
+                    if (_sendFailure != null) _message(_sendFailure!.message),
+                    if (_messageSent != null) ...[
+                      _message('Local acknowledgement saved'),
+                      const Text(
+                        'Sender’s local historical ACK only; no live pipe or '
+                        'guaranteed remote availability.',
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    OutlinedButton(
+                      key: const ValueKey('refresh-message-inbox'),
+                      onPressed: _configured && !_pending
+                          ? _refreshInbox
+                          : null,
+                      child: Text(
+                        _readingInbox
+                            ? 'Refreshing…'
+                            : 'Refresh received message',
+                      ),
+                    ),
+                    if (_inboxFailure != null) _message(_inboxFailure!.message),
+                    if (_inbox case final inbox?) ...[
+                      if (!inbox.present)
+                        _message('No message received locally')
+                      else ...[
+                        _message('Saved in this node’s Vault'),
+                        SelectableText(
+                          inbox.text!,
+                          key: const ValueKey('received-message-text'),
+                        ),
+                      ],
+                    ],
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Inbox reads show read-only historical evidence validated '
+                      'by Go, including after local Deny/Delete if history still '
+                      'validates. This is separate from sender ACK, readiness, '
+                      'Trust, PWOpen and current communication permission. '
+                      'No polling or automatic retries; no multi-message chat, '
+                      'E2EE, anonymity or production transport security.',
+                    ),
                   ],
                 ),
               ),
