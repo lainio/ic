@@ -27,10 +27,11 @@ var (
 	errOutgoingUnchanged = errors.New("local outgoing message unchanged")
 )
 
-// Local storage only, not authenticated wire bytes. RequestDigest references
-// the exact signed establishment request; AcceptedDigest additionally pins the
-// exact canonical acceptedRecord, including its signed result. Requester means
-// Alice; false means Bob. Neither role requires a message from the other node.
+// The outgoing v1 record is unsigned; messageEnvelope authenticates its exact
+// bytes. RequestDigest references the exact signed establishment request;
+// AcceptedDigest additionally pins the exact canonical acceptedRecord, including
+// its signed result. Requester means Alice; false means Bob. Neither role
+// requires a message from the other node.
 type outgoingBinding struct {
 	_              struct{} `cbor:",toarray"`
 	Root           key.Public
@@ -182,6 +183,16 @@ func readOutgoing(tx storage.ReadTx, expected outgoingBinding, text string,
 	if !found {
 		return nil, nil
 	}
+	record := try.To1(decodeOutgoing(raw, expected))
+	assert.That(record.Text == text, errOutgoing)
+	return raw, nil
+}
+
+func decodeOutgoing(raw []byte, expected outgoingBinding,
+) (_ outgoingMessage, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+
 	assert.That(len(raw) > 0 && len(raw) <= maxOutgoingBytes, errOutgoing)
 	var record outgoingMessage
 	assert.That(wire.DecMode.Unmarshal(raw, &record) == nil, errOutgoing)
@@ -189,10 +200,9 @@ func readOutgoing(tx storage.ReadTx, expected outgoingBinding, text string,
 		bytes.Equal(raw, try.To1(wire.Marshal(record))) &&
 		len(record.ID) == 16 && record.ID[6]&0xf0 == 0x40 &&
 		record.ID[8]&0xc0 == 0x80 && validOutgoingText(record.Text), errOutgoing)
-	assert.That(record.Text == text &&
-		bytes.Equal(try.To1(wire.Marshal(record.Binding)),
-			try.To1(wire.Marshal(expected))), errOutgoing)
-	return raw, nil
+	assert.That(bytes.Equal(try.To1(wire.Marshal(record.Binding)),
+		try.To1(wire.Marshal(expected))), errOutgoing)
+	return record, nil
 }
 
 func validOutgoingText(text string) bool {

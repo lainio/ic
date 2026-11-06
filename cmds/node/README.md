@@ -250,11 +250,21 @@ without a new message ID or write; conflicts/corruption fail closed. Missing
 records need no migration; unknown versions are refused, never overwritten.
 An uncertain result requires storage inspection, with no automatic retry.
 
-Authenticated wire bytes, inbound admission, receipts/ACKs (including late
-historical ACKs), transport, transport confidentiality, additional messages,
-general protocol concurrency and UI remain unimplemented. No endpoint, CLI or
-startup action exposes this function. This is a candidate local projection,
-not a messaging channel, V19 refinement or promotion of normative contracts.
+PW-Msg-Go-02 adds private `prepareOutgoingEnvelope` under the same owner lock.
+It stores one canonical `[1, exactOutgoingBytes, signature]` envelope in
+`local-pw-message-envelope-v1`, signing with the installed ES256/P-256 identity
+and `pw-message-auth/v1` purpose. The unchanged outgoing payload binds sender,
+receiver, role, ID, text and the exact signed request/accepted-history digests;
+both independently retained histories agree on these digests. Signing is outside
+the transaction; durable guards are rechecked before the single-row commit.
+Restart or a lost result reuses identical saved bytes without another message
+signature or write, after current guards and a fresh signer-usability probe.
+Corruption/conflicts fail closed. Text is **not encrypted by this envelope**.
+This preparation does not advance `Transmit`, set `sent`, contact a peer or
+establish delivery, Trust or `PWOpen`. Receiver-local inbox admission is next;
+receipts/ACKs, transport, confidentiality, additional messages, general protocol
+concurrency and UI remain unimplemented. No endpoint, CLI or startup exposes
+this operation, and no distributed refinement or contract promotion is claimed.
 
 ## Local held-half deletion
 
