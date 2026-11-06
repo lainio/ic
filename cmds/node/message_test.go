@@ -36,13 +36,13 @@ func TestServeMessageOnlyOptInPeer(t *testing.T) {
 	assert.NoError(result.err)
 	assert.Equal(result.status, 409) // Route exists; invalid domain envelope.
 	assert.Equal(string(result.body), "Conflict\n")
-	for _, peerPath := range []string{"/owner/pw/message", "/peer/pw/establish",
+	for _, peerPath := range []string{"/owner/pw/message", "/owner/pw/message/send", "/peer/pw/establish",
 		"/peer/pw/first-use"} {
 		result = postPeerProofHTTP(t.Context(), bob.peer.URL+peerPath, "",
 			[]byte(`{}`), false)
 		assert.NoError(result.err)
 		want := http.StatusBadRequest
-		if peerPath == "/owner/pw/message" {
+		if strings.HasPrefix(peerPath, "/owner/") {
 			want = http.StatusNotFound
 		}
 		assert.Equal(result.status, want)
@@ -58,6 +58,24 @@ func TestServeMessageOnlyOptInPeer(t *testing.T) {
 			[]byte(body), false)
 		assert.NoError(result.err)
 		assert.Equal(result.status, 404)
+	}
+	assert.DeepEqual(
+		try.To1(firstUseState(disabled.service.store.Vault())),
+		before,
+	)
+	// The operational send route exists even without this node's peer listener.
+	// No message history was prepared, so valid owner input is locally refused.
+	const sendPath = "/owner/pw/message/send"
+	const sendBody = `{"text":"one","peer_message_url":"http://127.0.0.1:1/peer/pw/message"}`
+	for _, auth := range []string{"", disabled.auth} {
+		result = postPeerProofHTTP(t.Context(), disabled.owner.URL+sendPath,
+			auth, []byte(sendBody), false)
+		assert.NoError(result.err)
+		want := 401
+		if auth != "" {
+			want = 409
+		}
+		assert.Equal(result.status, want)
 	}
 	assert.DeepEqual(
 		try.To1(firstUseState(disabled.service.store.Vault())),

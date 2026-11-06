@@ -143,6 +143,7 @@ func TestDeleteHeldEarlierCredentialsAndPeer(t *testing.T) {
 			peerapi.NewHandler(nil, nil, nil),
 			peerapi.NewEstablishmentHandler(nil, http.NotFoundHandler()),
 			peerapi.NewFirstUseHandler(nil, http.NotFoundHandler()),
+			peerapi.NewMessageHandler(nil, http.NotFoundHandler()),
 			peerapi.NewAdHandler(nil, nil, nil, ""),
 			peerapi.NewProofHandler(nil, nil, nil, "", nil),
 			peerapi.NewChallengeHandler(nil, nil, nil, "",
@@ -150,7 +151,7 @@ func TestDeleteHeldEarlierCredentialsAndPeer(t *testing.T) {
 			peerapi.NewAcceptanceHandler(nil, nil, nil, "", nil,
 				peerapi.NewHandler(nil, nil, nil)),
 		} {
-			for _, path := range []string{deleteHeldPath, denyPath} {
+			for _, path := range []string{deleteHeldPath, denyPath, messageSendPath} {
 				for _, method := range []string{"POST", "GET"} {
 					r := httptest.NewRequest(
 						method,

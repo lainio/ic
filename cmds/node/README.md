@@ -343,6 +343,38 @@ authorized snapshot. The routing hint grants no identity or permission, and
 plaintext is suitable only for a trusted-host disposable demo. This remains the
 PW-Msg-02 candidate, with no V19 refinement or normative contract promotion.
 
+PW-Msg-Go-08 wires these phases into the operational owner bearer route
+`POST /owner/pw/message/send`. After establishment and successful first use,
+either node may send first. The sender needs no `--peer-listen`; the receiver
+must enable its existing peer listener. Replace `HEADER_FILE` with the sender's
+printed header file, `OWNER_PORT` with its owner port, and `PEER_PORT` with the
+receiver's peer port:
+
+~~~sh
+curl -q --noproxy '*' --max-time 10 --silent --show-error --include \
+  --header '@HEADER_FILE' --header 'Content-Type: application/json' \
+  --data-raw '{"text":"Hello","peer_message_url":"http://127.0.0.1:PEER_PORT/peer/pw/message"}' \
+  'http://127.0.0.1:OWNER_PORT/owner/pw/message/send'
+~~~
+
+Exactly those two JSON fields are required (2 KiB request; 1–1024 UTF-8 text
+bytes). The URL must use canonical numeric loopback (such as `127.0.0.1` or
+`[::1]`), an explicit nonzero port and that exact path, without query/fragment.
+It is only a routing
+hint, supplying no identity, consent or authority. HTTP 200 with
+`{"local_acknowledgement_saved":true}` means the sender authenticated and saved
+the historical ACK. A receiver signature asserts acceptance; it cannot prove
+honest storage. Each local preparation step commits separately before HTTP;
+409 means no POST began, but earlier local commits may remain. After an HTTP
+attempt, 502 means the peer outcome is unknown, including when local ACK storage
+fails after receiver commit. Nothing is rolled back or retried automatically.
+Only an explicit identical-text retry may reuse the saved ID/envelope/sent and
+inbox under current guards; different text is refused. Sender Deny/Delete during
+HTTP still permits the valid late ACK, but blocks later sends/retries. One
+outgoing and one inbox per Vault remain; this is a plaintext local demo, not a
+chat API. Startup and reads remain inert; older credentials and peer listeners
+exclude this owner action.
+
 ## Local held-half deletion
 
 The operational `NewFirstUseCredentials` composition used by `node serve`
