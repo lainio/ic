@@ -38,7 +38,7 @@ func TestFirstUseHTTPOnlyAfterCommits(t *testing.T) {
 				),
 			)
 			bob := bobOwner.(*authenticatedStatusHandler).next.(*firstUseHandler)
-			prove, _, establish, use := bobBind(server.Listener)
+			prove, _, establish, use, _ := bobBind(server.Listener)
 			endpoint := "http://" + server.Listener.Addr().
 				String() +
 				"/peer/introduction"

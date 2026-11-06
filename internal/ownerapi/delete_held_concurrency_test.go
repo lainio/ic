@@ -172,7 +172,8 @@ func TestDeleteHeldSerializedWithRequesterAcceptance(t *testing.T) {
 	defer server.Close()
 	_, _, bind := try.To3(NewFirstUseCredentials(t.Context(), f.vault,
 		f.root, f.child, f.signer, t.TempDir()))
-	prove, _, establish, _ := bind(server.Listener)
+	prove, _, establish, _, message := bind(server.Listener)
+	assert.That(message != nil)
 	endpoint := "http://" + server.Listener.Addr().
 		String() +
 		"/peer/introduction"

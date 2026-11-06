@@ -17,8 +17,9 @@ func TestFirstUseOwnerStrictInputAndCredentials(t *testing.T) {
 	h, file, bind := try.To3(
 		NewFirstUseCredentials(t.Context(), nil, nil, nil, nil, t.TempDir()),
 	)
-	prove, accept, establish, use := bind(nil)
+	prove, accept, establish, use, message := bind(nil)
 	assert.That(prove == nil && accept == nil && establish == nil && use == nil)
+	assert.That(message == nil)
 	auth := strings.TrimSpace(
 		strings.TrimPrefix(
 			string(try.To1(os.ReadFile(file))),

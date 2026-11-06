@@ -180,7 +180,8 @@ func heldOwnerTarget(
 		string(try.To1(os.ReadFile(file))), "Authorization:"))
 	target := h.(*authenticatedStatusHandler).next.(*firstUseHandler)
 	f.publisher = target.publicationHandler
-	_, _, establish, use := bind(f.listener)
+	prove, _, establish, use, _ := bind(f.listener)
+	assert.That(prove != nil)
 	f.peer = peerapi.NewFirstUseHandler(use,
 		peerapi.NewEstablishmentHandler(establish, http.NotFoundHandler()))
 	return target

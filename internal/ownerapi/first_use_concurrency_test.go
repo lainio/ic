@@ -42,7 +42,7 @@ func firstUseOwnerTarget(
 		),
 	)
 	target := h.(*authenticatedStatusHandler).next.(*firstUseHandler)
-	prove, accept, establish, use := bind(f.listener)
+	prove, accept, establish, use, _ := bind(f.listener)
 	assert.That(prove != nil && accept != nil && establish != nil && use != nil)
 	f.peer = peerapi.NewFirstUseHandler(use, http.NotFoundHandler())
 	now := time.Now().UTC().UnixNano()

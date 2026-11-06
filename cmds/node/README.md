@@ -309,6 +309,21 @@ Linux backend/reopen behavior. No `sent`, transport or UI is added. The next
 separate increment is the explicit transport/`Transmit` boundary, not Flutter
 chat; no normative contract promotion or distributed refinement is claimed.
 
+PW-Msg-Go-06 adds only opt-in loopback `POST /peer/pw/message`: bounded JSON
+`{"version":1,"envelope":"<canonical-base64>"}` (4 KiB) returns
+`{"version":1,"receipt":"<canonical-base64>"}` (2 KiB). The operational
+receiver capability holds the existing owner mutation/signer lock across
+`AcceptIncoming` then `ReturnReceipt` for the exact envelope, releasing it before
+HTTP output. A signing failure or lost reply can leave the inbox committed;
+there is no rollback or automatic retry. An authorized exact retry is read-only,
+including after reopen; receiver Deny/Delete refuses new processing and retains
+history. The owner listener returns 404 without a bearer challenge, and no peer
+route is enabled without `--peer-listen`. The signed envelope contains plaintext:
+this is loopback-only demo transport, not E2EE, a secure channel or anonymity.
+Sender HTTP `Transmit`, explicit `sent` and receipt observation wiring remain
+the next increment; this operation writes no sender state and promotes no
+candidate semantics or normative contracts.
+
 ## Local held-half deletion
 
 The operational `NewFirstUseCredentials` composition used by `node serve`

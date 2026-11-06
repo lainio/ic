@@ -308,6 +308,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	var configure func(net.Listener) (
 		ownerapi.CurrentAdProver, ownerapi.LocalAcceptanceProver,
 		ownerapi.LocalEstablisher, ownerapi.LocalFirstUser,
+		ownerapi.LocalMessageReceiver,
 	)
 	s.handler, s.headerFile, configure = try.To3(
 		ownerapi.NewFirstUseCredentials(
@@ -320,7 +321,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 		// This peer-only operation must not even challenge for owner credentials.
 		if r.URL.Path == "/peer/pw/challenge" ||
 			r.URL.Path == "/peer/pw/accept" || r.URL.Path == "/peer/pw/establish" ||
-			r.URL.Path == "/peer/pw/first-use" {
+			r.URL.Path == "/peer/pw/first-use" || r.URL.Path == "/peer/pw/message" {
 			w.Header().Set("Cache-Control", "no-store")
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			return
@@ -334,7 +335,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 	// Install both endpoint-bound surfaces once, before either Serve starts.
 	s.configurePublication = func(peer net.Listener) {
 		once.Do(func() {
-			prove, accept, establish, firstUse := configure(peer)
+			prove, accept, establish, firstUse, message := configure(peer)
 			if peer != nil {
 				endpoint := "http://" + peer.Addr().String() + "/peer/introduction"
 				s.peerHandler = peerapi.NewProofHandler(s.store.Vault(), root, s.child,
@@ -345,6 +346,7 @@ func setupNodeServe(ctx context.Context, cmd *cobra.Command) (
 					establish, s.peerHandler,
 				)
 				s.peerHandler = peerapi.NewFirstUseHandler(firstUse, s.peerHandler)
+				s.peerHandler = peerapi.NewMessageHandler(message, s.peerHandler)
 			}
 		})
 	}

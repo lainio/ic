@@ -23,12 +23,14 @@ type LocalFirstUser func(request []byte) (response []byte, err error)
 // It also grants POST /owner/pw/holding/delete for the sole local holding;
 // deletion needs no peer listener and shares the existing mutation lock.
 // POST /owner/policy/deny selects only a peer, using the same local lock.
+// The bound peer capability also admits a message then issues its receipt.
 // Earlier credentials retain their scopes. Bind once before serving; nil
 // permanently disables peer capabilities. Startup neither signs nor writes.
 func NewFirstUseCredentials(ctx context.Context, vault *storage.Vault,
 	root, local key.Public, signer key.Handle, dir string,
 ) (http.Handler, string, func(net.Listener) (
 	CurrentAdProver, LocalAcceptanceProver, LocalEstablisher, LocalFirstUser,
+	LocalMessageReceiver,
 ), error) {
 	h := &publicationHandler{
 		deviceHandler: newDeviceHandler(vault, root, local, signer),
@@ -42,12 +44,14 @@ func NewFirstUseCredentials(ctx context.Context, vault *storage.Vault,
 	}
 	configure := func(peer net.Listener) (
 		CurrentAdProver, LocalAcceptanceProver, LocalEstablisher, LocalFirstUser,
+		LocalMessageReceiver,
 	) {
 		prove := bind(peer)
 		if prove == nil {
-			return nil, nil, nil, nil
+			return nil, nil, nil, nil, nil
 		}
-		return prove, h.proveLocalAcceptance, h.establishLocal, h.firstUseLocal
+		return prove, h.proveLocalAcceptance, h.establishLocal, h.firstUseLocal,
+			h.receiveMessageLocal
 	}
 	return handler, file, configure, nil
 }

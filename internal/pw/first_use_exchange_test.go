@@ -118,7 +118,8 @@ func (f *firstUseExchange) bind(t *testing.T) {
 			t.TempDir(),
 		),
 	)
-	_, _, establish, use := bind(f.server.Listener)
+	prove, _, establish, use, _ := bind(f.server.Listener)
+	assert.That(prove != nil)
 	f.peer = peerapi.NewFirstUseHandler(
 		use,
 		peerapi.NewEstablishmentHandler(establish, http.NotFoundHandler()),
