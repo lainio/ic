@@ -27,6 +27,8 @@ type LocalFirstUser func(request []byte) (response []byte, err error)
 // POST /owner/pw/message/send prepares, sends once and observes a historical
 // ACK under the same owner lock, releasing it for HTTP. Sending needs no peer
 // listener on this node; its explicit routing hint grants no peer authority.
+// GET /owner/pw/message/inbox reads authenticated local incoming history only;
+// it needs no peer listener, current permission or signer.
 // Earlier credentials retain their scopes. Bind once before serving; nil
 // permanently disables peer capabilities. Startup neither signs nor writes.
 func NewFirstUseCredentials(ctx context.Context, vault *storage.Vault,
@@ -72,6 +74,10 @@ func (h *publicationHandler) firstUseLocal(raw []byte) ([]byte, error) {
 type firstUseHandler struct{ *redemptionHandler }
 
 func (h *firstUseHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == messageInboxPath {
+		h.serveMessageInbox(w, r)
+		return
+	}
 	if r.URL.Path == messageSendPath {
 		h.serveMessageSend(w, r)
 		return

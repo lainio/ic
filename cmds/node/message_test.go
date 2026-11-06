@@ -36,6 +36,17 @@ func TestServeMessageOnlyOptInPeer(t *testing.T) {
 	assert.NoError(result.err)
 	assert.Equal(result.status, 409) // Route exists; invalid domain envelope.
 	assert.Equal(string(result.body), "Conflict\n")
+	for _, auth := range []string{"", alice.auth, bob.auth} {
+		for _, method := range []string{"GET", "POST", "HEAD"} {
+			r := httptest.NewRequest(method, "/owner/pw/message/inbox", nil)
+			r.Header.Set("Authorization", auth)
+			w := httptest.NewRecorder()
+			bob.service.peerHandler.ServeHTTP(w, r)
+			assert.Equal(w.Code, 404)
+			assert.Equal(w.Header().Get("WWW-Authenticate"), "")
+			assert.Equal(w.Header().Get("Cache-Control"), "no-store")
+		}
+	}
 	for _, peerPath := range []string{"/owner/pw/message", "/owner/pw/message/send", "/peer/pw/establish",
 		"/peer/pw/first-use"} {
 		result = postPeerProofHTTP(t.Context(), bob.peer.URL+peerPath, "",
@@ -63,6 +74,20 @@ func TestServeMessageOnlyOptInPeer(t *testing.T) {
 		try.To1(firstUseState(disabled.service.store.Vault())),
 		before,
 	)
+	// Historical inbox reads need no peer listener. Missing first-use history
+	// is a fixed refusal, even though no message has been committed here.
+	for _, auth := range []string{"", disabled.auth} {
+		r := httptest.NewRequest("GET", "/owner/pw/message/inbox", nil)
+		r.Header.Set("Authorization", auth)
+		w := httptest.NewRecorder()
+		disabled.service.handler.ServeHTTP(w, r)
+		want := 401
+		if auth != "" {
+			want = 409
+		}
+		assert.Equal(w.Code, want)
+		assert.Equal(w.Body.String(), http.StatusText(want)+"\n")
+	}
 	// The operational send route exists even without this node's peer listener.
 	// No message history was prepared, so valid owner input is locally refused.
 	const sendPath = "/owner/pw/message/send"

@@ -375,6 +375,21 @@ outgoing and one inbox per Vault remain; this is a plaintext local demo, not a
 chat API. Startup and reads remain inert; older credentials and peer listeners
 exclude this owner action.
 
+PW-Msg-Go-09 adds operational bearer `GET /owner/pw/message/inbox`, with no
+body or selectors. It returns exactly `{"present":false}` for valid history
+without an inbox, or `{"present":true,"message_id_hex":"<32 lowercase hex>",
+"text":"..."}` for the locally committed, authenticated single incoming message.
+One read transaction verifies exact accepted history, successful historical
+first use and the retained signed envelope. Reads survive Deny, holding deletion,
+Known/device loss, signer loss and reopen; they grant no new communication
+permission, ACK, Trust or `PWOpen`. No signing, peer contact or Vault write occurs.
+Responses are `no-store` and at most 2 KiB; invalid evidence or JSON escaping
+beyond that bound returns fixed 409 without plaintext or truncation. Malformed
+GET shape returns 400, wrong methods 405 and path variants 404. Older credentials
+exclude this read; peers return 404 without a bearer challenge. Startup/status
+never inspect the inbox. This remains one message per direction; the next
+increment is Flutter send/receive widgets over Go-08 and this GET.
+
 ## Local held-half deletion
 
 The operational `NewFirstUseCredentials` composition used by `node serve`
