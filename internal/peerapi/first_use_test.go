@@ -15,7 +15,7 @@ func TestFirstUseStrictPeerBoundary(t *testing.T) {
 	defer assert.PushTester(t)()
 	calls := 0
 	h := NewFirstUseHandler(
-		func([]byte) ([]byte, error) { calls++; return nil, errors.New("secret diagnostic") },
+		func(int, []byte) ([]byte, error) { calls++; return nil, errors.New("secret diagnostic") },
 		http.NotFoundHandler(),
 	)
 	for _, tc := range []struct {
@@ -28,7 +28,7 @@ func TestFirstUseStrictPeerBoundary(t *testing.T) {
 		{`{"version":1,"request":"AQ==","root":"x"}`, 400},
 		{`{"version":1,"request":"AQ=="} {}`, 400},
 		{`{"version":1.0,"request":"AQ=="}`, 400},
-		{`{"version":2,"request":"AQ=="}`, 400},
+		{`{"version":2,"request":"AQ=="}`, 409},
 		{`{"version":1,"request":"AR=="}`, 400},
 		{`{"version":1,"request":"AQ==\n"}`, 400},
 		{`{"version":1,"request":null}`, 400},
@@ -49,7 +49,7 @@ func TestFirstUseStrictPeerBoundary(t *testing.T) {
 		assert.Equal(w.Body.String(), http.StatusText(tc.status)+"\n")
 		assert.Equal(w.Header().Get("Cache-Control"), "no-store")
 	}
-	assert.Equal(calls, 1)
+	assert.Equal(calls, 2)
 	for _, mode := range []string{"GET", "query", "encoding", "trailer", "duplicate media", "wrong media", "escaped", "owner", "nil"} {
 		r := httptest.NewRequest(
 			"POST",
@@ -89,5 +89,5 @@ func TestFirstUseStrictPeerBoundary(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		assert.Equal(w.Code, want)
 	}
-	assert.Equal(calls, 1)
+	assert.Equal(calls, 2)
 }

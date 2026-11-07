@@ -89,19 +89,6 @@ func NewEstablishmentHandler(
 	})
 }
 
-func readEstablishmentRequest(w http.ResponseWriter, r *http.Request,
-) ([]byte, int) {
-	// First use still accepts only its original version-1 envelope.
-	request, status := readVersionedEstablishmentRequest(w, r)
-	if status != 0 {
-		return nil, status
-	}
-	if request.version != 1 {
-		return nil, http.StatusBadRequest
-	}
-	return request.raw, 0
-}
-
 func readVersionedEstablishmentRequest(w http.ResponseWriter, r *http.Request,
 ) (establishmentRequest, int) {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))

@@ -12,7 +12,7 @@ import (
 // The narrow owner capability owns authentication, guards, signing and receipt
 // commit. This handler has no Vault, signer or owner credentials. Nil disables it.
 func NewFirstUseHandler(
-	firstUse func([]byte) ([]byte, error), next http.Handler,
+	firstUse func(int, []byte) ([]byte, error), next http.Handler,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/peer/pw/first-use" || firstUse == nil {
@@ -40,7 +40,7 @@ func NewFirstUseHandler(
 			fail(http.StatusBadRequest)
 			return
 		}
-		request, status := readEstablishmentRequest(w, r)
+		request, status := readVersionedEstablishmentRequest(w, r)
 		if status != 0 {
 			fail(status)
 			return
@@ -51,7 +51,9 @@ func NewFirstUseHandler(
 		}
 		glog.V(1).Info("intro_pw op=first_use side=acceptor " +
 			"stage=request result=accepted")
-		response, err := firstUse(request)
+		// The selected domain operation authenticates canonical signed bytes
+		// against pinned local history before signing or committing a receipt.
+		response, err := firstUse(request.version, request.raw)
 		if err != nil {
 			glog.V(1).Info("intro_pw op=first_use side=acceptor " +
 				"stage=local result=refused reason=undetermined")
@@ -65,7 +67,7 @@ func NewFirstUseHandler(
 		document, err := json.Marshal(struct {
 			Version  int    `json:"version"`
 			Response []byte `json:"response"`
-		}{1, response})
+		}{request.version, response})
 		if err != nil || len(document) > maxEstablishmentEnvelopeBytes {
 			fail(http.StatusInternalServerError)
 			return

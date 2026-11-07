@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -24,6 +25,26 @@ func SendFirstUse(ctx context.Context, saved SavedFirstUse) ([]byte, error) {
 	if ctx == nil || len(saved.request) == 0 || saved.endpoint == "" {
 		return nil, ErrFirstUseExchange
 	}
+	endpoint := strings.TrimSuffix(saved.endpoint, "/peer/introduction") +
+		"/peer/pw/first-use"
+	return sendFirstUse(ctx, 1, endpoint, saved.request)
+}
+
+// SendFirstUseV2 sends only the opaque committed Await snapshot, once, to its
+// private accepted peer origin. Release all owner/signer/Vault locks first.
+// No caller-selected URL, request bytes, callback or retry is accepted.
+func SendFirstUseV2(ctx context.Context, saved SavedFirstUseV2) ([]byte, error) {
+	if ctx == nil || len(saved.request) == 0 ||
+		!canonicalServiceContact(saved.peerOrigin) {
+		return nil, ErrFirstUseExchange
+	}
+	return sendFirstUse(ctx, 2, saved.peerOrigin+"/peer/pw/first-use",
+		saved.request)
+}
+
+func sendFirstUse(ctx context.Context, version int, endpoint string,
+	raw []byte,
+) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	transport := &http.Transport{
@@ -36,18 +57,22 @@ func SendFirstUse(ctx context.Context, saved SavedFirstUse) ([]byte, error) {
 			return http.ErrUseLastResponse
 		},
 	}
-	endpoint := strings.TrimSuffix(saved.endpoint, "/peer/introduction") +
-		"/peer/pw/first-use"
-	data, err := postEstablishment(ctx, client, endpoint, saved.request)
+	var data []byte
+	var err error
+	if version == 1 {
+		data, err = postEstablishment(ctx, client, endpoint, raw)
+	} else {
+		data, err = postEstablishmentVersion(ctx, client, endpoint, raw, version)
+	}
 	if err != nil {
 		return nil, ErrFirstUseExchange
 	}
-	return decodeFirstUseResponse(data)
+	return decodeFirstUseResponse(data, version)
 }
 
 // Exact flat versioned envelope: reject duplicates, aliases, unknown fields,
 // noninteger versions, trailing values and noncanonical padded base64.
-func decodeFirstUseResponse(data []byte) ([]byte, error) {
+func decodeFirstUseResponse(data []byte, version int) ([]byte, error) {
 	if len(data) > maxEstablishmentEnvelopeBytes || !utf8.Valid(data) {
 		return nil, ErrFirstUseExchange
 	}
@@ -59,9 +84,11 @@ func decodeFirstUseResponse(data []byte) ([]byte, error) {
 	seen := make(map[string]bool, 2)
 	var response []byte
 	for d.More() {
+		start := d.InputOffset()
 		token, err := d.Token()
 		name, valid := token.(string)
-		if err != nil || !valid || seen[name] {
+		if err != nil || !valid || seen[name] ||
+			bytes.Contains(data[start:d.InputOffset()], []byte{'\\'}) {
 			return nil, ErrFirstUseExchange
 		}
 		seen[name] = true
@@ -71,7 +98,7 @@ func decodeFirstUseResponse(data []byte) ([]byte, error) {
 		}
 		switch name {
 		case "version":
-			if value != json.Number("1") {
+			if value != json.Number(strconv.Itoa(version)) {
 				return nil, ErrFirstUseExchange
 			}
 		case "response":
