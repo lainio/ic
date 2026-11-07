@@ -84,3 +84,19 @@ func TestRequesterBackendCommitFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestRequesterV2BackendCommitFailure(t *testing.T) {
+	defer assert.PushTester(t)()
+	f := newRequester(t, false)
+	before := try.To1(os.ReadFile(f.alice.path))
+	restore := readOnlyVaultDescriptor(t, f.alice.path)
+	saved, err := f.saveV2(aliceServiceOrigin)
+	restore()
+	assert.Equal(err, ErrEstablishment)
+	assert.DeepEqual(saved, SavedAttemptV2{})
+	assert.DeepEqual(try.To1(os.ReadFile(f.alice.path)), before)
+	assert.DeepEqual(requesterRecords(t, f.alice.vault), [3][]byte{})
+	f.alice.reopen(t)
+	assert.DeepEqual(requesterRecords(t, f.alice.vault), [3][]byte{})
+	try.To1(f.saveV2(aliceServiceOrigin))
+}

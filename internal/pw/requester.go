@@ -19,6 +19,10 @@ import (
 	"github.com/lainio/ic/storage"
 )
 
+// One slot across wire versions. The historical key name does not select a
+// decoder: v1 and v2 readers each require their own exact version and layout.
+// Keeping this slot also prevents the unchanged v1 Bob path from overwriting
+// a requester attempt. No migration, second slot or reinterpretation is allowed.
 const attemptKey = "local-pw-attempt-v1"
 
 var errRequesterUnchanged = errors.New("requester acceptance unchanged")
@@ -304,4 +308,134 @@ func attemptSnapshot(raw, ad []byte, accepted, held bool) SavedAttempt {
 	_ = wire.DecMode.Unmarshal(ad, &current)
 	return SavedAttempt{request: bytes.Clone(raw),
 		endpoint: current.Payload.PeerIntroductionURL, Accepted: accepted, Held: held}
+}
+
+// SavedAttemptV2 owns only an exact saved request, not acceptance or holding.
+// Its separate type cannot be passed to the live v1 SendEstablish path.
+type SavedAttemptV2 struct {
+	request []byte
+}
+
+// SaveAttemptV2 prepares the contact-bound request in an independently
+// Root/local-bound Vault. The internal caller MUST supply requesterContact
+// from its own trusted, pinned service configuration, never from HTTP input,
+// the target ad, UI/demo text or another Vault. Target contact and ad come only
+// from this Vault's previously authenticated and verified Bob evidence.
+//
+// Hold the owner mutation/signer lock, including configuration changes, across
+// this call. Sign outside transactions and revalidate durable guards at commit.
+// Retained attempts are read, never re-signed or rebound. A new runtime port
+// conflicts; disposable demos need fresh relationship state for a fresh port
+// unless an explicit fixed contact is configured. No reachability is promised.
+// This API does not enable v2 acceptance or change the live v1 owner route.
+func SaveAttemptV2(vault *storage.Vault, root, local, target key.Public,
+	signer key.Handle, invitationID []byte, audience, requesterContact string,
+) (SavedAttemptV2, error) {
+	return saveAttemptV2(vault, root, local, target, signer, invitationID,
+		audience, requesterContact, time.Now)
+}
+
+func saveAttemptV2(vault *storage.Vault, root, local, target key.Public,
+	signer key.Handle, invitationID []byte, audience, requesterContact string,
+	now func() time.Time,
+) (_ SavedAttemptV2, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, func(cause error) error {
+		glog.V(1).Infof("intro_pw op=prepare_v2 side=requester "+
+			"stage=attempt result=refused reason=%s", establishmentReason(cause))
+		return ErrEstablishment
+	})
+
+	assert.That(vault != nil && validPublic(root) && validPublic(local) &&
+		validPublic(target) && !bytes.Equal(local, target) &&
+		len(invitationID) == 32 && canonicalServiceContact(requesterContact) &&
+		(audience == InvitationAny || audience == InvitationDirected),
+		ErrEstablishment)
+	p := EstablishmentV2{Version: 2, Root: bytes.Clone(root),
+		Requester: bytes.Clone(local), Target: bytes.Clone(target),
+		InvitationID: bytes.Clone(invitationID), Audience: audience,
+		Device: bytes.Clone(local), RequesterContact: requesterContact}
+	if audience == InvitationDirected {
+		p.Recipient = bytes.Clone(local)
+	}
+
+	var saved []byte
+	read := func(tx storage.ReadTx) (err error) {
+		defer err2.Handle(&err, nil)
+		saved = try.To1(readAttemptV2(tx, p, now))
+		if saved == nil {
+			p.Ad = try.To1(requesterGuards(tx, p.guardBinding(), now))
+			p.TargetContact = try.To1(serviceContactFromAd(p.Ad))
+		}
+		return nil
+	}
+	try.To(vault.View(read))
+	state := try.To1(device.InspectLocal(vault, p.Root, p.Requester,
+		localSigner{signer}))
+	assert.That(state.Authorized,
+		establishmentRefusal("device_not_authorized"))
+	assert.That(state.Usable, establishmentRefusal("signer_unusable"))
+	try.To(vault.View(read))
+	if saved != nil {
+		return SavedAttemptV2{request: saved}, nil
+	}
+
+	p.AttemptID = make([]byte, 32)
+	try.To1(rand.Read(p.AttemptID))
+	digest := key.HashTagged(EstablishPurposeV2, try.To1(wire.Marshal(p)))
+	signature := try.To1((localSigner{signer}).Sign(bytes.Clone(digest[:])))
+	raw := try.To1(wire.Marshal(SignedEstablishmentV2{
+		Payload: p, Signature: bytes.Clone(signature),
+	}))
+	try.To1(decodeEstablishmentV2(raw, p.Root, p.Target))
+	try.To(vault.Update(func(tx storage.WriteTx) (err error) {
+		defer err2.Handle(&err, nil)
+		return commitAttemptV2(tx, p.Root, p.Requester, requesterContact, raw, now)
+	}))
+	return SavedAttemptV2{request: bytes.Clone(raw)}, nil
+}
+
+// This increment understands only unaccepted v2 attempts. Any v1 attempt or
+// accepted/held evidence fails closed, including a v1 history after deletion.
+func readAttemptV2(tx storage.ReadTx, expected EstablishmentV2,
+	now func() time.Time,
+) (_ []byte, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+	raw, found := try.To2(tx.Get([]byte(attemptKey)))
+	_, accepted := try.To2(tx.Get([]byte(acceptedKey)))
+	_, held := try.To2(tx.Get([]byte(heldKey)))
+	assert.That(!accepted && !held, establishmentRefusal("state_incompatible"))
+	if !found {
+		return nil, nil
+	}
+	request := try.To1(decodeEstablishmentV2(raw, expected.Root, expected.Target))
+	p := request.Payload
+	assert.That(bytes.Equal(p.Requester, expected.Requester) &&
+		p.RequesterContact == expected.RequesterContact &&
+		matchesInvitation(Invitation{Root: expected.Root, Target: expected.Target,
+			ID: expected.InvitationID, Audience: expected.Audience,
+			Recipient: expected.Recipient}, p.guardBinding()),
+		establishmentRefusal("attempt_incompatible"))
+	assert.That(expected.Ad == nil || bytes.Equal(p.Ad, expected.Ad),
+		establishmentRefusal("ad_evidence_changed"))
+	try.To1(requesterGuards(tx, p.guardBinding(), now))
+	return bytes.Clone(raw), nil
+}
+
+func commitAttemptV2(tx storage.WriteTx, root, local key.Public,
+	requesterContact string, raw []byte, now func() time.Time,
+) (err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+	var request SignedEstablishmentV2
+	try.To(decodeEstablishmentCanonical(raw, &request))
+	request = try.To1(decodeEstablishmentV2(raw, root, request.Payload.Target))
+	p := request.Payload
+	assert.That(bytes.Equal(p.Requester, local) &&
+		p.RequesterContact == requesterContact, ErrEstablishment)
+	prior := try.To1(readAttemptV2(tx, p, now))
+	assert.That(prior == nil, establishmentRefusal("attempt_incompatible"))
+	try.To1(requesterGuards(tx, p.guardBinding(), now))
+	return tx.Put([]byte(attemptKey), raw)
 }
