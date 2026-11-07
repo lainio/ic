@@ -66,7 +66,7 @@ func deleteHeldInTx(tx storage.WriteTx, root, local key.Public) (err error) {
 	assert.That(!issued || row.State != InvitationConsumed ||
 		(accepted && !attempting), ErrDeleteHeld)
 	// The shared slots retain their versioned meanings. V2 authenticates its
-	// complete role-specific tuple and refuses all first-use state. It needs
+	// complete role-specific tuple and optional v2 first-use evidence. It needs
 	// no live guard or signer, and removes only the separately held half.
 	if try.To1(hasV2History(history, attempt)) {
 		saved := try.To1(readLocalHistoryV2(tx, root, local, attempting))

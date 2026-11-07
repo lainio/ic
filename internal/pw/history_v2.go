@@ -20,6 +20,8 @@ type localHistoryV2 struct {
 	binding  EstablishmentV2
 	accepted bool
 	held     bool
+	firstUse firstUseRecord
+	useSeen  bool
 }
 
 // No current Known, device, ad-expiry, policy, runtime or signer guard belongs
@@ -56,7 +58,6 @@ func readLocalHistoryV2(tx storage.ReadTx, root, local key.Public, alice bool,
 		return localHistoryV2{version: 1}, nil
 	}
 	assert.That(record.Version == 2, ErrEstablishment)
-	try.To(noFirstUseV2(tx))
 	var request SignedEstablishmentV2
 	try.To(decodeEstablishmentCanonical(record.Request, &request))
 	target := local
@@ -74,9 +75,10 @@ func readLocalHistoryV2(tx storage.ReadTx, root, local key.Public, alice bool,
 	payload := acceptedPayloadV2(p, record.Request)
 	try.To(verifyAcceptedV2(record.Response, payload))
 	held = try.To1(readHistoryHolding(tx, 2, payload.RequestDigest))
+	firstUse, useSeen := try.To2(readUseHistoryV2(tx, payload, alice))
 	return localHistoryV2{version: 2, request: bytes.Clone(record.Request),
 		response: bytes.Clone(record.Response), binding: p,
-		accepted: true, held: held}, nil
+		accepted: true, held: held, firstUse: firstUse, useSeen: useSeen}, nil
 }
 
 func readPendingHistoryV2(raw []byte, root, local key.Public,
