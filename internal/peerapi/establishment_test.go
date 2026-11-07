@@ -18,7 +18,7 @@ func TestEstablishmentStrictEnvelope(t *testing.T) {
 	defer assert.PushTester(t)()
 	const valid = `{"version":1,"request":"AQ=="}`
 	calls := 0
-	h := NewEstablishmentHandler(func([]byte) ([]byte, error) {
+	h := NewEstablishmentHandler(func(int, []byte) ([]byte, error) {
 		calls++
 		return nil, errors.New("private request/response diagnostic")
 	}, http.NotFoundHandler())
@@ -45,7 +45,7 @@ func TestEstablishmentStrictEnvelope(t *testing.T) {
 		`{"version":1,"request":"AQ==","REQUEST":"AQ=="}`,
 		`{"version":1.0,"request":"AQ=="}`,
 		`{"version":1e0,"request":"AQ=="}`,
-		`{"version":2,"request":"AQ=="}`,
+		`{"version":3,"request":"AQ=="}`,
 		`{"version":"1","request":"AQ=="}`,
 		`{"version":true,"request":"AQ=="}`,
 		`{"version":1,"request":null}`, `{"version":1,"request":[]}`,
@@ -95,6 +95,7 @@ func TestEstablishmentStrictEnvelope(t *testing.T) {
 		{func(r *http.Request) { r.URL.RawPath = establishPath }, 404},
 		{func(r *http.Request) { r.URL.Opaque = "//peer" }, 404},
 		{func(r *http.Request) { r.Header.Add("Content-Type", "application/json") }, 415},
+		{func(r *http.Request) { r.Header.Set("Content-Encoding", "gzip") }, 415},
 		{func(r *http.Request) { r.Body = nil }, 400},
 	} {
 		assert.Equal(
@@ -122,7 +123,7 @@ func TestEstablishmentStrictEnvelope(t *testing.T) {
 func TestEstablishmentBoundsCapabilityResult(t *testing.T) {
 	defer assert.PushTester(t)()
 	for _, result := range [][]byte{nil, make([]byte, pw.MaxEstablishmentBytes+1)} {
-		h := NewEstablishmentHandler(func([]byte) ([]byte, error) {
+		h := NewEstablishmentHandler(func(int, []byte) ([]byte, error) {
 			return result, nil
 		}, http.NotFoundHandler())
 		r := httptest.NewRequest("POST", establishPath,
@@ -133,4 +134,43 @@ func TestEstablishmentBoundsCapabilityResult(t *testing.T) {
 		assert.Equal(w.Code, 500)
 		assert.Equal(w.Body.String(), "Internal Server Error\n")
 	}
+}
+
+func TestEstablishmentV2Envelope(t *testing.T) {
+	defer assert.PushTester(t)()
+	calls := 0
+	h := NewEstablishmentHandler(func(version int, raw []byte) ([]byte, error) {
+		calls++
+		assert.Equal(version, 2)
+		assert.DeepEqual(raw, []byte{1})
+		return []byte{2}, nil
+	}, http.NotFoundHandler())
+	for _, body := range []string{
+		`{"version":2,"version":2,"request":"AQ=="}`,
+		`{"version":2,"request":"AQ==","request":"AQ=="}`,
+		`{"version":2,"request":"AQ==","acceptance":"AQ=="}`,
+		`{"version":2,"request":"AQ==","endpoint":"http://127.0.0.1:1"}`,
+		`{"Version":2,"request":"AQ=="}`,
+		`{"ver\u0073ion":2,"request":"AQ=="}`,
+		`{"version":2,"reque\u0073t":"AQ=="}`,
+		`{"version":2.0,"request":"AQ=="}`,
+		`{"version":2e0,"request":"AQ=="}`,
+		`{"version":"2","request":"AQ=="}`,
+	} {
+		r := httptest.NewRequest("POST", establishPath, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		assert.Equal(w.Code, 400)
+	}
+	assert.Equal(calls, 0)
+	r := httptest.NewRequest("POST", establishPath,
+		strings.NewReader(`{"version":2,"request":"AQ=="}`))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	assert.Equal(w.Code, 200)
+	assert.Equal(w.Body.String(), `{"version":2,"acceptance":"Ag=="}`)
+	assert.Equal(w.Header().Get("Cache-Control"), "no-store")
+	assert.Equal(calls, 1)
 }

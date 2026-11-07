@@ -12,15 +12,19 @@ import (
 	"github.com/lainio/ic/storage"
 )
 
-// LocalEstablisher accepts one exact signed request and returns only BobReply's
-// currently authorized saved response. It grants no generic signing or Vault
-// writes. The owner service owns the pinned identities, endpoint and mutex.
-type LocalEstablisher func(request []byte) (acceptance []byte, err error)
+// LocalEstablisher authenticates one exact signed request in the envelope's
+// selected format and returns only that version's currently authorized saved
+// response. It grants no generic signing or Vault writes. The owner service
+// owns the pinned identities, endpoint and mutex.
+type LocalEstablisher func(version int, request []byte) (
+	acceptance []byte, err error,
+)
 
 // NewEstablishmentCredentials adds a narrow peer establishment capability to
 // NewAcceptanceCredentials' owner routes and peer proof capabilities, plus
 // explicit POST /owner/pw/invitations/redeem for one saved requester attempt.
-// Earlier constructors do not grant redemption. Alice needs no peer listener.
+// Earlier constructors do not grant redemption. V1 needs no Alice listener;
+// explicit v2 redemption requires her own bound peer endpoint.
 // Bind once with the actual opt-in listener before Serve. Nil permanently
 // disables all peer capabilities. Setup/binding never signs or writes the Vault.
 // The caller must join both servers before closing the borrowed Vault/signer.
@@ -51,7 +55,8 @@ func NewEstablishmentCredentials(ctx context.Context, vault *storage.Vault,
 	return handler, file, configure, nil
 }
 
-func (h *publicationHandler) establishLocal(raw []byte) ([]byte, error) {
+func (h *publicationHandler) establishLocal(version int, raw []byte,
+) ([]byte, error) {
 	raw = bytes.Clone(raw)
 	stage, reason, retained := "guards", "undetermined", false
 	defer func() {
@@ -65,6 +70,9 @@ func (h *publicationHandler) establishLocal(raw []byte) ([]byte, error) {
 	}()
 	h.mutations.Lock()
 	defer h.mutations.Unlock()
+	if version != 1 && version != 2 {
+		return nil, pw.ErrEstablishment
+	}
 	if h.endpoint == "" {
 		reason = "peer_listener_unavailable"
 		return nil, pw.ErrEstablishment
@@ -81,8 +89,14 @@ func (h *publicationHandler) establishLocal(raw []byte) ([]byte, error) {
 		// BobAccept authenticates, checks absence of both history and holding
 		// before signing, and rechecks all durable guards in its sole Update.
 		// A failure is final for this invocation; never try acceptance twice.
-		if err := pw.BobAccept(h.vault, h.root, h.child, h.signer,
-			h.endpoint, raw); err != nil {
+		if version == 2 {
+			err = pw.BobAcceptV2(h.vault, h.root, h.child, h.signer,
+				h.endpoint, raw)
+		} else {
+			err = pw.BobAccept(h.vault, h.root, h.child, h.signer,
+				h.endpoint, raw)
+		}
+		if err != nil {
 			return nil, pw.ErrEstablishment
 		}
 	case pw.InvitationConsumed:
@@ -94,7 +108,14 @@ func (h *publicationHandler) establishLocal(raw []byte) ([]byte, error) {
 	// Initial delivery and retry use the identical guarded, read-only path.
 	// Commit has completed. A refused reply cannot roll that history back.
 	stage = "reply"
-	response, err := pw.BobReply(h.vault, h.root, h.child, h.signer, h.endpoint, raw)
+	var response []byte
+	if version == 2 {
+		response, err = pw.BobReplyV2(h.vault, h.root, h.child, h.signer,
+			h.endpoint, raw)
+	} else {
+		response, err = pw.BobReply(h.vault, h.root, h.child, h.signer,
+			h.endpoint, raw)
+	}
 	retained = err == nil
 	return response, err
 }

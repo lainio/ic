@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -28,6 +29,36 @@ func SendEstablish(ctx context.Context, saved SavedAttempt) ([]byte, error) {
 	if ctx == nil || len(saved.request) == 0 || saved.endpoint == "" {
 		return nil, ErrEstablishmentExchange
 	}
+	endpoint := strings.TrimSuffix(saved.endpoint, "/peer/introduction") +
+		"/peer/pw/establish"
+	return sendEstablishment(ctx, 1, endpoint, saved.request)
+}
+
+// SendEstablishV2 sends only a committed SaveAttemptV2 snapshot. Its private
+// signed TargetContact supplies the destination; callers supply no URL or raw
+// request. Release owner/signer/Vault locks first. Failure leaves the outcome
+// unknown and the saved bytes available for a later explicit owner retry.
+func SendEstablishV2(
+	ctx context.Context,
+	saved SavedAttemptV2,
+) ([]byte, error) {
+	var request SignedEstablishmentV2
+	if ctx == nil ||
+		decodeEstablishmentCanonical(saved.request, &request) != nil {
+		return nil, ErrEstablishmentExchange
+	}
+	request, err := decodeEstablishmentV2(saved.request,
+		request.Payload.Root, request.Payload.Target)
+	if err != nil {
+		return nil, ErrEstablishmentExchange
+	}
+	endpoint := request.Payload.TargetContact + "/peer/pw/establish"
+	return sendEstablishment(ctx, 2, endpoint, saved.request)
+}
+
+func sendEstablishment(ctx context.Context, version int, endpoint string,
+	raw []byte,
+) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	transport := &http.Transport{
@@ -40,27 +71,33 @@ func SendEstablish(ctx context.Context, saved SavedAttempt) ([]byte, error) {
 			return http.ErrUseLastResponse
 		},
 	}
-	endpoint := strings.TrimSuffix(saved.endpoint, "/peer/introduction") +
-		"/peer/pw/establish"
-	data, err := postEstablishment(ctx, client, endpoint, saved.request)
+	data, err := postEstablishmentVersion(ctx, client, endpoint, raw, version)
 	if err != nil {
 		return nil, err
 	}
-	return decodeEstablishmentResponse(data)
+	return decodeEstablishmentResponse(data, version)
+}
+
+// The existing first-use transport retains its exact version-1 envelope.
+func postEstablishment(ctx context.Context, client *http.Client,
+	endpoint string, raw []byte,
+) ([]byte, error) {
+	return postEstablishmentVersion(ctx, client, endpoint, raw, 1)
 }
 
 // One direct POST, with no replayable body, cookies, credentials or proxy.
 // Keep raw transport/JSON/provider diagnostics outside err2 tracing entirely.
-func postEstablishment(
+func postEstablishmentVersion(
 	ctx context.Context,
 	client *http.Client,
 	endpoint string,
 	raw []byte,
+	version int,
 ) (data []byte, err error) {
 	body, err := json.Marshal(struct {
 		Version int    `json:"version"`
 		Request []byte `json:"request"`
-	}{1, raw})
+	}{version, raw})
 	if err != nil || len(body) > maxEstablishmentEnvelopeBytes {
 		return nil, ErrEstablishmentExchange
 	}
@@ -107,7 +144,7 @@ func postEstablishment(
 
 // Exact flat versioned envelope: reject duplicates, aliases, unknown fields,
 // noninteger versions, trailing values and noncanonical padded base64.
-func decodeEstablishmentResponse(data []byte) ([]byte, error) {
+func decodeEstablishmentResponse(data []byte, version int) ([]byte, error) {
 	if len(data) > maxEstablishmentEnvelopeBytes || !utf8.Valid(data) {
 		return nil, ErrEstablishmentExchange
 	}
@@ -119,9 +156,11 @@ func decodeEstablishmentResponse(data []byte) ([]byte, error) {
 	seen := make(map[string]bool, 2)
 	var response []byte
 	for d.More() {
+		start := d.InputOffset()
 		token, err := d.Token()
 		name, valid := token.(string)
-		if err != nil || !valid || seen[name] {
+		if err != nil || !valid || seen[name] ||
+			bytes.Contains(data[start:d.InputOffset()], []byte{'\\'}) {
 			return nil, ErrEstablishmentExchange
 		}
 		seen[name] = true
@@ -131,7 +170,7 @@ func decodeEstablishmentResponse(data []byte) ([]byte, error) {
 		}
 		switch name {
 		case "version":
-			if value != json.Number("1") {
+			if value != json.Number(strconv.Itoa(version)) {
 				return nil, ErrEstablishmentExchange
 			}
 		case "acceptance":

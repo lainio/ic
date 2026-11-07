@@ -35,6 +35,7 @@ type redemptionFixture struct {
 	*exchangeFixture
 	aliceOwner          http.Handler
 	aliceAuth           string
+	version             int
 	body                []byte
 	mu                  sync.Mutex
 	bob                 http.Handler
@@ -47,7 +48,7 @@ type redemptionFixture struct {
 func newRedemption(t *testing.T, directed bool) *redemptionFixture {
 	t.Helper()
 	defer assert.PushTester(t)()
-	f := &redemptionFixture{}
+	f := &redemptionFixture{version: 1}
 	f.exchangeFixture = newExchange(t, func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/peer/pw/establish" {
@@ -148,7 +149,7 @@ func (f *redemptionFixture) observe(r *http.Request) error {
 		Version int    `json:"version"`
 		Request []byte `json:"request"`
 	}
-	if json.Unmarshal(body, &document) != nil || document.Version != 1 ||
+	if json.Unmarshal(body, &document) != nil || document.Version != f.version ||
 		r.Header.Get("Authorization") != "" || r.Header.Get("Cookie") != "" {
 		return errors.New("invalid outbound envelope or credential forwarding")
 	}

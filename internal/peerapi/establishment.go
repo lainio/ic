@@ -16,13 +16,18 @@ import (
 
 const maxEstablishmentEnvelopeBytes = 3 * 1024
 
+type establishmentRequest struct {
+	version int
+	raw     []byte
+}
+
 // NewEstablishmentHandler adds only POST /peer/pw/establish to the opted-in
 // peer surface. The owner-managed capability authenticates the canonical signed
 // request and performs BobAccept (if new) then BobReply under its service lock.
 // No signer, owner credentials or generic Vault access cross this boundary.
 // A nil capability disables this route, preserving the existing proof routes.
 func NewEstablishmentHandler(
-	establish func([]byte) ([]byte, error), next http.Handler,
+	establish func(int, []byte) ([]byte, error), next http.Handler,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/peer/pw/establish" || establish == nil {
@@ -45,28 +50,31 @@ func NewEstablishmentHandler(
 			fail(http.StatusBadRequest)
 			return
 		}
-		request, status := readEstablishmentRequest(w, r)
+		request, status := readVersionedEstablishmentRequest(w, r)
 		if status != 0 {
 			fail(status)
 			return
 		}
 		glog.V(1).Info("intro_pw op=establish side=acceptor " +
 			"stage=request result=accepted")
-		acceptance, err := establish(request)
+		// The capability verifies this selected canonical signed format under
+		// pinned identities before effects; the envelope alone grants nothing.
+		acceptance, err := establish(request.version, request.raw)
 		if err != nil {
 			glog.V(1).Info("intro_pw op=establish side=acceptor " +
 				"stage=local result=refused reason=undetermined")
 			fail(http.StatusConflict)
 			return
 		}
-		if len(acceptance) == 0 || len(acceptance) > pw.MaxEstablishmentBytes {
+		if len(acceptance) == 0 ||
+			len(acceptance) > pw.MaxEstablishmentBytes {
 			fail(http.StatusInternalServerError)
 			return
 		}
 		document, err := json.Marshal(struct {
 			Version    int    `json:"version"`
 			Acceptance []byte `json:"acceptance"`
-		}{1, acceptance})
+		}{request.version, acceptance})
 		if err != nil || len(document) > maxEstablishmentEnvelopeBytes {
 			fail(http.StatusInternalServerError)
 			return
@@ -83,75 +91,97 @@ func NewEstablishmentHandler(
 
 func readEstablishmentRequest(w http.ResponseWriter, r *http.Request,
 ) ([]byte, int) {
+	// First use still accepts only its original version-1 envelope.
+	request, status := readVersionedEstablishmentRequest(w, r)
+	if status != 0 {
+		return nil, status
+	}
+	if request.version != 1 {
+		return nil, http.StatusBadRequest
+	}
+	return request.raw, 0
+}
+
+func readVersionedEstablishmentRequest(w http.ResponseWriter, r *http.Request,
+) (establishmentRequest, int) {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" ||
-		len(r.Header.Values("Content-Type")) != 1 {
-		return nil, http.StatusUnsupportedMediaType
+		len(r.Header.Values("Content-Type")) != 1 ||
+		len(r.Header.Values("Content-Encoding")) != 0 {
+		return establishmentRequest{}, http.StatusUnsupportedMediaType
 	}
 	if r.Body == nil {
-		return nil, http.StatusBadRequest
+		return establishmentRequest{}, http.StatusBadRequest
 	}
 	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body,
 		maxEstablishmentEnvelopeBytes))
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			return nil, http.StatusRequestEntityTooLarge
+			return establishmentRequest{}, http.StatusRequestEntityTooLarge
 		}
-		return nil, http.StatusBadRequest
+		return establishmentRequest{}, http.StatusBadRequest
 	}
 	request, ok := decodeEstablishmentRequest(data)
 	if !ok {
-		return nil, http.StatusBadRequest
+		return establishmentRequest{}, http.StatusBadRequest
 	}
 	return request, 0
 }
 
-func decodeEstablishmentRequest(data []byte) ([]byte, bool) {
+func decodeEstablishmentRequest(data []byte) (establishmentRequest, bool) {
+	var request establishmentRequest
 	if !utf8.Valid(data) {
-		return nil, false
+		return request, false
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
 	if token, err := d.Token(); err != nil || token != json.Delim('{') {
-		return nil, false
+		return request, false
 	}
 	seen := make(map[string]bool, 2)
-	var request []byte
 	for d.More() {
+		start := d.InputOffset()
 		token, err := d.Token()
 		name, valid := token.(string)
-		if err != nil || !valid || seen[name] {
-			return nil, false
+		if err != nil || !valid || seen[name] ||
+			bytes.Contains(data[start:d.InputOffset()], []byte{'\\'}) {
+			return request, false
 		}
 		seen[name] = true
 		value, err := d.Token()
 		if err != nil {
-			return nil, false
+			return request, false
 		}
 		switch name {
 		case "version":
-			if value != json.Number("1") {
-				return nil, false
+			switch value {
+			case json.Number("1"):
+				request.version = 1
+			case json.Number("2"):
+				request.version = 2
+			default:
+				return request, false
 			}
 		case "request":
 			encoded, valid := value.(string)
 			if !valid {
-				return nil, false
+				return request, false
 			}
-			request, err = base64.StdEncoding.Strict().DecodeString(encoded)
-			if err != nil || len(request) == 0 ||
-				len(request) > pw.MaxEstablishmentBytes ||
-				base64.StdEncoding.EncodeToString(request) != encoded {
-				return nil, false
+			request.raw, err = base64.StdEncoding.Strict().
+				DecodeString(encoded)
+			if err != nil || len(request.raw) == 0 ||
+				len(request.raw) > pw.MaxEstablishmentBytes ||
+				base64.StdEncoding.EncodeToString(request.raw) != encoded {
+				return request, false
 			}
 		default:
-			return nil, false
+			return request, false
 		}
 	}
 	if token, err := d.Token(); err != nil || token != json.Delim('}') ||
 		len(seen) != 2 {
-		return nil, false
+		return request, false
 	}
 	_, err := d.Token()
 	return request, err == io.EOF

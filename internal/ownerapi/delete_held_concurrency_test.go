@@ -194,7 +194,8 @@ func TestDeleteHeldSerializedWithRequesterAcceptance(t *testing.T) {
 	saved := try.To1(
 		target.saveRedemption(
 			t.Context(),
-			redemptionInput{f.child, row.ID, row.Audience},
+			redemptionInput{version: 1, target: f.child,
+				id: row.ID, audience: row.Audience},
 		),
 	)
 	response := try.To1(pw.SendEstablish(t.Context(), saved))
