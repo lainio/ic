@@ -57,7 +57,7 @@ func deleteHeldInTx(tx storage.WriteTx, root, local key.Public) (err error) {
 
 	row, issued := try.To2(readInvitation(tx, root, local))
 	attempt, attempting := try.To2(tx.Get([]byte(attemptKey)))
-	_, accepted := try.To2(tx.Get([]byte(acceptedKey)))
+	history, accepted := try.To2(tx.Get([]byte(acceptedKey)))
 	holding, held := try.To2(tx.Get([]byte(heldKey)))
 	_, using := try.To2(tx.Get([]byte(firstUseKey)))
 	receipt, seen := try.To2(tx.Get([]byte(useSeenKey)))
@@ -65,6 +65,17 @@ func deleteHeldInTx(tx storage.WriteTx, root, local key.Public) (err error) {
 	// consumption belongs exclusively to Bob's accepted binding.
 	assert.That(!issued || row.State != InvitationConsumed ||
 		(accepted && !attempting), ErrDeleteHeld)
+	// The shared slots retain their versioned meanings. V2 authenticates its
+	// complete role-specific tuple and refuses all first-use state. It needs
+	// no live guard or signer, and removes only the separately held half.
+	if try.To1(hasV2History(history, attempt)) {
+		saved := try.To1(readLocalHistoryV2(tx, root, local, attempting))
+		assert.That(saved.version == 2, ErrDeleteHeld)
+		if !saved.held {
+			return errHeldUnchanged
+		}
+		return tx.Delete([]byte(heldKey))
+	}
 	if !accepted {
 		assert.That(!held && !using && !seen, ErrDeleteHeld)
 		if attempting {
@@ -105,4 +116,21 @@ func deleteHeldInTx(tx storage.WriteTx, root, local key.Public) (err error) {
 		bytes.Equal(holding, try.To1(wire.Marshal(record))) &&
 		bytes.Equal(record.RequestDigest, p.RequestDigest), ErrDeleteHeld)
 	return tx.Delete([]byte(heldKey))
+}
+
+func hasV2History(history, attempt []byte) (_ bool, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+	if history != nil {
+		assert.That(len(history) <= 2*MaxEstablishmentBytes+16, ErrDeleteHeld)
+		var record acceptedRecord
+		assert.That(wire.DecMode.Unmarshal(history, &record) == nil,
+			ErrDeleteHeld)
+		return record.Version == 2, nil // Full authentication follows dispatch.
+	}
+	if attempt != nil {
+		var request SignedEstablishmentV2
+		return decodeEstablishmentCanonical(attempt, &request) == nil, nil
+	}
+	return false, nil
 }

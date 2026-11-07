@@ -40,6 +40,7 @@ func bobAcceptV2(vault *storage.Vault, root, local key.Public, signer key.Handle
 	request := try.To1(decodeEstablishmentV2(raw, root, local))
 	try.To(vault.View(func(tx storage.ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
+		try.To(noFirstUseV2(tx))
 		try.To1(newRedemption(tx, request.Payload.guardBinding(), endpoint, now))
 		return nil
 	}))
@@ -66,6 +67,7 @@ func commitAcceptanceV2(tx storage.WriteTx, root, local key.Public,
 	request := try.To1(decodeEstablishmentV2(raw, root, local))
 	payload := acceptedPayloadV2(request.Payload, raw)
 	try.To(verifyAcceptedV2(response, payload))
+	try.To(noFirstUseV2(tx))
 	// Authentication binds TargetContact to the signed ad's canonical origin;
 	// newRedemption requires that exact ad to be Bob's own current publication
 	// at the bound listener. The projection is used only for shared guards.

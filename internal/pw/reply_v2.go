@@ -7,7 +7,6 @@ import (
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
-	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/device"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -41,32 +40,12 @@ func bobReplyV2(vault *storage.Vault, root, local key.Public, signer key.Handle,
 	try.To(vault.View(func(tx storage.ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 
-		row, found := try.To2(readInvitation(tx, root, local))
-		assert.That(found && row.State == InvitationConsumed &&
-			matchesInvitation(row, request.Payload.guardBinding()), ErrEstablishment)
-		history, found := try.To2(tx.Get([]byte(acceptedKey)))
-		assert.That(found && len(history) <= 2*MaxEstablishmentBytes+16,
-			ErrEstablishment)
-		var accepted acceptedRecord
-		assert.That(wire.DecMode.Unmarshal(history, &accepted) == nil,
-			ErrEstablishment)
-		assert.That(accepted.Version == 2 &&
-			bytes.Equal(history, try.To1(wire.Marshal(accepted))) &&
-			bytes.Equal(accepted.Request, raw), ErrEstablishment)
-		payload := acceptedPayloadV2(request.Payload, raw)
-		try.To(verifyAcceptedV2(accepted.Response, payload))
-
-		holding, found := try.To2(tx.Get([]byte(heldKey)))
-		assert.That(found && len(holding) <= 128, ErrEstablishment)
-		var held heldRecord
-		assert.That(wire.DecMode.Unmarshal(holding, &held) == nil,
-			ErrEstablishment)
-		assert.That(held.Version == 2 &&
-			bytes.Equal(holding, try.To1(wire.Marshal(held))) &&
-			bytes.Equal(held.RequestDigest, payload.RequestDigest), ErrEstablishment)
+		history := try.To1(readLocalHistoryV2(tx, root, local, false))
+		assert.That(history.version == 2 && history.accepted && history.held &&
+			bytes.Equal(history.request, raw), ErrEstablishment)
 		try.To1(currentEstablishmentGuards(tx, request.Payload.guardBinding(),
 			endpoint, now))
-		response = bytes.Clone(accepted.Response)
+		response = bytes.Clone(history.response)
 		return nil
 	}))
 	return response, nil

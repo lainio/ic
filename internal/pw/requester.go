@@ -310,10 +310,13 @@ func attemptSnapshot(raw, ad []byte, accepted, held bool) SavedAttempt {
 		endpoint: current.Payload.PeerIntroductionURL, Accepted: accepted, Held: held}
 }
 
-// SavedAttemptV2 owns only an exact saved request, not acceptance or holding.
-// Its separate type cannot be passed to the live v1 SendEstablish path.
+// SavedAttemptV2 owns the exact saved request. Accepted/Held describe only
+// authenticated local history, never current permission or peer state. Its
+// separate type cannot be passed to the live v1 SendEstablish path.
 type SavedAttemptV2 struct {
-	request []byte
+	request  []byte
+	Accepted bool
+	Held     bool
 }
 
 // SaveAttemptV2 prepares the contact-bound request in an independently
@@ -327,7 +330,7 @@ type SavedAttemptV2 struct {
 // Retained attempts are read, never re-signed or rebound. A new runtime port
 // conflicts; disposable demos need fresh relationship state for a fresh port
 // unless an explicit fixed contact is configured. No reachability is promised.
-// This API does not enable v2 acceptance or change the live v1 owner route.
+// This API does not commit acceptance or change the live v1 owner route.
 func SaveAttemptV2(vault *storage.Vault, root, local, target key.Public,
 	signer key.Handle, invitationID []byte, audience, requesterContact string,
 ) (SavedAttemptV2, error) {
@@ -359,11 +362,11 @@ func saveAttemptV2(vault *storage.Vault, root, local, target key.Public,
 		p.Recipient = bytes.Clone(local)
 	}
 
-	var saved []byte
+	var saved SavedAttemptV2
 	read := func(tx storage.ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
 		saved = try.To1(readAttemptV2(tx, p, now))
-		if saved == nil {
+		if saved.request == nil {
 			p.Ad = try.To1(requesterGuards(tx, p.guardBinding(), now))
 			p.TargetContact = try.To1(serviceContactFromAd(p.Ad))
 		}
@@ -376,8 +379,8 @@ func saveAttemptV2(vault *storage.Vault, root, local, target key.Public,
 		establishmentRefusal("device_not_authorized"))
 	assert.That(state.Usable, establishmentRefusal("signer_unusable"))
 	try.To(vault.View(read))
-	if saved != nil {
-		return SavedAttemptV2{request: saved}, nil
+	if saved.request != nil {
+		return saved, nil
 	}
 
 	p.AttemptID = make([]byte, 32)
@@ -395,22 +398,21 @@ func saveAttemptV2(vault *storage.Vault, root, local, target key.Public,
 	return SavedAttemptV2{request: bytes.Clone(raw)}, nil
 }
 
-// This increment understands only unaccepted v2 attempts. Any v1 attempt or
-// accepted/held evidence fails closed, including a v1 history after deletion.
+// Authenticate the whole requester tuple before returning retained bytes.
+// Accepted/deleted v2 history is never mistaken for an available attempt slot.
+// Legacy v1 evidence retains its interpretation and cannot be overwritten.
 func readAttemptV2(tx storage.ReadTx, expected EstablishmentV2,
 	now func() time.Time,
-) (_ []byte, err error) {
+) (_ SavedAttemptV2, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
-	raw, found := try.To2(tx.Get([]byte(attemptKey)))
-	_, accepted := try.To2(tx.Get([]byte(acceptedKey)))
-	_, held := try.To2(tx.Get([]byte(heldKey)))
-	assert.That(!accepted && !held, establishmentRefusal("state_incompatible"))
-	if !found {
-		return nil, nil
+	saved := try.To1(readLocalHistoryV2(tx, expected.Root,
+		expected.Requester, true))
+	assert.That(saved.version != 1, establishmentRefusal("state_incompatible"))
+	if saved.request == nil {
+		return SavedAttemptV2{}, nil
 	}
-	request := try.To1(decodeEstablishmentV2(raw, expected.Root, expected.Target))
-	p := request.Payload
+	p := saved.binding
 	assert.That(bytes.Equal(p.Requester, expected.Requester) &&
 		p.RequesterContact == expected.RequesterContact &&
 		matchesInvitation(Invitation{Root: expected.Root, Target: expected.Target,
@@ -420,7 +422,8 @@ func readAttemptV2(tx storage.ReadTx, expected EstablishmentV2,
 	assert.That(expected.Ad == nil || bytes.Equal(p.Ad, expected.Ad),
 		establishmentRefusal("ad_evidence_changed"))
 	try.To1(requesterGuards(tx, p.guardBinding(), now))
-	return bytes.Clone(raw), nil
+	return SavedAttemptV2{request: saved.request,
+		Accepted: saved.accepted, Held: saved.held}, nil
 }
 
 func commitAttemptV2(tx storage.WriteTx, root, local key.Public,
@@ -435,7 +438,7 @@ func commitAttemptV2(tx storage.WriteTx, root, local key.Public,
 	assert.That(bytes.Equal(p.Requester, local) &&
 		p.RequesterContact == requesterContact, ErrEstablishment)
 	prior := try.To1(readAttemptV2(tx, p, now))
-	assert.That(prior == nil, establishmentRefusal("attempt_incompatible"))
+	assert.That(prior.request == nil, establishmentRefusal("attempt_incompatible"))
 	try.To1(requesterGuards(tx, p.guardBinding(), now))
 	return tx.Put([]byte(attemptKey), raw)
 }
