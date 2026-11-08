@@ -94,7 +94,10 @@ class _WalletDemoScreenState extends State<WalletDemoScreen>
     _conversation?.setActive(
       _live &&
           _currentRoute &&
-          (lifecycle == null || lifecycle == AppLifecycleState.resumed),
+          // Visible desktop windows lose keyboard focus without being hidden.
+          (lifecycle == null ||
+              lifecycle == AppLifecycleState.resumed ||
+              lifecycle == AppLifecycleState.inactive),
     );
   }
 
@@ -844,11 +847,26 @@ class _LiveConversationPanel extends StatefulWidget {
 
 class _LiveConversationPanelState extends State<_LiveConversationPanel> {
   late final _text = TextEditingController(
-    text: widget.conversation.submittedText ?? '',
+    text: widget.conversation.acknowledged
+        ? ''
+        : widget.conversation.submittedText ?? '',
   );
 
   @override
+  void initState() {
+    super.initState();
+    widget.conversation.addListener(_clearAcknowledgedText);
+  }
+
+  void _clearAcknowledgedText() {
+    if (widget.conversation.acknowledged && _text.text.isNotEmpty) {
+      _text.clear();
+    }
+  }
+
+  @override
   void dispose() {
+    widget.conversation.removeListener(_clearAcknowledgedText);
     _text.dispose();
     super.dispose();
   }
@@ -886,14 +904,8 @@ class _LiveConversationPanelState extends State<_LiveConversationPanel> {
                 caption: 'Submitted in this window',
                 provenance: 'Live outgoing submission',
               ),
-            if (conversation.acknowledged)
-              const Text(
-                'Local acknowledgement saved',
-                style: TextStyle(color: demoCyan, fontSize: 12),
-              )
-            else if (conversation.sending)
-              const Text('Submitting…')
-            else if (conversation.sendFailure case final failure?)
+            if (conversation.sendFailure case final failure?
+                when failure != StatusFailure.messageInput)
               Text(failure.message, style: const TextStyle(color: demoAmber)),
             if (conversation.outcomeUnknown &&
                 conversation.sendFailure != StatusFailure.messageUnknown)
@@ -902,64 +914,80 @@ class _LiveConversationPanelState extends State<_LiveConversationPanel> {
                 style: TextStyle(color: demoAmber),
               ),
             const SizedBox(height: 16),
-            if (conversation.inboxFailure case final failure?)
-              Text(failure.message, style: const TextStyle(color: demoAmber))
-            else if (inbox == null)
-              const Text('Inbox unknown · awaiting a valid local read')
-            else if (!inbox.present)
-              const Text('No message received locally')
-            else
+            if (inbox != null && inbox.present)
               _Bubble(
                 key: ValueKey('live-incoming-${inbox.messageIdHex}'),
                 text: inbox.text!,
                 fromOwner: false,
-                caption: 'Authenticated inbox · local Vault',
+                caption: conversation.inboxFresh
+                    ? 'Authenticated inbox · local Vault'
+                    : 'Last authenticated inbox · local Vault',
                 provenance: 'Live authenticated incoming message',
+              )
+            else if (conversation.inboxFresh)
+              const Text('No message received locally'),
+            if (!conversation.active)
+              const Text(
+                'Refresh paused.',
+                style: TextStyle(color: demoMuted, fontSize: 11),
+              )
+            else if (conversation.inboxFailure case final failure?)
+              Text(
+                'Refresh unavailable · ${failure.message}',
+                style: const TextStyle(color: demoAmber, fontSize: 11),
+              )
+            else if (!conversation.inboxFresh)
+              const Text(
+                'Inbox unknown · awaiting a valid local read',
+                style: TextStyle(color: demoMuted, fontSize: 11),
               ),
             const SizedBox(height: 20),
-            TextField(
-              key: const ValueKey('live-composer'),
-              controller: _text,
-              enabled: conversation.active && !conversation.sending,
-              readOnly: submitted != null,
-              minLines: 1,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'One message · 1–1024 UTF-8 bytes',
-                border: OutlineInputBorder(),
+            if (conversation.acknowledged)
+              const Text(
+                'Message sent · Local acknowledgement saved',
+                key: ValueKey('live-completed'),
+                style: TextStyle(color: demoCyan, fontSize: 12),
+              )
+            else ...[
+              if (submitted == null) ...[
+                TextField(
+                  key: const ValueKey('live-composer'),
+                  controller: _text,
+                  enabled: conversation.active && !conversation.sending,
+                  minLines: 1,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: 'Message',
+                    errorText:
+                        conversation.sendFailure == StatusFailure.messageInput
+                        ? 'Enter 1–1024 UTF-8 bytes.'
+                        : null,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              FilledButton.icon(
+                key: const ValueKey('live-send'),
+                onPressed: conversation.active && !conversation.sending
+                    ? () => conversation.send(submitted ?? _text.text)
+                    : null,
+                icon: const Icon(Icons.arrow_upward, size: 18),
+                label: Text(
+                  conversation.sending
+                      ? 'Sending…'
+                      : submitted == null
+                      ? 'Send one message'
+                      : 'Retry exact message',
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              key: const ValueKey('live-send'),
-              onPressed:
-                  conversation.active &&
-                      !conversation.sending &&
-                      !conversation.acknowledged
-                  ? () => conversation.send(submitted ?? _text.text)
-                  : null,
-              icon: const Icon(Icons.arrow_upward, size: 18),
-              label: Text(
-                conversation.acknowledged
-                    ? 'Single message submitted'
-                    : submitted == null
-                    ? 'Send one message'
-                    : 'Retry exact message',
-              ),
-            ),
+            ],
             const SizedBox(height: 12),
             const Text(
               'One message each way. Local acknowledgements are historical; '
               'current remote availability is unknown. Outgoing history is '
               'unavailable after restarting this window.',
               style: TextStyle(color: demoMuted, fontSize: 11, height: 1.5),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              conversation.active
-                  ? 'Reading this node’s saved inbox about once a second.'
-                  : 'Inbox polling paused.',
-              style: const TextStyle(color: demoMuted, fontSize: 11),
             ),
             TextButton(
               key: const ValueKey('close-live-conversation'),

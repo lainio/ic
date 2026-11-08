@@ -302,18 +302,30 @@ contact from authenticated relationship evidence and decides permission.
 `Local acknowledgement saved` is a historical sender-local observation, not
 current remote availability. An uncertain outcome retains the exact submitted
 text for explicit retry. No send is automatic. Accepted text remains locked
-across panel navigation within the window. Restarting the window discards its
-outgoing submission: the API has no outgoing-history read endpoint.
+across panel navigation within the window. After confirmed success the composer
+is cleared and replaced by `Message sent · Local acknowledgement saved`;
+the outgoing bubble retains the text. Restarting the window discards its outgoing
+submission: the API has no outgoing-history read endpoint.
 
-While active and foreground, the panel reads
+While its route and live panel are active and the window is visible, the panel reads
 `/owner/pw/message/inbox?version=2` about once a second, scheduling the next
-read only after the previous one finishes. Navigation, closing live mode,
-configuration invalidation and app inactivity stop polling and discard late
-results. These GETs read authenticated local history; they are not delivery
-notifications. Repeated message IDs render one bubble. Only a valid
-`present:false` displays absence; failed or invalid reads display unavailable
-data. No fixture text, invented timestamp or remote-read indicator is added.
+read only after the previous one finishes. Both `resumed` and `inactive` keep
+polling and allow a pending send to finish; keyboard focus is unnecessary.
+Hidden, paused or detached windows, navigation, closing live mode and configuration
+invalidation stop polling and discard late results. Pauses and failed reads retain
+the last authenticated incoming message with a small refresh status; they never
+turn a failed read into an empty inbox. These GETs read authenticated local history;
+they are not delivery notifications. Repeated message IDs render one bubble,
+and conflicting history reports an error without replacing authenticated content.
+Only a valid `present:false` before any saved incoming message displays absence.
+No fixture text, invented timestamp or remote-read indicator is added.
 Credentials are reread on every request through the existing bounded client.
+
+Desktop acceptance still requires a real rehearsal: place Alice and Bob side by
+side, submit a message, then focus a terminal. Both windows must retain their
+authenticated messages and show a new incoming message without clicking its
+recipient. Widget tests simulate lifecycle events; they do not establish native
+desktop focus behavior.
 
 ### v2 staging
 

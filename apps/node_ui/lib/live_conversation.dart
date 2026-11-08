@@ -28,8 +28,9 @@ class LiveConversation extends ChangeNotifier {
   String? _submittedText;
   StatusFailure? _sendFailure;
   StatusFailure? _inboxFailure;
+  // Last validated local read, retained independently of refresh availability.
   MessageInbox? _inbox;
-  MessageInbox? _observed;
+  bool _inboxFresh = false;
 
   bool get active => _active;
   bool get sending => _sending;
@@ -39,13 +40,14 @@ class LiveConversation extends ChangeNotifier {
   StatusFailure? get sendFailure => _sendFailure;
   StatusFailure? get inboxFailure => _inboxFailure;
   MessageInbox? get inbox => _inbox;
+  bool get inboxFresh => _inboxFresh;
 
   void setActive(bool value) {
     if (_disposed || value == _active) return;
     _active = value;
     _generation++;
     _timer?.cancel();
-    _inbox = null;
+    _inboxFresh = false;
     _inboxFailure = null;
     if (!value) {
       _reader?.close();
@@ -76,18 +78,18 @@ class LiveConversation extends ChangeNotifier {
       if (!_current(generation)) return;
       // There is exactly one immutable inbox slot. Repeated reads of its ID
       // render the same bubble; conflicting history is never an empty inbox.
-      if (_observed case final previous?) {
+      if (_inbox case final previous? when previous.present) {
         if (result.messageIdHex != previous.messageIdHex ||
             result.text != previous.text) {
           throw StatusFailure.inboxInvalidResponse;
         }
       }
-      if (result.present) _observed = result;
       _inbox = result;
+      _inboxFresh = true;
       _inboxFailure = null;
     } catch (error) {
       if (_current(generation)) {
-        _inbox = null;
+        _inboxFresh = false;
         _inboxFailure = error is StatusFailure
             ? error
             : StatusFailure.inboxFailed;

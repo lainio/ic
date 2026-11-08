@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ic_node_ui/demo_config.dart';
 import 'package:ic_node_ui/live_conversation.dart';
@@ -17,6 +18,7 @@ import 'wallet_demo_test.dart' show keyed, viewport, selectPeer, switchWallet;
 const _text = ' Exact user text 🌍\nwith whitespace. ';
 const _id = '0123456789abcdef0123456789abcdef';
 const _incoming = MessageInbox.saved(messageIdHex: _id, text: 'Real reply 🌍');
+const _completed = 'Message sent · Local acknowledgement saved';
 
 class _Client extends StatusClient {
   _Client(this.harness);
@@ -29,7 +31,7 @@ class _Client extends StatusClient {
     String header,
     String text,
   ) {
-    expect(
+    expectSync(
       (url, header),
       (harness.config.ownerStatusUrl, harness.config.ownerHeaderFile),
     );
@@ -39,7 +41,7 @@ class _Client extends StatusClient {
 
   @override
   Future<MessageInbox> readMessageInboxV2(String url, String header) {
-    expect(
+    expectSync(
       (url, header),
       (harness.config.ownerStatusUrl, harness.config.ownerHeaderFile),
     );
@@ -96,20 +98,30 @@ Future<void> _compose(WidgetTester tester, [String text = _text]) async {
   await _click(tester, 'live-send');
 }
 
+Future<void> _lifecycle(WidgetTester tester, AppLifecycleState state) =>
+    tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+      'flutter/lifecycle',
+      const StringCodec().encodeMessage(state.toString()),
+      (_) {},
+    );
+
 void main() {
-  testWidgets('two windows send and reply through their own polled inboxes', (
+  testWidgets('two visible inactive windows receive without recipient focus', (
     tester,
   ) async {
     viewport(tester, const Size(2400, 1100));
     final alice = _Harness('alice');
     final bob = _Harness('bob');
     final received = <String, MessageInbox>{};
+    final releases = {'alice': Completer<void>(), 'bob': Completer<void>()};
     final sessions = [alice.session(), bob.session()];
+    addTearDown(() => _lifecycle(tester, AppLifecycleState.resumed));
     for (final harness in [alice, bob]) {
       final role = harness.config.role;
       final peer = role == 'alice' ? 'bob' : 'alice';
       harness.read = () async => received[role] ?? const MessageInbox.empty();
       harness.send = () async {
+        await releases[role]!.future;
         received[peer] = MessageInbox.saved(
           messageIdHex: role == 'alice' ? _id : 'f' * 32,
           text: harness.sent.single,
@@ -157,9 +169,15 @@ void main() {
       ('alice', 'bob', 'Hello Bob 🌍', _id),
       ('bob', 'alice', 'Hello Alice 🌍', 'f' * 32),
     ]) {
+      await _lifecycle(tester, AppLifecycleState.resumed);
+      await tester.pump();
       await tester.ensureVisible(inside(role, 'live-composer'));
       await tester.enterText(inside(role, 'live-composer'), text);
       await click(role, 'live-send');
+      // Model focusing a third application while both windows remain visible.
+      await _lifecycle(tester, AppLifecycleState.inactive);
+      releases[role]!.complete();
+      await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       await tester.pump();
       expect(
@@ -175,7 +193,10 @@ void main() {
     }
     expect(alice.sent, ['Hello Bob 🌍']);
     expect(bob.sent, ['Hello Alice 🌍']);
-    expect(find.text('Local acknowledgement saved'), findsNWidgets(2));
+    expect(find.text(_completed), findsNWidgets(2));
+    expect(find.byType(TextField), findsNothing);
+    expect(inside('bob', 'live-incoming-$_id'), findsOneWidget);
+    expect(inside('alice', 'live-incoming-${'f' * 32}'), findsOneWidget);
     expect(find.text('Coffee on Friday?'), findsNothing);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
@@ -247,15 +268,20 @@ void main() {
           same(fixture),
         );
       }
+      final editor = tester.widget<TextField>(keyed('live-composer'));
+      expect(editor.decoration!.labelText, 'Message');
+      expect(editor.decoration!.errorText, isNull);
       await _compose(tester);
       expect(harness.sent, [_text]);
-      expect(find.text('Local acknowledgement saved'), findsOneWidget);
+      expect(find.text(_completed), findsOneWidget);
       expect(
         find.descendant(of: keyed('live-outgoing'), matching: find.text(_text)),
         findsOneWidget,
       );
-      expect(tester.widget<TextField>(keyed('live-composer')).readOnly, isTrue);
-      expect(tester.widget<FilledButton>(keyed('live-send')).onPressed, isNull);
+      expect(editor.controller!.text, isEmpty);
+      expect(keyed('live-composer'), findsNothing);
+      expect(keyed('live-send'), findsNothing);
+      expect(find.byType(EditableText), findsNothing);
       for (final claim in [
         'Delivered',
         'Read',
@@ -279,6 +305,31 @@ void main() {
     });
   }
 
+  testWidgets('invalid text gets a short error and stays editable', (
+    tester,
+  ) async {
+    viewport(tester, const Size(390, 700));
+    final harness = _Harness();
+    harness.send = () async => throw StatusFailure.messageInput;
+    await _open(tester, harness);
+    expect(find.text('Enter 1–1024 UTF-8 bytes.'), findsNothing);
+    final tooLong = '🌍' * 257;
+    await _compose(tester, tooLong);
+    final editor = tester.widget<TextField>(keyed('live-composer'));
+    expect(editor.controller!.text, tooLong);
+    expect(editor.readOnly, isFalse);
+    expect(editor.enabled, isTrue);
+    expect(editor.decoration!.labelText, 'Message');
+    expect(editor.decoration!.errorText, 'Enter 1–1024 UTF-8 bytes.');
+    expect(keyed('live-outgoing'), findsNothing);
+    harness.send = () async => const MessageSendReceipt();
+    await _compose(tester);
+    expect(find.text(_completed), findsOneWidget);
+    expect(find.text('Enter 1–1024 UTF-8 bytes.'), findsNothing);
+    expect(editor.controller!.text, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('unknown text stays immutable across retry and route reopening', (
     tester,
   ) async {
@@ -292,10 +343,13 @@ void main() {
       return const MessageSendReceipt();
     };
     await _open(tester, harness);
+    final editor = tester.widget<TextField>(keyed('live-composer'));
     await _compose(tester);
     expect(find.text(StatusFailure.messageUnknown.message), findsOneWidget);
     expect(find.textContaining('private bearer'), findsNothing);
-    expect(tester.widget<TextField>(keyed('live-composer')).readOnly, isTrue);
+    expect(editor.controller!.text, _text);
+    expect(keyed('live-composer'), findsNothing);
+    expect(find.text('Retry exact message'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
     expect(harness.sent, [_text]);
     await _click(tester, 'close-wallet-demo');
@@ -303,9 +357,17 @@ void main() {
     await selectPeer(tester, 'bob');
     await _click(tester, 'open-live-conversation');
     expect(
-      tester.widget<TextField>(keyed('live-composer')).controller!.text,
-      _text,
+      find.descendant(of: keyed('live-outgoing'), matching: find.text(_text)),
+      findsOneWidget,
     );
+    expect(keyed('live-composer'), findsNothing);
+    final session = tester
+        .widget<WalletDemoScreen>(find.byType(WalletDemoScreen))
+        .liveConversation!;
+    await session.send('A conflicting edit');
+    await tester.pump();
+    expect(harness.sent, [_text]);
+    expect(find.text(StatusFailure.messageRetryText.message), findsOneWidget);
     await _click(tester, 'live-send');
     expect(
       find.text('Previous submission outcome remains unknown.'),
@@ -313,12 +375,14 @@ void main() {
     );
     await _click(tester, 'live-send');
     expect(harness.sent, [_text, _text, _text]);
-    expect(find.text('Local acknowledgement saved'), findsOneWidget);
+    expect(find.text(_completed), findsOneWidget);
     await _click(tester, 'close-wallet-demo');
     await _click(tester, 'open-wallet-demo');
     await selectPeer(tester, 'bob');
     await _click(tester, 'open-live-conversation');
-    expect(tester.widget<FilledButton>(keyed('live-send')).onPressed, isNull);
+    expect(keyed('live-composer'), findsNothing);
+    expect(keyed('live-send'), findsNothing);
+    expect(find.text(_completed), findsOneWidget);
     expect(harness.sent, hasLength(3));
     await tester.pumpWidget(const SizedBox());
 
@@ -336,7 +400,7 @@ void main() {
   });
 
   testWidgets(
-    'polling uses one ID and distinguishes unknown, empty and invalid',
+    'polling retains authenticated history through errors and rejects conflicts',
     (tester) async {
       viewport(tester, const Size(1440, 1000));
       final harness = _Harness();
@@ -346,8 +410,13 @@ void main() {
       expect(find.text('No message received locally'), findsNothing);
       await tester.pump(const Duration(seconds: 5));
       expect(harness.reads, 1); // No overlap while the first read is pending.
-      pending.complete(const MessageInbox.empty());
+      pending.completeError(StatusFailure.inboxFailed);
       await tester.pumpAndSettle();
+      expect(find.textContaining('Refresh unavailable'), findsOneWidget);
+      expect(find.text('No message received locally'), findsNothing);
+      harness.read = () async => const MessageInbox.empty();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(find.text('No message received locally'), findsOneWidget);
       harness.read = () async => _incoming;
       await tester.pump(const Duration(seconds: 1));
@@ -357,20 +426,39 @@ void main() {
       await tester.pump();
       expect(keyed('live-incoming-$_id'), findsOneWidget);
       expect(find.text(_incoming.text!), findsOneWidget);
-      harness.read = () async => throw StatusFailure.inboxConflict;
+      harness.read = () async => throw StatusFailure.inboxFailed;
       await tester.pump(const Duration(seconds: 1));
       await tester.pump();
-      expect(find.text(StatusFailure.inboxConflict.message), findsOneWidget);
+      expect(find.textContaining('Refresh unavailable'), findsOneWidget);
       expect(find.text('No message received locally'), findsNothing);
-      expect(keyed('live-incoming-$_id'), findsNothing);
-      harness.read = () async => const MessageInbox.empty();
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pump();
+      expect(keyed('live-incoming-$_id'), findsOneWidget);
+      expect(find.text(_incoming.text!), findsOneWidget);
       expect(
-        find.text(StatusFailure.inboxInvalidResponse.message),
+        find.text('Last authenticated inbox · local Vault'),
         findsOneWidget,
       );
-      expect(find.text('No message received locally'), findsNothing);
+      harness.read = () async => _incoming;
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(find.textContaining('Refresh unavailable'), findsNothing);
+      expect(find.text('Authenticated inbox · local Vault'), findsOneWidget);
+      for (final conflict in [
+        const MessageInbox.empty(),
+        MessageInbox.saved(messageIdHex: 'f' * 32, text: _incoming.text!),
+        const MessageInbox.saved(messageIdHex: _id, text: 'Changed history'),
+      ]) {
+        harness.read = () async => conflict;
+        await tester.pump(const Duration(seconds: 1));
+        await tester.pump();
+        expect(
+          find.textContaining(StatusFailure.inboxInvalidResponse.message),
+          findsOneWidget,
+        );
+        expect(find.text('No message received locally'), findsNothing);
+        expect(keyed('live-incoming-$_id'), findsOneWidget);
+        expect(find.text(_incoming.text!), findsOneWidget);
+        expect(find.text('Changed history'), findsNothing);
+      }
       expect(harness.sent, isEmpty);
       await tester.pumpWidget(const SizedBox());
     },
@@ -446,28 +534,135 @@ void main() {
     });
   }
 
-  testWidgets('inactive app cancels send, ignores late ACK and pauses inbox', (
+  testWidgets('inactive window keeps polling and accepts its in-flight ACK', (
     tester,
   ) async {
     viewport(tester, const Size(1440, 1000));
     final harness = _Harness();
     final pending = Completer<MessageSendReceipt>();
     harness.send = () => pending.future;
+    harness.read = () async => _incoming;
+    addTearDown(() => _lifecycle(tester, AppLifecycleState.resumed));
+    await _open(tester, harness);
+    final editor = tester.widget<TextField>(keyed('live-composer'));
+    await _compose(tester);
+    final sender = harness.clients.singleWhere((client) => !client.closed);
+    expect(editor.controller!.text, _text);
+    expect(keyed('live-composer'), findsNothing);
+    expect(find.text('Sending…'), findsOneWidget);
+    expect(tester.widget<FilledButton>(keyed('live-send')).onPressed, isNull);
+    await _lifecycle(tester, AppLifecycleState.inactive);
+    await tester.pump();
+    final reads = harness.reads;
+    expect(sender.closed, isFalse);
+    expect(keyed('live-incoming-$_id'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(harness.reads, reads + 1);
+    expect(find.text('Refresh paused.'), findsNothing);
+    pending.complete(const MessageSendReceipt());
+    await tester.pumpAndSettle();
+    expect(find.text(_completed), findsOneWidget);
+    expect(editor.controller!.text, isEmpty);
+    expect(keyed('live-outgoing'), findsOneWidget);
+    expect(keyed('live-composer'), findsNothing);
+    expect(keyed('live-send'), findsNothing);
+    await _lifecycle(tester, AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text(StatusFailure.messageUnknown.message), findsNothing);
+    expect(keyed('live-incoming-$_id'), findsOneWidget);
+    expect(harness.sent, [_text]);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('hidden, paused and detached retain history but stop polling', (
+    tester,
+  ) async {
+    viewport(tester, const Size(1440, 1000));
+    final harness = _Harness();
+    harness.read = () async => _incoming;
+    addTearDown(() => _lifecycle(tester, AppLifecycleState.resumed));
+    await _open(tester, harness);
+    final session = tester
+        .widget<WalletDemoScreen>(find.byType(WalletDemoScreen))
+        .liveConversation!;
+    for (final state in [
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+      AppLifecycleState.detached,
+    ]) {
+      await _lifecycle(tester, state);
+      await tester.pump();
+      final reads = harness.reads;
+      await tester.pump(const Duration(seconds: 3));
+      expect(harness.reads, reads);
+      // Hidden windows do not render frames; inspect retained state directly.
+      expect(session.active, isFalse);
+      expect(session.inbox, same(_incoming));
+      expect(session.inboxFresh, isFalse);
+    }
+    final pending = Completer<MessageInbox>();
+    final readsBeforeResume = harness.reads;
+    harness.read = () => pending.future;
+    await _lifecycle(tester, AppLifecycleState.inactive);
+    await tester.pump();
+    expect(keyed('live-incoming-$_id'), findsOneWidget);
+    expect(find.text('Last authenticated inbox · local Vault'), findsOneWidget);
+    expect(
+      find.text('Inbox unknown · awaiting a valid local read'),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 3));
+    expect(harness.reads, readsBeforeResume + 1);
+    pending.complete(_incoming);
+    await tester.pumpAndSettle();
+    expect(find.text('Authenticated inbox · local Vault'), findsOneWidget);
+    expect(session.active, isTrue);
+    expect(session.inboxFresh, isTrue);
+    harness.read = () async => _incoming;
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+    expect(harness.reads, readsBeforeResume + 2);
+
+    await _click(tester, 'close-live-conversation');
+    expect(keyed('sample-composer'), findsOneWidget);
+    final closedReads = harness.reads;
+    await tester.pump(const Duration(seconds: 3));
+    expect(harness.reads, closedReads);
+    await _click(tester, 'open-live-conversation');
+    expect(keyed('live-incoming-$_id'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('hiding cancels a pending send without losing its exact text', (
+    tester,
+  ) async {
+    viewport(tester, const Size(1440, 1000));
+    final harness = _Harness();
+    final pending = Completer<MessageSendReceipt>();
+    harness.send = () => pending.future;
+    addTearDown(() => _lifecycle(tester, AppLifecycleState.resumed));
     await _open(tester, harness);
     await _compose(tester);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await _lifecycle(tester, AppLifecycleState.hidden);
     await tester.pump();
     final reads = harness.reads;
     expect(harness.clients.every((client) => client.closed), isTrue);
     pending.complete(const MessageSendReceipt());
     await tester.pump(const Duration(seconds: 3));
     expect(harness.reads, reads);
-    expect(find.text('Local acknowledgement saved'), findsNothing);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await _lifecycle(tester, AppLifecycleState.inactive);
     await tester.pumpAndSettle();
+    expect(find.text(_completed), findsNothing);
     expect(find.text(StatusFailure.messageUnknown.message), findsOneWidget);
+    expect(find.text(_text), findsOneWidget);
+    expect(keyed('live-composer'), findsNothing);
     expect(harness.reads, reads + 1);
     expect(harness.sent, [_text]);
+    harness.send = () async => const MessageSendReceipt();
+    await _click(tester, 'live-send');
+    expect(harness.sent, [_text, _text]);
+    expect(find.text(_completed), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }
