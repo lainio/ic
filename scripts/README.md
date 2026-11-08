@@ -5,6 +5,7 @@ pidfd support, run:
 
 ~~~sh
 python3 scripts/pw_demo.py up
+python3 scripts/pw_demo.py list
 python3 scripts/pw_demo.py status
 python3 scripts/pw_demo.py down
 python3 scripts/pw_demo.py destroy --confirm RUN_ID
@@ -26,10 +27,21 @@ and matching checkout path. Ordinary existing directories, symlinks, repository
 paths, ancestors of the checkout and paths containing a `storage` component
 are refused. No previous identities or Vaults are reused.
 
+`list` discovers runs without a run ID and marks the `latest.json` selection
+with `*`. It shows recorded lifecycle and checkpoint, not current process or
+network health. Valid runs appear newest first using the immutable run marker's
+filesystem modification time; invalid candidates appear as `INVALID` without
+untrusted details. Listing reads local evidence under the base lock, makes no
+HTTP or process calls, and changes no stored state. An empty valid base reports
+`No runs exist.`
+
 `status` and `down` default to the most recently allocated run, including a
 failed partial run. Use `--run-id RUN_ID` to select an older one. A new `up`
 does not stop an older run. `destroy --confirm RUN_ID` selects that exact run,
 independently of the latest pointer; it does not accept a deletion path.
+Copy a full run ID from `list` into `destroy --confirm RUN_ID`; listing does not
+relax destruction's validation. `mysys` may be the presenter's shell alias for
+`python3 scripts/pw_demo.py`; no alias is required.
 
 ## Presenter workflow
 
@@ -39,17 +51,21 @@ Terminal 1, from the Go checkout:
 python3 scripts/pw_demo.py up --chat-ready
 ~~~
 
-Confirm `READY_FOR_CHAT`. The controller prints the two actual absolute paths
-(shown here with placeholders):
+Successful `up` prints exactly one line with the full allocated run ID:
 
 ~~~text
-READY_FOR_CHAT
-Alice Flutter config: /absolute/RUN/config/alice.json
-Bob Flutter config: /absolute/RUN/config/bob.json
+OK run-0123456789abcdef0123456789abcdef READY_FOR_CHAT
 ~~~
 
-Alice and Bob's Go nodes remain running after the command returns.
-Use the actual printed paths in the following commands.
+Alice and Bob's Go nodes remain running after the command returns. Use `status`
+for the detailed report, including both actual absolute Flutter config paths:
+
+~~~sh
+python3 scripts/pw_demo.py list
+python3 scripts/pw_demo.py status
+~~~
+
+Use the config paths from `status` in the following commands.
 
 Terminal 2, from `apps/node_ui`, with cached dependencies on ARM64 Linux:
 
@@ -137,8 +153,10 @@ them makes no additional HTTP, Vault, signing or device calls. `config` is
 0700 and both files are 0600. A failed or interrupted `up`, including failure
 while printing success, removes its new snapshots. Old runs are never rewritten.
 For chat-ready mode, both historical checks precede publication and
-`READY_FOR_CHAT` is printed only after publication succeeds. `up` and read-only
-`status` print both absolute config paths.
+`OK ... READY_FOR_CHAT` is printed only after publication succeeds. Read-only
+`status` retains the full run ID, lifecycle/checkpoint, all node keys and
+endpoints, both config paths, historical receipts, process observations and
+diagnostic log locations.
 
 Each file has exactly these five fields (Bob uses his own checked values):
 
@@ -176,37 +194,15 @@ disposable run for another trial. Historical verification and signer-probe
 receipts do not prove ongoing reachability, authorization or current readiness.
 This harness adds no cryptographic authority, shared PW, `PWOpen` or Trust.
 
-Plain `up` output, abbreviated with placeholders for per-run values (the actual
-command prints all three full keys, all receipts and both diagnostic paths):
+Plain `up` also prints exactly one line after setup and config publication:
 
 ~~~text
-Preparing disposable run: /home/me/.ic-pw-demo/run-<id>
-READY_FOR_INVITATION
-Run: run-<id>
-Evidence directory: /home/me/.ic-pw-demo/run-<id>
-Last setup stage: ready-for-invitation | lifecycle: ready
-Alice actual COSE public-key hex: <full actual Alice COSE hex>
-Alice Flutter owner status URL: http://127.0.0.1:45725/owner/status
-Alice Flutter owner.header file: /home/me/.ic-pw-demo/run-<id>/tmp/node-owner-status-<n>/owner.header
-Bob actual COSE public-key hex: <full actual Bob COSE hex>
-Bob Flutter owner status URL: http://127.0.0.1:39925/owner/status
-Bob Flutter owner.header file: /home/me/.ic-pw-demo/run-<id>/tmp/node-owner-status-<m>/owner.header
-Bob peer introduction URL: http://127.0.0.1:45635/peer/introduction
-Alice = requester; Bob = invitation issuer/acceptor.
-Alice Flutter config: /home/me/.ic-pw-demo/run-<id>/config/alice.json
-Bob Flutter config: /home/me/.ic-pw-demo/run-<id>/config/bob.json
-alice process: running
-bob process: running
-Historical receipt: alice-known at <UTC observation time>
-  Observed both actual Alice and Bob subjects in this owner's Known.
-Historical receipt: bob-device at <UTC observation time>
-  Observed authorized=true, usable=true at this bootstrap invocation.
-Bob published ad expiry (server-issued): <UTC expiry>
-Historical receipt: alice-ad-verified at <UTC observation time>
-  Observed verified=true for Bob's actual subject on Alice.
-WARNING: READY is a setup-time checkpoint, not a permanent promise. Issue/redeem shortly afterward in Flutter. The ad and eventual invitation have separate 15-minute TTLs; nothing auto-renews.
-No invitation issued or consumed; no first use performed.
+OK run-abcdef0123456789abcdef0123456789 READY_FOR_INVITATION
 ~~~
+
+For another message exchange, allocate a fresh disposable run with
+`up --chat-ready`. The one-message/one-reply bound is unchanged; there is no
+reset or message-history deletion.
 
 After the trial:
 
@@ -237,9 +233,11 @@ Setup polls startup output and authenticated status with deadlines, detects
 early process exits, and never retries a mutation after a lost reply. A failed
 or lost mutating response can follow a committed effect; its outcome remains
 unresolved, with no rollback inferred. Create a fresh disposable run. A failed
-or interrupted `up` reports its named stage and private diagnostic path, stops
-its own children and retains the partial run. Only failure cleanup may escalate
-from SIGINT to SIGTERM/SIGKILL for the same verified child, with bounded waits.
+or interrupted `up` reports `FAILED run=RUN_ID stage=STAGE reason=FIXED_CODE`
+and its private evidence/diagnostic paths, stops its own children and retains
+the partial run. Failure before allocation omits the run ID. Only failure
+cleanup may escalate from SIGINT to SIGTERM/SIGKILL for the same verified child,
+with bounded waits.
 SIGKILL of the orchestrator itself or host power loss cannot run cleanup;
 use `status`/`down` to inspect any registered survivors. There is no resume or
 repair of partial state.

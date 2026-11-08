@@ -249,11 +249,17 @@ class Base:
     def close(self):
         os.close(self.lock)
 
+    def latest_run_id(self):
+        latest = decode_json(read_private(self.path / "latest.json"))
+        exact(latest, ("run_id",))
+        run_id = latest["run_id"]
+        require(type(run_id) is str and RUN_ID.fullmatch(run_id),
+                "invalid-run-id")
+        return run_id
+
     def select(self, run_id=None):
         if run_id is None:
-            latest = decode_json(read_private(self.path / "latest.json"))
-            exact(latest, ("run_id",))
-            run_id = latest["run_id"]
+            run_id = self.latest_run_id()
         require(type(run_id) is str and RUN_ID.fullmatch(run_id),
                 "invalid-run-id")
         return Run(self, run_id)
@@ -1014,6 +1020,40 @@ def utc(nanoseconds):
                                           datetime.timezone.utc).isoformat()
 
 
+def list_runs(base):
+    latest = (base.latest_run_id()
+              if os.path.lexists(base.path / "latest.json") else None)
+    rows = []
+    for run_id in os.listdir(base.path):
+        if not RUN_ID.fullmatch(run_id):
+            continue
+        try:
+            path = checked_path(base.path / run_id)
+            private_stat(path.lstat(), directory=True)
+            # Refuse special files before the existing readers open them.
+            for name in ("run.json", "manifest.json"):
+                private_stat((path / name).lstat())
+            run = base.select(run_id)
+            validate_configs(run)
+            modified = (path / "run.json").lstat().st_mtime_ns
+            rows.append((modified, run_id, run.manifest["state"],
+                         run.manifest["stage"]))
+        except (DemoError, OSError, ValueError, TypeError, KeyError):
+            # Never display unvalidated manifest fields or exception contents.
+            rows.append((0, run_id, "INVALID", "-"))
+    if not rows:
+        print("No runs exist.")
+        return
+    print(f"  {'RUN ID':36}  {'LIFECYCLE':9}  CHECKPOINT")
+    # The immutable marker has no creation timestamp. Its mtime is only an
+    # ordering hint; invalid candidates follow validated runs.
+    rows.sort(key=lambda row: (row[2] != "INVALID", row[0], row[1]), reverse=True)
+    for _, run_id, lifecycle, checkpoint in rows:
+        mark = "*" if run_id == latest else " "
+        print(f"{mark} {run_id}  {lifecycle:9}  {checkpoint}")
+    print("* latest; lifecycle/checkpoint are recorded history, not current health.")
+
+
 def status(run):
     m = run.manifest
     print("Run:", m["marker"]["run_id"])
@@ -1155,7 +1195,7 @@ def interrupted(*_):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     subcommands = parser.add_subparsers(dest="command", required=True)
-    for name in ("up", "status", "down", "destroy"):
+    for name in ("up", "list", "status", "down", "destroy"):
         command = subcommands.add_parser(name)
         command.add_argument("--base-dir", default=str(Path.home() / ".ic-pw-demo"),
                              help="new or marked private absolute parent outside the repo")
@@ -1171,25 +1211,18 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, interrupted)
     base = run = None
     try:
-        platform_check()
+        if args.command != "list":
+            platform_check()
         base = Base(args.base_dir, create=args.command == "up")
         if args.command == "up":
             with defer_interrupts():
                 run = base.allocate()
-            print("Preparing disposable run:", run.path, flush=True)
             up(run, chat_ready=args.chat_ready)
-            print("READY_FOR_CHAT" if args.chat_ready else "READY_FOR_INVITATION")
-            status(run)
-            if args.chat_ready:
-                print("Chat preparation recorded; no message sent. Open the configured "
-                      "counterpart in each Flutter window and activate the live conversation.")
-                print("Historical checks do not establish current permission, "
-                      "listener reachability, live delivery, shared PWOpen or Trust.")
-            else:
-                print("WARNING: READY is a setup-time checkpoint, not a permanent promise. "
-                      "Issue/redeem shortly afterward in Flutter. The ad and eventual "
-                      "invitation have separate 15-minute TTLs; nothing auto-renews.")
-                print("No invitation issued or consumed; no first use performed.")
+            print("OK", run.path.name,
+                  "READY_FOR_CHAT" if args.chat_ready else "READY_FOR_INVITATION",
+                  flush=True)
+        elif args.command == "list":
+            list_runs(base)
         elif args.command == "destroy":
             run = base.select(args.confirm)
             destroy(run, args.confirm)
@@ -1224,7 +1257,9 @@ def main(argv=None):
                             "cleanup-incomplete")
             except (Exception, KeyboardInterrupt):
                 reason = "setup-failed-cleanup-incomplete"
-        print("FAILED stage=" + stage + " reason=" + reason, file=sys.stderr)
+        identifier = " run=" + run.path.name if run else ""
+        print("FAILED" + identifier + " stage=" + stage + " reason=" + reason,
+              file=sys.stderr)
         if run:
             print("Private evidence:", run.path, file=sys.stderr)
             log = run.manifest["last_log"]

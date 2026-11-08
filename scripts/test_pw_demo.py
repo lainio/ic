@@ -330,7 +330,7 @@ class ProcessTests(PrivateTest):
         real_print = print
 
         def fail_ready(*args, **kwargs):
-            if args and args[0] == "READY_FOR_INVITATION":
+            if args and args[0] == "OK":
                 raise BrokenPipeError
             real_print(*args, **kwargs)
 
@@ -577,6 +577,59 @@ class SequenceTests(PrivateTest):
             demo.up(self.run, chat_ready=chat_ready)
         return harness
 
+    def test_list_recorded_runs_newest_first_without_probes_or_writes(self):
+        self.execute(chat_ready=True)
+        ready = self.run
+        self.run = self.base.allocate()
+        self.execute(chat_ready=True)
+        stopped = self.run
+        with mock.patch.object(demo, "stop_process", return_value="stopped"):
+            demo.down(stopped)
+        self.run = self.base.allocate()
+
+        def fail_first_use(name, path, result):
+            if path == "/owner/pw/first-use":
+                raise TimeoutError("private response")
+            return result
+
+        with self.assertRaises(TimeoutError):
+            self.execute(fail_first_use, chat_ready=True)
+        failed = self.run
+        # Marker mtime orders allocation, even if an old manifest was updated.
+        for index, run in enumerate((ready, stopped, failed), 1):
+            os.utime(run.path / "run.json", ns=(index * 10**9, index * 10**9))
+        os.utime(ready.path / "manifest.json", ns=(9 * 10**9, 9 * 10**9))
+
+        def snapshot():
+            return {p.relative_to(self.base.path):
+                    (p.stat().st_mtime_ns, p.stat().st_mode,
+                     p.read_bytes() if p.is_file() else None)
+                    for p in (self.base.path, *self.base.path.rglob("*"))}
+
+        before = snapshot()
+        output = io.StringIO()
+        with contextlib.ExitStack() as stack:
+            for target, name in ((demo, "Owner"), (demo, "Harness"),
+                                 (demo, "process_state"), (demo, "stop_process"),
+                                 (demo, "write_json"), (demo, "create_file"),
+                                 (demo, "write_configs"), (demo, "remove_contents"),
+                                 (demo.subprocess, "Popen"),
+                                 (demo.http.client, "HTTPConnection")):
+                stack.enter_context(mock.patch.object(
+                    target, name, side_effect=AssertionError("read-only listing")))
+            stack.enter_context(contextlib.redirect_stdout(output))
+            demo.list_runs(self.base)
+        self.assertEqual(snapshot(), before)
+        rows = [line.split() for line in output.getvalue().splitlines()[1:-1]]
+        self.assertEqual(rows, [
+            ["*", failed.path.name, "failed", "alice-v2-first-use"],
+            [stopped.path.name, "down", "ready-for-chat"],
+            [ready.path.name, "ready", "ready-for-chat"],
+        ])
+        self.assertIn("recorded history, not current health", output.getvalue())
+        for private in (str(self.base.path), "Bearer", "a" * 64, "b" * 64):
+            self.assertNotIn(private, output.getvalue())
+
     def test_config_pair_exact_independent_private_and_down_retention(self):
         self.execute()
         directory = self.run.path / "config"
@@ -746,7 +799,7 @@ class SequenceTests(PrivateTest):
         real_print = print
 
         def fail_ready(*args, **kwargs):
-            if args and args[0] == "READY_FOR_INVITATION":
+            if args and args[0] == "OK":
                 raise BrokenPipeError
             real_print(*args, **kwargs)
 
@@ -965,8 +1018,19 @@ class SequenceTests(PrivateTest):
                         self.assertEqual(run.manifest["stage"], stage)
                         self.assertFalse((run.path / "config").exists())
                     console = output.getvalue() + error.getvalue()
-                    self.assertIn("FAILED stage=" + stage, console)
-                    for value in ("READY_FOR", "Bearer", "a" * 64,
+                    self.assertIn("FAILED run=" + run.path.name + " stage=" + stage,
+                                  console)
+                    self.assertEqual(output.getvalue(), "")
+                    self.assertIn("Private diagnostic file: " +
+                                  str(run.path / "logs" / (target + ".stderr")),
+                                  error.getvalue())
+                    reason = (str(failure) if isinstance(failure, demo.DemoError)
+                              else "unexpected-response" if type(failure) is dict
+                              else "operation-failed")
+                    self.assertEqual(error.getvalue().splitlines()[0],
+                                     f"FAILED run={run.path.name} "
+                                     f"stage={stage} reason={reason}")
+                    for value in ("OK", "READY_FOR", "Traceback", "Bearer", "a" * 64,
                                   "signed-private-data", "plaintext-private", h.invitation_id):
                         self.assertNotIn(value, console)
 
@@ -1057,53 +1121,69 @@ class SequenceTests(PrivateTest):
         self.assertFalse(self.run.path.exists())
         self.assertTrue(other.path.exists())
 
-    def test_chat_cli_prints_only_committed_checkpoint_and_cleans_output_failure(self):
+    def test_up_cli_one_line_after_publication_and_cleans_output_failure(self):
         previous = signal.getsignal(signal.SIGTERM)
         self.addCleanup(signal.signal, signal.SIGTERM, previous)
         real_print = print
-        for fail_output in (False, True):
-            path = self.parent / ("console-" + str(fail_output))
-            harnesses = []
+        for chat_ready, fail_output in ((False, False), (True, False),
+                                        (False, True), (True, True)):
+            with self.subTest(chat_ready=chat_ready, fail_output=fail_output):
+                path = self.parent / f"console-{chat_ready}-{fail_output}"
+                harnesses = []
+                checkpoint = ("READY_FOR_CHAT" if chat_ready
+                              else "READY_FOR_INVITATION")
 
-            def harness(run):
-                h = FakeHarness(run)
-                harnesses.append(h)
-                return h
+                def harness(run):
+                    h = FakeHarness(run)
+                    harnesses.append(h)
+                    return h
 
-            def checkpoint(*args, **kwargs):
-                if args and args[0] == "READY_FOR_CHAT":
-                    run = harnesses[0].run
-                    recorded = run.base.select()
-                    self.assertEqual(recorded.manifest["stage"], "ready-for-chat")
-                    self.assertTrue(demo.validate_configs(recorded))
+                def checked_print(*args, **kwargs):
+                    if args and args[0] == "OK":
+                        run = harnesses[0].run
+                        recorded = run.base.select()
+                        self.assertEqual(recorded.manifest["stage"],
+                                         checkpoint.lower().replace("_", "-"))
+                        self.assertTrue(demo.validate_configs(recorded))
+                        self.assertTrue(kwargs.get("flush"))
+                        if fail_output:
+                            raise BrokenPipeError("signed-private-data")
+                    real_print(*args, **kwargs)
+
+                output, error = io.StringIO(), io.StringIO()
+                with mock.patch.object(demo, "Harness", side_effect=harness), \
+                        mock.patch.object(demo, "process_state", return_value="running"), \
+                        mock.patch.object(demo, "stop_process", return_value="stopped") as stop, \
+                        mock.patch.object(demo, "status") as status, \
+                        mock.patch("builtins.print", side_effect=checked_print), \
+                        contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                    args = ["up", "--base-dir", str(path)]
+                    if chat_ready:
+                        args.append("--chat-ready")
+                    code = demo.main(args)
+                self.assertEqual(code, int(fail_output))
+                self.assertEqual(stop.call_count, 4 if fail_output else 0)
+                status.assert_not_called()
+                with contextlib.closing(demo.Base(path)) as base:
+                    run = base.select()
+                    self.assertEqual(run.manifest["state"],
+                                     "failed" if fail_output else "ready")
+                    self.assertEqual((run.path / "config").exists(), not fail_output)
                     if fail_output:
-                        raise BrokenPipeError("signed-private-data")
-                real_print(*args, **kwargs)
-
-            output, error = io.StringIO(), io.StringIO()
-            with mock.patch.object(demo, "Harness", side_effect=harness), \
-                    mock.patch.object(demo, "process_state", return_value="running"), \
-                    mock.patch.object(demo, "stop_process", return_value="stopped") as stop, \
-                    mock.patch("builtins.print", side_effect=checkpoint), \
-                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
-                code = demo.main(["up", "--chat-ready", "--base-dir", str(path)])
-            self.assertEqual(code, int(fail_output))
-            self.assertEqual(stop.call_count, 4 if fail_output else 0)
-            with contextlib.closing(demo.Base(path)) as base:
-                run = base.select()
-                self.assertEqual(run.manifest["state"], "failed" if fail_output else "ready")
-                self.assertEqual((run.path / "config").exists(), not fail_output)
-                if not fail_output:
-                    self.assertIn("READY_FOR_CHAT\n", output.getvalue())
-                    for name in demo.CONFIG_NAMES:
-                        self.assertIn(name.title() + " Flutter config: " +
-                                      str(run.path / "config" / (name + ".json")),
-                                      output.getvalue())
-            console = output.getvalue() + error.getvalue()
-            for value in ("READY_FOR_INVITATION", "No invitation issued", "Bearer",
-                          "a" * 64, "b" * 64, "signed-private-data",
-                          harnesses[0].invitation_id, "YQ==", "Yg=="):
-                self.assertNotIn(value, console)
+                        self.assertEqual(output.getvalue(), "")
+                        self.assertIn("FAILED run=" + run.path.name, error.getvalue())
+                    else:
+                        self.assertEqual(output.getvalue(),
+                                         f"OK {run.path.name} {checkpoint}\n")
+                        self.assertEqual(error.getvalue(), "")
+                console = output.getvalue() + error.getvalue()
+                for value in ("Flutter config:", "Historical receipt:", "Bearer",
+                              "a" * 64, "b" * 64, "signed-private-data",
+                              harnesses[0].invitation_id, "YQ==", "Yg=="):
+                    self.assertNotIn(value, console)
+                if fail_output:
+                    self.assertNotIn("OK", console)
+                    self.assertNotIn("READY_FOR", console)
 
     def test_bad_known_stops_before_bootstrap(self):
         def mutate(name, path, result):
@@ -1171,6 +1251,142 @@ class SequenceTests(PrivateTest):
                 self.assertFalse((self.run.path / "config").exists())
 
 
+class ListingTests(PrivateTest):
+    def invoke(self, *args):
+        output, error = io.StringIO(), io.StringIO()
+        previous = signal.getsignal(signal.SIGTERM)
+        try:
+            with contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                code = demo.main(args)
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+        return code, output.getvalue(), error.getvalue()
+
+    def test_list_empty_base_default_and_explicit_base_directory(self):
+        path = self.parent / ".ic-pw-demo"
+        with contextlib.closing(demo.Base(path, create=True)):
+            pass
+        with mock.patch.object(demo.Path, "home", return_value=self.parent), \
+                mock.patch.object(demo.os, "pidfd_open",
+                                  side_effect=AssertionError("no process probes")):
+            self.assertEqual(self.invoke("list"), (0, "No runs exist.\n", ""))
+            self.assertEqual(self.invoke("list", "--base-dir", str(path)),
+                             (0, "No runs exist.\n", ""))
+        self.assertEqual({p.name for p in path.iterdir()}, {"base.json", "lock"})
+
+    def test_list_preserves_base_ownership_and_lock_checks(self):
+        unmarked = self.parent / "unmarked"
+        unmarked.mkdir(mode=0o700)
+        linked = self.parent / "linked"
+        linked.symlink_to(self.base.path, target_is_directory=True)
+        missing = self.parent / "missing"
+        for path in (unmarked, linked, missing, self.base.path):
+            with self.subTest(path=path):
+                code, output, error = self.invoke("list", "--base-dir", str(path))
+                self.assertEqual(code, 1)
+                self.assertEqual(output, "")
+                self.assertIn("FAILED stage=ownership-preflight", error)
+        self.assertFalse(missing.exists())
+        self.assertEqual(list(unmarked.iterdir()), [])
+
+    def test_invalid_candidates_are_safe_rows_and_links_are_not_read(self):
+        malformed = self.base.allocate()
+        malformed.manifest["stage"] = "private\nREADY_FOR_CHAT"
+        malformed.save()
+        wrong_type = self.base.allocate()
+        wrong_type.manifest["stage"] = {}
+        wrong_type.save()
+        marker = self.base.allocate()
+        demo.write_json(marker.path / "run.json", {})
+        linked_marker = self.base.allocate()
+        (linked_marker.path / "run.json").unlink()
+        (linked_marker.path / "run.json").symlink_to(self.run.path / "run.json")
+        fifo = self.base.allocate()
+        (fifo.path / "manifest.json").unlink()
+        os.mkfifo(fifo.path / "manifest.json", 0o600)
+        linked_id = "run-" + "f" * 32
+        (self.base.path / linked_id).symlink_to(self.run.path, target_is_directory=True)
+        ignored = "run-UNTRUSTED\nREADY_FOR_CHAT"
+        (self.base.path / ignored).symlink_to(self.run.path, target_is_directory=True)
+        identifiers = [run.path.name for run in
+                       (malformed, wrong_type, marker, linked_marker, fifo)] + [linked_id]
+        demo.write_json(self.base.path / "latest.json", {"run_id": linked_id})
+        read = demo.read_private
+
+        def checked_read(path, *args):
+            self.assertFalse(path.is_relative_to(self.base.path / linked_id))
+            self.assertNotEqual(path, linked_marker.path / "run.json")
+            return read(path, *args)
+
+        output = io.StringIO()
+        with mock.patch.object(demo, "read_private", side_effect=checked_read), \
+                contextlib.redirect_stdout(output):
+            demo.list_runs(self.base)
+        rows = [line.split() for line in output.getvalue().splitlines()[1:-1]]
+        self.assertEqual(rows[0], [self.run.path.name, "partial", "allocated"])
+        for identifier in identifiers:
+            expected = (["*"] if identifier == linked_id else [])
+            self.assertIn(expected + [identifier, "INVALID", "-"], rows)
+        self.assertEqual(len(rows), 1 + len(identifiers))
+        self.assertNotIn("READY_FOR_CHAT", output.getvalue())
+        self.assertNotIn("private", output.getvalue())
+        self.assertTrue((self.base.path / linked_id).is_symlink())
+        self.assertEqual(demo.decode_json(read(malformed.path / "manifest.json")),
+                         malformed.manifest)
+        with self.assertRaises(demo.DemoError):
+            demo.destroy(marker, marker.path.name)
+        self.assertTrue(marker.path.exists())
+
+    def test_latest_pointer_is_validated_and_may_be_absent(self):
+        path = self.base.path / "latest.json"
+        demo.write_json(path, {"run_id": "private\nREADY_FOR_CHAT"})
+        with self.assertRaises(demo.DemoError):
+            demo.list_runs(self.base)
+        path.unlink()
+        path.symlink_to(self.run.path / "manifest.json")
+        with self.assertRaises(demo.DemoError):
+            demo.list_runs(self.base)
+        path.unlink()
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            demo.list_runs(self.base)
+        self.assertEqual(output.getvalue().splitlines()[1].split(),
+                         [self.run.path.name, "partial", "allocated"])
+
+    def test_list_then_existing_cli_selection_and_explicit_destroy(self):
+        path = self.parent / "commands"
+        with contextlib.closing(demo.Base(path, create=True)) as base:
+            older = base.allocate().path.name
+            latest = base.allocate().path.name
+        code, output, error = self.invoke("list", "--base-dir", str(path))
+        self.assertEqual((code, error), (0, ""))
+        self.assertIn("* " + latest, output)
+        for selected, options in ((latest, []), (older, ["--run-id", older])):
+            code, output, error = self.invoke("status", "--base-dir", str(path), *options)
+            self.assertEqual((code, error), (0, ""))
+            self.assertIn("Run: " + selected, output)
+            self.assertIn("Last setup stage: allocated | lifecycle: partial", output)
+            code, output, error = self.invoke("down", "--base-dir", str(path), *options)
+            self.assertEqual((code, error), (0, ""))
+            self.assertIn("DOWN; evidence retained:", output)
+        code, output, error = self.invoke("destroy", "--base-dir", str(path),
+                                          "--confirm", older)
+        self.assertEqual((code, error), (0, ""))
+        self.assertIn("DESTROYED " + older, output)
+        self.assertFalse((path / older).exists())
+        self.assertTrue((path / latest).exists())
+        with contextlib.closing(demo.Base(path)) as base:
+            self.assertEqual(base.select().path.name, latest)
+
+    def test_up_allocation_failure_omits_run_id_and_sanitizes_exception(self):
+        path = self.parent / "allocation-failure"
+        with mock.patch.object(demo.Base, "allocate",
+                               side_effect=OSError("Bearer private-response")):
+            self.assertEqual(self.invoke("up", "--base-dir", str(path)),
+                             (1, "", "FAILED stage=ownership-preflight "
+                              "reason=operation-failed\n"))
+
+
 @unittest.skipUnless(os.environ.get("PW_DEMO_LIVE") == "1",
                      "NOT RUN: opt in with PW_DEMO_LIVE=1")
 class LiveSmoke(unittest.TestCase):
@@ -1200,9 +1416,9 @@ class LiveSmoke(unittest.TestCase):
                 run = base.select()
                 self.assertEqual(run.manifest["state"], "ready")
                 self.assertTrue(demo.validate_configs(run))
+                self.assertEqual(up.stdout,
+                                 f"OK {run.path.name} READY_FOR_INVITATION\n".encode())
                 for name in ("alice", "bob"):
-                    self.assertIn(str(run.path / "config" / (name + ".json")).encode(),
-                                  up.stdout)
                     self.assertEqual(demo.Owner(run, name).json("GET", "/owner/status"),
                                      {"choice": "completed"})
                 receipts = {r["stage"]: r["result"] for r in run.manifest["receipts"]}
@@ -1259,6 +1475,8 @@ class ChatReadyLiveSmoke(unittest.TestCase):
                             "missing chat checkpoint; inspect private evidence")
             with contextlib.closing(demo.Base(base_path)) as base:
                 run = base.select()
+                self.assertEqual(up.stdout,
+                                 f"OK {run.path.name} READY_FOR_CHAT\n".encode())
                 self.assertEqual(run.manifest["stage"], "ready-for-chat")
                 self.assertEqual(run.manifest["state"], "ready")
                 self.assertEqual([r["stage"] for r in run.manifest["receipts"]],
@@ -1267,8 +1485,6 @@ class ChatReadyLiveSmoke(unittest.TestCase):
                 for name in demo.CONFIG_NAMES:
                     self.assertEqual(demo.process_state(run.manifest["processes"][name]),
                                      "running")
-                    self.assertTrue((name.title() + " Flutter config: " + str(
-                        run.path / "config" / (name + ".json"))).encode() in up.stdout)
                     try:
                         owner = demo.Owner(run, name)
                         demo.same(owner.json("GET", "/owner/status"),
