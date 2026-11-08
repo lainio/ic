@@ -42,15 +42,22 @@ var (
 func sendMessageOnce(ctx context.Context, saved savedMessageTransmit,
 	peerMessageURL string,
 ) ([]byte, error) {
-	if ctx == nil || len(saved.envelope) == 0 ||
-		len(saved.envelope) > maxMessageEnvelopeBytes ||
+	return sendMessageVersionOnce(ctx, saved.envelope, peerMessageURL, 1)
+}
+
+func sendMessageVersionOnce(ctx context.Context, envelope, peerMessageURL string,
+	version int,
+) ([]byte, error) {
+	if ctx == nil || len(envelope) == 0 ||
+		len(envelope) > maxMessageEnvelopeBytes ||
+		(version != 1 && version != 2) ||
 		!validMessageURL(peerMessageURL) || ctx.Err() != nil {
 		return nil, errMessageNotDispatched
 	}
 	body, err := json.Marshal(struct {
 		Version  int    `json:"version"`
 		Envelope []byte `json:"envelope"`
-	}{1, []byte(saved.envelope)})
+	}{version, []byte(envelope)})
 	if err != nil || len(body) > maxMessageRequestBytes {
 		return nil, errMessageNotDispatched
 	}
@@ -78,7 +85,7 @@ func sendMessageOnce(ctx context.Context, saved savedMessageTransmit,
 	if err != nil {
 		return nil, errMessageOutcomeUnknown
 	}
-	return readMessageResponse(ctx, response)
+	return readMessageResponse(ctx, response, version)
 }
 
 func validMessageURL(value string) bool {
@@ -106,6 +113,7 @@ func validMessageURL(value string) bool {
 
 // Raw provider, URL, HTTP and JSON errors never enter err2 diagnostic tracing.
 func readMessageResponse(ctx context.Context, response *http.Response,
+	version int,
 ) (receipt []byte, err error) {
 	defer func() {
 		if response.Body.Close() != nil {
@@ -132,10 +140,10 @@ func readMessageResponse(ctx context.Context, response *http.Response,
 		len(response.Trailer) != 0 || ctx.Err() != nil {
 		return nil, errMessageOutcomeUnknown
 	}
-	return decodeMessageResponse(data)
+	return decodeMessageResponse(data, version)
 }
 
-func decodeMessageResponse(data []byte) ([]byte, error) {
+func decodeMessageResponse(data []byte, version int) ([]byte, error) {
 	if len(data) > maxMessageResponseBytes || !utf8.Valid(data) {
 		return nil, errMessageOutcomeUnknown
 	}
@@ -161,18 +169,23 @@ func decodeMessageResponse(data []byte) ([]byte, error) {
 		}
 		switch name {
 		case "version":
-			if value != json.Number("1") {
+			if (version != 1 || value != json.Number("1")) &&
+				(version != 2 || value != json.Number("2")) {
 				return nil, errMessageOutcomeUnknown
 			}
 		case "receipt":
+			bound := maxMessageReceiptBytes
+			if version == 2 {
+				bound = maxMessageReceiptBytesV2
+			}
 			encoded, valid := value.(string)
 			if !valid || len(encoded) >
-				base64.StdEncoding.EncodedLen(maxMessageReceiptBytes) {
+				base64.StdEncoding.EncodedLen(bound) {
 				return nil, errMessageOutcomeUnknown
 			}
 			receipt, err = base64.StdEncoding.Strict().DecodeString(encoded)
 			if err != nil || len(receipt) == 0 ||
-				len(receipt) > maxMessageReceiptBytes ||
+				len(receipt) > bound ||
 				base64.StdEncoding.EncodeToString(receipt) != encoded {
 				return nil, errMessageOutcomeUnknown
 			}

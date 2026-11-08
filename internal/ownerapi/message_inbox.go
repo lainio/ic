@@ -24,7 +24,8 @@ func (h *firstUseHandler) serveMessageInbox(w http.ResponseWriter,
 		writeStatusError(w, http.StatusMethodNotAllowed)
 		return
 	}
-	if r.URL.RawQuery != "" || r.URL.ForceQuery ||
+	if (r.URL.RawQuery != "" && r.URL.RawQuery != "version=2") ||
+		r.URL.ForceQuery ||
 		r.URL.Fragment != "" || r.URL.RawFragment != "" ||
 		len(r.Header.Values("Content-Encoding")) != 0 ||
 		len(r.Header.Values("Transfer-Encoding")) != 0 ||
@@ -38,7 +39,13 @@ func (h *firstUseHandler) serveMessageInbox(w http.ResponseWriter,
 		writeStatusError(w, http.StatusConflict)
 		return
 	}
-	inbox, err := pw.ReadMessageInbox(h.vault, h.root, h.child)
+	var inbox pw.MessageInbox
+	var err error
+	if r.URL.RawQuery == "version=2" {
+		inbox, err = pw.ReadMessageInboxV2(h.vault, h.root, h.child)
+	} else {
+		inbox, err = pw.ReadMessageInbox(h.vault, h.root, h.child)
+	}
 	if err != nil {
 		writeStatusError(w, http.StatusConflict)
 		return

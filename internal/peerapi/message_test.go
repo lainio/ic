@@ -19,8 +19,9 @@ const messageBody = `{"version":1,"envelope":"AQ=="}`
 func TestMessageStrictPeerJSON(t *testing.T) {
 	defer assert.PushTester(t)()
 	calls := 0
-	h := NewMessageHandler(func(raw []byte) ([]byte, error) {
+	h := NewMessageHandler(func(version int, raw []byte) ([]byte, error) {
 		calls++
+		assert.Equal(version, 1)
 		assert.DeepEqual(raw, []byte{1})
 		return raw, errors.New("secret plaintext IDs keys bearer diagnostic")
 	}, http.NotFoundHandler())
@@ -30,7 +31,7 @@ func TestMessageStrictPeerJSON(t *testing.T) {
 		`{"version":1,"envelope":null}`, `{"version":1,"envelope":[]}`,
 		`{"version":1,"envelope":{}}`, `{"version":1,"envelope":1}`,
 		`{"version":1,"envelope":true}`, `{"version":1,"envelope":""}`,
-		`{"version":2,"envelope":"AQ=="}`,
+		`{"version":3,"envelope":"AQ=="}`,
 		`{"version":1.0,"envelope":"AQ=="}`,
 		`{"version":1e0,"envelope":"AQ=="}`,
 		`{"version":"1","envelope":"AQ=="}`,
@@ -91,7 +92,7 @@ func TestMessageStrictPeerHeadersAndRouting(t *testing.T) {
 		fallthroughs++
 		w.WriteHeader(404)
 	})
-	h := NewMessageHandler(func([]byte) ([]byte, error) {
+	h := NewMessageHandler(func(int, []byte) ([]byte, error) {
 		calls++
 		return nil, errors.New("private diagnostic")
 	}, next)
@@ -204,7 +205,7 @@ func TestMessageInvalidLocalCallbackOutput(t *testing.T) {
 	for _, output := range [][]byte{nil, {}, {1}, []byte("private output"),
 		make([]byte, pw.MaxMessageReceiptBytes+1)} {
 		calls := 0
-		h := NewMessageHandler(func([]byte) ([]byte, error) {
+		h := NewMessageHandler(func(int, []byte) ([]byte, error) {
 			calls++
 			return output, nil
 		}, http.NotFoundHandler())

@@ -282,7 +282,7 @@ func TestMessageSendHTTPWrongReceiverAndForgedSuccess(t *testing.T) {
 	var owner sync.Mutex
 	saved := saveHTTPTransmit(t, f, &owner)
 	before := f.snapshot(t)
-	f.peer = peerapi.NewMessageHandler(func(raw []byte) ([]byte, error) {
+	f.peer = peerapi.NewMessageHandler(func(_ int, raw []byte) ([]byte, error) {
 		// A safe loopback address may still point at the wrong node.
 		owner.Lock()
 		defer owner.Unlock()

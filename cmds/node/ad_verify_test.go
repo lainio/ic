@@ -39,17 +39,18 @@ type verificationExchange struct {
 }
 
 type verificationNode struct {
-	fixture   serveFixture
-	service   *nodeServe
-	choice    onboarding.StoredChoice
-	owner     *httptest.Server
-	peer      *httptest.Server
-	auth      string
-	ad        []byte
-	exchanges chan verificationExchange
-	calls     atomic.Int32
-	mu        sync.Mutex
-	respond   func(http.ResponseWriter, *http.Request, http.Handler)
+	fixture        serveFixture
+	service        *nodeServe
+	choice         onboarding.StoredChoice
+	owner          *httptest.Server
+	peer           *httptest.Server
+	auth           string
+	ad             []byte
+	exchanges      chan verificationExchange
+	calls          atomic.Int32
+	mu             sync.Mutex
+	respond        func(http.ResponseWriter, *http.Request, http.Handler)
+	messageRespond func(http.ResponseWriter, *http.Request, http.Handler)
 }
 
 func (n *verificationNode) setResponse(respond func(http.ResponseWriter, *http.Request, http.Handler)) {
@@ -100,6 +101,10 @@ func startVerificationNode(t *testing.T, f serveFixture, publishing bool) *verif
 		n.service.configurePublication(n.peer.Listener)
 		next := n.service.peerHandler
 		n.peer.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/peer/pw/message" {
+				n.serveObservedMessage(w, r, next)
+				return
+			}
 			if r.URL.Path != peerProofPath {
 				next.ServeHTTP(w, r)
 				return

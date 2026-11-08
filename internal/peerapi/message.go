@@ -23,7 +23,7 @@ const (
 // this handler receives no Vault, identities, signer or owner credentials.
 // Nil disables the route. Signed envelopes carry plaintext: demo transport only.
 func NewMessageHandler(
-	receive func([]byte) ([]byte, error), next http.Handler,
+	receive func(int, []byte) ([]byte, error), next http.Handler,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/peer/pw/message" {
@@ -50,7 +50,7 @@ func NewMessageHandler(
 			fail(http.StatusBadRequest)
 			return
 		}
-		envelope, status := readMessageRequest(w, r)
+		version, envelope, status := readMessageRequest(w, r)
 		if status != 0 {
 			fail(status)
 			return
@@ -60,19 +60,24 @@ func NewMessageHandler(
 			return
 		}
 		// Preserve the exact request even if an internal callback mutates input.
-		receipt, err := receive(bytes.Clone(envelope))
+		receipt, err := receive(version, bytes.Clone(envelope))
 		if err != nil {
 			fail(http.StatusConflict)
 			return
 		}
-		if pw.ValidateLocalMessageReceipt(envelope, receipt) != nil {
+		if version == 2 {
+			err = pw.ValidateLocalMessageReceiptV2(envelope, receipt)
+		} else {
+			err = pw.ValidateLocalMessageReceipt(envelope, receipt)
+		}
+		if err != nil {
 			fail(http.StatusInternalServerError)
 			return
 		}
 		document, err := json.Marshal(struct {
 			Version int    `json:"version"`
 			Receipt []byte `json:"receipt"`
-		}{1, receipt})
+		}{version, receipt})
 		if err != nil || len(document) > maxMessageResponseBytes {
 			fail(http.StatusInternalServerError)
 			return
@@ -86,14 +91,16 @@ func NewMessageHandler(
 	})
 }
 
-func readMessageRequest(w http.ResponseWriter, r *http.Request) ([]byte, int) {
+func readMessageRequest(w http.ResponseWriter, r *http.Request) (
+	int, []byte, int,
+) {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" ||
 		len(r.Header.Values("Content-Type")) != 1 {
-		return nil, http.StatusUnsupportedMediaType
+		return 0, nil, http.StatusUnsupportedMediaType
 	}
 	if r.Body == nil {
-		return nil, http.StatusBadRequest
+		return 0, nil, http.StatusBadRequest
 	}
 	data, err := io.ReadAll(
 		http.MaxBytesReader(w, r.Body, maxMessageRequestBytes),
@@ -101,28 +108,29 @@ func readMessageRequest(w http.ResponseWriter, r *http.Request) ([]byte, int) {
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			return nil, http.StatusRequestEntityTooLarge
+			return 0, nil, http.StatusRequestEntityTooLarge
 		}
-		return nil, http.StatusBadRequest
+		return 0, nil, http.StatusBadRequest
 	}
-	envelope, ok := decodeMessageRequest(data)
+	version, envelope, ok := decodeMessageRequest(data)
 	if !ok {
-		return nil, http.StatusBadRequest
+		return 0, nil, http.StatusBadRequest
 	}
-	return envelope, 0
+	return version, envelope, 0
 }
 
-func decodeMessageRequest(data []byte) ([]byte, bool) {
+func decodeMessageRequest(data []byte) (int, []byte, bool) {
 	if !utf8.Valid(data) {
-		return nil, false
+		return 0, nil, false
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
 	if token, err := d.Token(); err != nil || token != json.Delim('{') {
-		return nil, false
+		return 0, nil, false
 	}
 	seen := make(map[string]bool, 2)
 	var envelope []byte
+	var version int
 	for d.More() {
 		start := d.InputOffset()
 		token, err := d.Token()
@@ -130,38 +138,43 @@ func decodeMessageRequest(data []byte) ([]byte, bool) {
 		// Reject even a sole escaped spelling, as well as duplicate aliases.
 		if err != nil || !valid || seen[name] ||
 			bytes.Contains(data[start:d.InputOffset()], []byte{'\\'}) {
-			return nil, false
+			return 0, nil, false
 		}
 		seen[name] = true
 		value, err := d.Token()
 		if err != nil {
-			return nil, false
+			return 0, nil, false
 		}
 		switch name {
 		case "version":
-			if value != json.Number("1") {
-				return nil, false
+			switch value {
+			case json.Number("1"):
+				version = 1
+			case json.Number("2"):
+				version = 2
+			default:
+				return 0, nil, false
 			}
 		case "envelope":
 			encoded, valid := value.(string)
 			if !valid || len(encoded) >
 				base64.StdEncoding.EncodedLen(pw.MaxMessageEnvelopeBytes) {
-				return nil, false
+				return 0, nil, false
 			}
 			envelope, err = base64.StdEncoding.Strict().DecodeString(encoded)
 			if err != nil || len(envelope) == 0 ||
 				len(envelope) > pw.MaxMessageEnvelopeBytes ||
 				base64.StdEncoding.EncodeToString(envelope) != encoded {
-				return nil, false
+				return 0, nil, false
 			}
 		default:
-			return nil, false
+			return 0, nil, false
 		}
 	}
 	if token, err := d.Token(); err != nil || token != json.Delim('}') ||
 		len(seen) != 2 {
-		return nil, false
+		return 0, nil, false
 	}
 	_, err := d.Token()
-	return envelope, err == io.EOF
+	return version, envelope, err == io.EOF
 }

@@ -81,9 +81,9 @@ func (f *messageHTTPFixture) bindMessage(t *testing.T, signer key.Handle) {
 	f.owner = owner
 	f.auth = strings.TrimSpace(strings.TrimPrefix(
 		string(try.To1(os.ReadFile(file))), "Authorization:"))
-	f.peer = peerapi.NewMessageHandler(func(raw []byte) ([]byte, error) {
+	f.peer = peerapi.NewMessageHandler(func(version int, raw []byte) ([]byte, error) {
 		f.calls++
-		return receive(raw)
+		return receive(version, raw)
 	}, http.NotFoundHandler())
 	assert.DeepEqual(f.snapshot(t), before) // No startup writes.
 }
@@ -289,7 +289,7 @@ func TestMessageHTTPRejectsInternalReceiptMismatch(t *testing.T) {
 		if mode == "signature" {
 			response[len(response)-1] ^= 1
 		}
-		f.peer = peerapi.NewMessageHandler(func(raw []byte) ([]byte, error) {
+		f.peer = peerapi.NewMessageHandler(func(_ int, raw []byte) ([]byte, error) {
 			if mode == "mutated input" {
 				copy(raw, f.raw)
 			}

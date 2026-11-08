@@ -133,7 +133,7 @@ func TestMessageClientStrictJSON(t *testing.T) {
 		" \n { \"receipt\":\"AA==\", \"version\":1 } \t",
 	} {
 		assert.DeepEqual(
-			try.To1(decodeMessageResponse([]byte(data))),
+			try.To1(decodeMessageResponse([]byte(data), 1)),
 			[]byte{0},
 		)
 	}
@@ -161,7 +161,7 @@ func TestMessageClientStrictJSON(t *testing.T) {
 		invalid = append(invalid, `{"version":1,"receipt":`+receipt+`}`)
 	}
 	for i, data := range invalid {
-		raw, err := decodeMessageResponse([]byte(data))
+		raw, err := decodeMessageResponse([]byte(data), 1)
 		assert.Equal(err, errMessageOutcomeUnknown, fmt.Sprint(i))
 		assert.SNil(raw)
 	}

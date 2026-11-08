@@ -62,10 +62,11 @@ func TestOwnerMessageSendTextAndCanonicalURLBounds(t *testing.T) {
 			body += strings.Repeat(" ", maxMessageSendRequestBytes-len(body))
 			r := httptest.NewRequest("POST", messageSendPath, strings.NewReader(body))
 			r.Header.Set("Content-Type", "application/json")
-			gotText, gotURL, status := readMessageSendRequest(httptest.NewRecorder(), r)
+			input, status := readMessageSendRequest(httptest.NewRecorder(), r)
 			assert.Equal(status, 0)
-			assert.Equal(gotText, text)
-			assert.Equal(gotURL, url)
+			assert.Equal(input.version, 1)
+			assert.Equal(input.text, text)
+			assert.Equal(input.peerURL, url)
 		}
 	}
 }

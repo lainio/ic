@@ -39,7 +39,7 @@ func (h *firstUseHandler) serveMessageSend(w http.ResponseWriter,
 		writeStatusError(w, http.StatusBadRequest)
 		return
 	}
-	text, peerURL, status := readMessageSendRequest(w, r)
+	input, status := readMessageSendRequest(w, r)
 	if status != 0 {
 		writeStatusError(w, status)
 		return
@@ -48,7 +48,14 @@ func (h *firstUseHandler) serveMessageSend(w http.ResponseWriter,
 		writeStatusError(w, http.StatusBadRequest)
 		return
 	}
-	prepared, err := h.prepareMessageSend(r.Context(), text)
+	var prepared pw.PreparedMessageSend
+	var preparedV2 pw.PreparedMessageSendV2
+	var err error
+	if input.version == 2 {
+		preparedV2, err = h.prepareMessageSendV2(r.Context(), input.text)
+	} else {
+		prepared, err = h.prepareMessageSend(r.Context(), input.text)
+	}
 	if err != nil {
 		glog.V(1).Info("intro_pw op=message_send stage=prepare " +
 			"result=refused dispatch=not_started local_state=retained")
@@ -58,7 +65,13 @@ func (h *firstUseHandler) serveMessageSend(w http.ResponseWriter,
 
 	// sent authorizes an attempt; it does not prove dispatch or peer admission.
 	// The preparation lock is released before HTTP, including on exact retry.
-	receipt, err := pw.SendMessageOnce(r.Context(), prepared, peerURL)
+	var receipt pw.MessageSendReceipt
+	var receiptV2 []byte
+	if input.version == 2 {
+		receiptV2, err = pw.SendMessageOnceV2(r.Context(), preparedV2)
+	} else {
+		receipt, err = pw.SendMessageOnce(r.Context(), prepared, input.peerURL)
+	}
 	if err != nil {
 		if errors.Is(err, pw.ErrMessageNotDispatched) {
 			glog.V(1).Info("intro_pw op=message_send stage=exchange " +
@@ -71,7 +84,12 @@ func (h *firstUseHandler) serveMessageSend(w http.ResponseWriter,
 		}
 		return
 	}
-	if err := h.observeMessageReceipt(receipt); err != nil {
+	if input.version == 2 {
+		err = h.observeMessageReceiptV2(receiptV2)
+	} else {
+		err = h.observeMessageReceipt(receipt)
+	}
+	if err != nil {
 		glog.V(1).Info("intro_pw op=message_send stage=ack " +
 			"result=unknown dispatch=possible local_state=retained")
 		writeStatusError(w, http.StatusBadGateway)
@@ -99,18 +117,41 @@ func (h *firstUseHandler) observeMessageReceipt(
 	return pw.ObserveMessageReceipt(h.vault, h.root, h.child, receipt)
 }
 
+func (h *firstUseHandler) prepareMessageSendV2(ctx context.Context, text string,
+) (pw.PreparedMessageSendV2, error) {
+	h.mutations.Lock()
+	defer h.mutations.Unlock()
+	if err := ctx.Err(); err != nil {
+		return pw.PreparedMessageSendV2{}, err
+	}
+	return pw.PrepareMessageSendV2(h.vault, h.root, h.child, h.signer,
+		h.firstUseRuntimeV2(), text)
+}
+
+func (h *firstUseHandler) observeMessageReceiptV2(receipt []byte) error {
+	h.mutations.Lock()
+	defer h.mutations.Unlock()
+	_, err := pw.ObserveMessageReceiptV2(h.vault, h.root, h.child, receipt)
+	return err
+}
+
+type messageSendInput struct {
+	version       int
+	text, peerURL string
+}
+
 func readMessageSendRequest(w http.ResponseWriter, r *http.Request,
-) (string, string, int) {
+) (messageSendInput, int) {
 	media, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || media != "application/json" ||
 		len(r.Header.Values("Content-Type")) != 1 {
-		return "", "", http.StatusUnsupportedMediaType
+		return messageSendInput{}, http.StatusUnsupportedMediaType
 	}
 	if r.ContentLength > maxMessageSendRequestBytes {
-		return "", "", http.StatusRequestEntityTooLarge
+		return messageSendInput{}, http.StatusRequestEntityTooLarge
 	}
 	if r.Body == nil {
-		return "", "", http.StatusBadRequest
+		return messageSendInput{}, http.StatusBadRequest
 	}
 	data, err := io.ReadAll(
 		http.MaxBytesReader(w, r.Body, maxMessageSendRequestBytes),
@@ -118,54 +159,74 @@ func readMessageSendRequest(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			return "", "", http.StatusRequestEntityTooLarge
+			return messageSendInput{}, http.StatusRequestEntityTooLarge
 		}
-		return "", "", http.StatusBadRequest
+		return messageSendInput{}, http.StatusBadRequest
 	}
-	text, peerURL, ok := decodeMessageSendRequest(data)
+	input, ok := decodeMessageSendRequest(data)
 	if !ok {
-		return "", "", http.StatusBadRequest
+		return messageSendInput{}, http.StatusBadRequest
 	}
-	return text, peerURL, 0
+	return input, 0
 }
 
-func decodeMessageSendRequest(data []byte) (string, string, bool) {
+func decodeMessageSendRequest(data []byte) (messageSendInput, bool) {
 	if !utf8.Valid(data) {
-		return "", "", false
+		return messageSendInput{}, false
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
+	d.UseNumber()
 	if token, err := d.Token(); err != nil || token != json.Delim('{') {
-		return "", "", false
+		return messageSendInput{}, false
 	}
 	seen := make(map[string]bool, 2)
-	var text, peerURL string
+	input := messageSendInput{version: 1}
 	for d.More() {
 		start := d.InputOffset()
 		token, err := d.Token()
 		name, valid := token.(string)
 		if err != nil || !valid || seen[name] ||
 			bytes.Contains(data[start:d.InputOffset()], []byte{'\\'}) {
-			return "", "", false
+			return messageSendInput{}, false
 		}
 		seen[name] = true
 		token, err = d.Token()
 		value, valid := token.(string)
-		if err != nil || !valid {
-			return "", "", false
+		if err != nil {
+			return messageSendInput{}, false
 		}
 		switch name {
 		case "text":
-			text = value
+			if !valid {
+				return messageSendInput{}, false
+			}
+			input.text = value
 		case "peer_message_url":
-			peerURL = value
+			if !valid {
+				return messageSendInput{}, false
+			}
+			input.peerURL = value
+		case "version":
+			if token != json.Number("2") {
+				return messageSendInput{}, false
+			}
+			input.version = 2
 		default:
-			return "", "", false
+			return messageSendInput{}, false
 		}
 	}
 	if token, err := d.Token(); err != nil || token != json.Delim('}') ||
-		len(seen) != 2 || !pw.ValidMessageSendInput(text, peerURL) {
-		return "", "", false
+		len(seen) != 2 || !seen["text"] {
+		return messageSendInput{}, false
+	}
+	if input.version == 2 {
+		if !seen["version"] || seen["peer_message_url"] ||
+			!pw.ValidMessageSendInputV2(input.text) {
+			return messageSendInput{}, false
+		}
+	} else if !pw.ValidMessageSendInput(input.text, input.peerURL) {
+		return messageSendInput{}, false
 	}
 	_, err := d.Token()
-	return text, peerURL, err == io.EOF
+	return input, err == io.EOF
 }

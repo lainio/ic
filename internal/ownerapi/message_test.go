@@ -18,7 +18,7 @@ func TestMessageCapabilityRequiresPeerBinding(t *testing.T) {
 	h, _, bind := try.To3(NewFirstUseCredentials(t.Context(),
 		nil, nil, nil, nil, t.TempDir()))
 	target := h.(*authenticatedStatusHandler).next.(*firstUseHandler)
-	_, err := target.receiveMessageLocal([]byte{1})
+	_, err := target.receiveMessageLocal(1, []byte{1})
 	assert.Error(err)
 	prove, accept, establish, use, receive := bind(nil)
 	assert.That(prove == nil && accept == nil && establish == nil &&
@@ -69,7 +69,7 @@ func TestMessageCapabilityUsesExistingMutationLock(t *testing.T) {
 	started, done := make(chan struct{}), make(chan error, 1)
 	go func() {
 		close(started)
-		_, err := receive([]byte{1})
+		_, err := receive(1, []byte{1})
 		done <- err
 	}()
 	<-started
