@@ -45,6 +45,10 @@ ROUTES = {
     ("POST", "/owner/device/bootstrap"),
     ("POST", "/owner/ads/publish"), ("POST", "/owner/ads/fetch"),
     ("POST", "/owner/ads/verify"),
+    ("POST", "/owner/pw/invitations/issue"),
+    ("POST", "/owner/pw/invitations/redeem"),
+    ("POST", "/owner/pw/first-use"),
+    ("GET", "/owner/pw/message/inbox?version=2"),
 }
 
 
@@ -359,10 +363,25 @@ class Run:
                     type(receipt["result"]) is dict, "invalid-receipts")
             validate_receipt(self, receipt["stage"], receipt["result"])
         stages = [receipt["stage"] for receipt in m["receipts"]]
-        require(stages == RECEIPT_ORDER[:len(stages)], "invalid-receipt-order")
+        require(stages == CHAT_RECEIPT_ORDER[:len(stages)],
+                "invalid-receipt-order")
+        final_orders = {"ready-for-invitation": RECEIPT_ORDER,
+                        "ready-for-chat": CHAT_RECEIPT_ORDER}
         if m["state"] == "ready":
-            require(stages == RECEIPT_ORDER and m["stage"] == "ready-for-invitation",
+            require(m["stage"] in final_orders,
                     "incomplete-ready-manifest")
+        if m["stage"] in final_orders:
+            require(stages == final_orders[m["stage"]] and
+                    m["state"] != "partial", "incomplete-ready-manifest")
+        elif m["stage"] in CHAT_STAGES:
+            # A stage is saved before dispatch; its receipt only after a
+            # validated response. Failed/down runs retain either boundary.
+            index = CHAT_RECEIPT_ORDER.index(m["stage"])
+            require(len(stages) in (index, index + 1),
+                    "inconsistent-chat-stage")
+        else:
+            require(len(stages) <= len(RECEIPT_ORDER),
+                    "inconsistent-chat-stage")
 
     def save(self):
         write_json(self.path / "manifest.json", self.manifest)
@@ -387,10 +406,15 @@ RECEIPT_ORDER = [
     "alice-device", "bob-device", "bob-publish", "alice-ad-received",
     "alice-ad-verified",
 ]
+CHAT_STAGES = [
+    "bob-invitation", "alice-v2-acceptance", "alice-v2-first-use",
+    "alice-v2-inbox", "bob-v2-inbox",
+]
+CHAT_RECEIPT_ORDER = RECEIPT_ORDER + CHAT_STAGES
 
 
 def validate_receipt(run, stage, result):
-    require(stage in RECEIPT_ORDER, "invalid-receipt-stage")
+    require(stage in CHAT_RECEIPT_ORDER, "invalid-receipt-stage")
     nodes = run.manifest["nodes"]
     name = stage.split("-")[0]
     peer = "bob" if name == "alice" else "alice"
@@ -424,9 +448,24 @@ def validate_receipt(run, stage, result):
     elif stage == "alice-ad-received":
         same(result, {"subject_public_key_hex": nodes["bob"]["public_key_hex"],
                       "introduction_created": False, "ad_changed": True})
-    else:
+    elif stage == "alice-ad-verified":
         same(result, {"subject_public_key_hex": nodes["bob"]["public_key_hex"],
                       "verified": True, "changed": True})
+    elif stage == "bob-invitation":
+        exact(result, ("issued", "audience", "recipient_public_key_hex",
+                       "expires_unix_nano"))
+        expiry = result["expires_unix_nano"]
+        require(type(expiry) is int and 0 < expiry < 2 ** 63,
+                "invalid-invitation-expiry")
+        same(result, {"issued": True, "audience": "Directed",
+                      "recipient_public_key_hex": nodes["alice"]["public_key_hex"],
+                      "expires_unix_nano": expiry})
+    elif stage == "alice-v2-acceptance":
+        same(result, {"acceptance_saved": True, "local_held": True})
+    elif stage == "alice-v2-first-use":
+        same(result, {"local_ready": True})
+    else:
+        same(result, {"present": False})
 
 
 def argv_hash(args):
@@ -682,7 +721,7 @@ class Harness:
         self.run.stage(stage, "logs/" + name + ".stderr")
         return self.owners[name].json("POST", path, body)
 
-    def setup(self):
+    def setup(self, chat_ready=False):
         run = self.run
         nodes = run.manifest["nodes"]
         self.command("build", ["go", "build", "-mod=readonly", "-o",
@@ -813,8 +852,54 @@ class Harness:
         for name in ("alice", "bob"):
             require(process_state(run.manifest["processes"][name]) == "running",
                     "server-exited-before-ready")
+        if chat_ready:
+            self.prepare_chat()
         run.manifest["state"] = "ready"
-        run.stage("ready-for-invitation")
+        run.stage("ready-for-chat" if chat_ready else "ready-for-invitation")
+
+    def prepare_chat(self):
+        run = self.run
+        # Revalidate the recorded independent keys and their startup bindings
+        # before any invitation operation. No caller-supplied key or contact.
+        recorded = run.base.select(run.path.name)
+        nodes = recorded.manifest["nodes"]
+        result = self.post("bob", "bob-invitation",
+                           "/owner/pw/invitations/issue",
+                           {"recipient_public_key_hex":
+                            nodes["alice"]["public_key_hex"]})
+        exact(result, ("invitation_id_hex", "audience",
+                       "recipient_public_key_hex", "expires_unix_nano"))
+        invitation_id = result["invitation_id_hex"]
+        require(type(invitation_id) is str and
+                re.fullmatch(r"[0-9a-f]{64}", invitation_id),
+                "invalid-invitation-id")
+        # The ID is transient. Persist only bounded non-secret observations.
+        receipt = {k: v for k, v in result.items() if k != "invitation_id_hex"}
+        receipt["issued"] = True
+        validate_receipt(run, "bob-invitation", receipt)
+        require(receipt["expires_unix_nano"] > time.time_ns(),
+                "invitation-expired-before-redemption")
+        run.receipt(receipt)
+
+        result = self.post("alice", "alice-v2-acceptance",
+                           "/owner/pw/invitations/redeem", {
+                               "version": 2,
+                               "target_public_key_hex": nodes["bob"]["public_key_hex"],
+                               "invitation_id_hex": invitation_id,
+                               "audience": "Directed"})
+        run.receipt(result)
+        result = self.post("alice", "alice-v2-first-use",
+                           "/owner/pw/first-use", {"version": 2})
+        run.receipt(result)
+
+        for name in ("alice", "bob"):
+            run.stage(name + "-v2-inbox", "logs/" + name + ".stderr")
+            result = self.owners[name].json(
+                "GET", "/owner/pw/message/inbox?version=2")
+            run.receipt(result)
+        for name in ("alice", "bob"):
+            require(process_state(run.manifest["processes"][name]) == "running",
+                    "server-exited-before-ready")
 
 
 @contextlib.contextmanager
@@ -832,10 +917,10 @@ def defer_interrupts():
         raise KeyboardInterrupt
 
 
-def up(run):
+def up(run, chat_ready=False):
     harness = Harness(run)
     try:
-        harness.setup()
+        harness.setup(chat_ready=chat_ready)
         write_configs(run)
     except BaseException:
         with defer_interrupts():
@@ -957,6 +1042,14 @@ def status(run):
             print("  Observed verified=true for Bob's actual subject on Alice.")
         elif stage in ("alice", "bob"):
             print("  Observed authenticated owner status: completed.")
+        elif stage == "bob-invitation":
+            print("  Observed Bob's Directed invitation issuance for Alice.")
+        elif stage == "alice-v2-acceptance":
+            print("  Observed Alice's saved v2 acceptance and local holding.")
+        elif stage == "alice-v2-first-use":
+            print("  Observed Alice's local historical v2 first-use Ready.")
+        elif stage in ("alice-v2-inbox", "bob-v2-inbox"):
+            print("  Observed this node's authenticated historical v2 inbox: empty.")
         if receipt["stage"] == "bob-publish":
             expiry = receipt["result"].get("expires_unix_nano")
             require(type(expiry) is int and 0 < expiry < 2 ** 63, "invalid-receipt")
@@ -1066,6 +1159,9 @@ def main(argv=None):
         command = subcommands.add_parser(name)
         command.add_argument("--base-dir", default=str(Path.home() / ".ic-pw-demo"),
                              help="new or marked private absolute parent outside the repo")
+        if name == "up":
+            command.add_argument("--chat-ready", action="store_true",
+                                 help="prepare v2 invitation and first-use history")
         if name in ("status", "down"):
             command.add_argument("--run-id", help="default: most recently allocated run")
         if name == "destroy":
@@ -1081,13 +1177,19 @@ def main(argv=None):
             with defer_interrupts():
                 run = base.allocate()
             print("Preparing disposable run:", run.path, flush=True)
-            up(run)
-            print("READY_FOR_INVITATION")
+            up(run, chat_ready=args.chat_ready)
+            print("READY_FOR_CHAT" if args.chat_ready else "READY_FOR_INVITATION")
             status(run)
-            print("WARNING: READY is a setup-time checkpoint, not a permanent promise. "
-                  "Issue/redeem shortly afterward in Flutter. The ad and eventual "
-                  "invitation have separate 15-minute TTLs; nothing auto-renews.")
-            print("No invitation issued or consumed; no first use performed.")
+            if args.chat_ready:
+                print("Chat preparation recorded; no message sent. Open the configured "
+                      "counterpart in each Flutter window and activate the live conversation.")
+                print("Historical checks do not establish current permission, "
+                      "listener reachability, live delivery, shared PWOpen or Trust.")
+            else:
+                print("WARNING: READY is a setup-time checkpoint, not a permanent promise. "
+                      "Issue/redeem shortly afterward in Flutter. The ad and eventual "
+                      "invitation have separate 15-minute TTLs; nothing auto-renews.")
+                print("No invitation issued or consumed; no first use performed.")
         elif args.command == "destroy":
             run = base.select(args.confirm)
             destroy(run, args.confirm)

@@ -19,7 +19,9 @@ The credential file is limited to 1 KiB and status responses to 4 KiB.
 ## Demo launch configuration (UI-02)
 
 For the next disposable two-node trial, run the
-[demo harness](../../scripts/README.md) and wait for `READY_FOR_INVITATION`.
+[demo harness](../../scripts/README.md) with
+`python3 scripts/pw_demo.py up --chat-ready` from the Go checkout and wait for
+`READY_FOR_CHAT`. Plain `up` still stops at `READY_FOR_INVITATION`.
 It prints two absolute paths: `RUN/config/alice.json` and
 `RUN/config/bob.json`. Alice is the **requester**; Bob is the **invitation
 issuer/acceptor**. Build once from this package with the installed SDK and
@@ -279,7 +281,7 @@ Graph observations remain fixtures, including after successful live messages.
 
 ## Live relationship conversation (PW-Demo-Flutter-01)
 
-After manual v2 staging below, launch the two bundle processes with their
+After v2 staging below, launch the two bundle processes with their
 respective `--config` paths as shown above. In each window open `Wallet demo`.
 The validated launch role selects Alice's or Bob's local fixture perspective.
 Select the configured counterpart, then explicitly click
@@ -313,7 +315,17 @@ notifications. Repeated message IDs render one bubble. Only a valid
 data. No fixture text, invented timestamp or remote-read indicator is added.
 Credentials are reread on every request through the existing bounded client.
 
-### Manual v2 staging
+### v2 staging
+
+From the Go checkout, run `python3 scripts/pw_demo.py up --chat-ready` and
+confirm `READY_FOR_CHAT`. This completes Directed issuance, v2 redemption,
+v2 first use and both authenticated historical empty-inbox checks before
+publishing the config pair. Use the two actual printed config paths and the
+[presenter commands](../../scripts/README.md#presenter-workflow). Both
+Go nodes remain running; activate each live conversation explicitly in Flutter.
+After the rehearsal, run `python3 scripts/pw_demo.py down`.
+
+Manual staging remains available:
 
 `python3 scripts/pw_demo.py up` stops at `READY_FOR_INVITATION`: prerequisites
 only, with **no invitation, redemption or first use performed**. On a fresh
@@ -336,12 +348,15 @@ listeners running at their original addresses throughout the rehearsal.
 3. POST Alice's `/owner/pw/first-use` with `{"version":2}`. Confirm
    `{"local_ready":true}` before messaging. A timeout or failed response is
    not confirmed setup; do not silently retry first use.
-4. Open both configured Flutter windows and activate the conversations above.
+4. GET each node's `/owner/pw/message/inbox?version=2`; both must return
+   exactly `{"present":false}`. These authenticate local history without
+   promising current permission or reachability.
+5. Open both configured Flutter windows and activate the conversations above.
 
 The existing `Live pairing` redemption/first-use controls below remain v1;
 they do not perform this v2 staging. Launching Flutter never performs setup.
 Stage promptly: the ad and invitation have separate 15-minute TTLs. This
-increment does not automate the Python harness or change the protocol.
+preparation does not send a message or change the protocol.
 The bound is one immutable outgoing and one immutable incoming message per
 node. Transport is trusted same-machine loopback **plaintext**, with no E2EE,
 Tor or production-security claim. The graph, trust and readiness remain

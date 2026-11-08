@@ -1,4 +1,4 @@
-"""Socket-free unit tests; PW_DEMO_LIVE=1 enables the separate live smoke."""
+"""Socket-free tests; PW_DEMO_LIVE / PW_DEMO_CHAT_LIVE opt into live smokes."""
 
 import contextlib
 import io
@@ -22,6 +22,13 @@ def public(byte):
 
 KEYS = {name: public(byte) for name, byte in
         zip(demo.NAMES, ("11", "22", "33"))}
+CHAT_OPERATIONS = [
+    ("bob", "POST", "/owner/pw/invitations/issue", "bob-invitation"),
+    ("alice", "POST", "/owner/pw/invitations/redeem", "alice-v2-acceptance"),
+    ("alice", "POST", "/owner/pw/first-use", "alice-v2-first-use"),
+    ("alice", "GET", "/owner/pw/message/inbox?version=2", "alice-v2-inbox"),
+    ("bob", "GET", "/owner/pw/message/inbox?version=2", "bob-v2-inbox"),
+]
 
 
 def record(run, label, pid=12345):
@@ -327,7 +334,8 @@ class ProcessTests(PrivateTest):
                 raise BrokenPipeError
             real_print(*args, **kwargs)
 
-        def setup(run):
+        def setup(run, chat_ready=False):
+            self.assertFalse(chat_ready)
             demo.create_file(run.path / "bin/tdc", b"fake")
             (run.path / "bin/tdc").chmod(0o700)
             run.manifest["nodes"]["root"] = {"public_key_hex": KEYS["root"]}
@@ -372,12 +380,25 @@ class HTTPTests(PrivateTest):
                 self.assertEqual(constructor.call_args.args, ("127.0.0.1", port))
                 self.assertEqual(connection.request.call_args.kwargs["headers"]["Authorization"],
                                  "Bearer " + token * 64)
-                for route in ("/peer/ad", "/owner/pw/invitations/issue",
-                              "/owner/pw/invitations/redeem", "/owner/pw/first-use",
+                for method, route in sorted(demo.ROUTES):
+                    owner.json(method, route)
+                    self.assertEqual(constructor.call_args.args,
+                                     ("127.0.0.1", port))
+                    self.assertEqual(
+                        connection.request.call_args.kwargs["headers"]["Authorization"],
+                        "Bearer " + token * 64)
+                for route in ("/peer/ad", "/owner/pw/invitations/revoke",
+                              "/owner/pw/message/send", "/owner/pw/message/inbox?version=2",
+                              "/owner/pw/first-use?version=2",
                               "/owner/policy/deny", "/owner/pw/holding/delete",
                               "http://127.0.0.1:10003/owner/status"):
                     with self.assertRaises(demo.DemoError):
                         owner.json("POST", route, {})
+                for route in ("/owner/pw/message/inbox",
+                              "/owner/pw/message/inbox?version=1",
+                              "/owner/pw/message/inbox?version=2&extra=1"):
+                    with self.assertRaises(demo.DemoError):
+                        owner.json("GET", route)
             response.status = 302
             before = connection.request.call_count
             with self.assertRaises(demo.DemoError):
@@ -487,6 +508,17 @@ class FakeOwner:
             if body != {"subject_public_key_hex": KEYS["bob"]}:
                 raise AssertionError("must verify Bob's actual subject")
             result = {"subject_public_key_hex": KEYS["bob"], "verified": True, "changed": True}
+        elif path == "/owner/pw/invitations/issue":
+            result = {"invitation_id_hex": h.invitation_id,
+                      "audience": "Directed",
+                      "recipient_public_key_hex": KEYS["alice"],
+                      "expires_unix_nano": demo.time.time_ns() + demo.TTL_NS}
+        elif path == "/owner/pw/invitations/redeem":
+            result = {"acceptance_saved": True, "local_held": True}
+        elif path == "/owner/pw/first-use":
+            result = {"local_ready": True}
+        elif path == "/owner/pw/message/inbox?version=2":
+            result = {"present": False}
         else:
             raise AssertionError("unexpected route")
         if h.mutate:
@@ -499,6 +531,7 @@ class FakeHarness(demo.Harness):
         super().__init__(run)
         self.calls = []
         self.mutate = mutate
+        self.invitation_id = "cd" * 32
 
     def command(self, label, args, timeout=30):
         self.calls.append((label, args))
@@ -534,13 +567,14 @@ class FakeHarness(demo.Harness):
 
 
 class SequenceTests(PrivateTest):
-    def execute(self, mutate=None):
+    def execute(self, mutate=None, chat_ready=False):
         harness = FakeHarness(self.run, mutate)
+        self.harness = harness
         with mock.patch.object(demo, "process_state", return_value="running"), \
                 mock.patch.object(demo, "Harness", return_value=harness), \
                 mock.patch.object(demo, "stop_process", return_value="stopped"), \
                 mock.patch.object(demo.time, "time_ns", return_value=1_800_000_000_000_000_000):
-            demo.up(self.run)
+            demo.up(self.run, chat_ready=chat_ready)
         return harness
 
     def test_config_pair_exact_independent_private_and_down_retention(self):
@@ -769,6 +803,308 @@ class SequenceTests(PrivateTest):
         self.assertEqual([r["stage"] for r in self.run.manifest["receipts"]], demo.RECEIPT_ORDER)
         self.assertFalse((self.run.path / "root/state").exists())
 
+    def test_chat_ready_exact_order_and_atomic_config_publication(self):
+        legacy = self.execute()
+        legacy_http = [c for c in legacy.calls if len(c) == 4]
+        self.run = self.base.allocate()
+        publish = demo.write_configs
+
+        def checked_publish(run):
+            self.assertEqual(run.manifest["state"], "ready")
+            self.assertEqual(run.manifest["stage"], "ready-for-chat")
+            self.assertEqual([r["stage"] for r in run.manifest["receipts"]],
+                             demo.RECEIPT_ORDER + [c[3] for c in CHAT_OPERATIONS])
+            self.assertFalse((run.path / "config").exists())
+            publish(run)
+
+        with mock.patch.object(demo, "write_configs", side_effect=checked_publish):
+            h = self.execute(chat_ready=True)
+        calls = [c for c in h.calls if len(c) == 4]
+        self.assertEqual(calls[:len(legacy_http)], legacy_http)
+        self.assertEqual(calls[len(legacy_http):], [
+            ("bob", "POST", "/owner/pw/invitations/issue",
+             {"recipient_public_key_hex": KEYS["alice"]}),
+            ("alice", "POST", "/owner/pw/invitations/redeem",
+             {"version": 2, "target_public_key_hex": KEYS["bob"],
+              "invitation_id_hex": h.invitation_id, "audience": "Directed"}),
+            ("alice", "POST", "/owner/pw/first-use", {"version": 2}),
+            ("alice", "GET", "/owner/pw/message/inbox?version=2", None),
+            ("bob", "GET", "/owner/pw/message/inbox?version=2", None),
+        ])
+        run = self.base.select()
+        self.assertTrue(demo.validate_configs(run))
+        for name in demo.CONFIG_NAMES:
+            self.assertEqual(demo.decode_json(demo.read_private(
+                run.path / "config" / (name + ".json"))),
+                demo.config_snapshot(run, name))
+        for path in (run.path / "manifest.json", *(run.path / "config").iterdir()):
+            data = path.read_text()
+            for secret in (h.invitation_id, "invitation_id_hex", "Bearer",
+                           "a" * 64, "b" * 64, "YQ==", "Yg=="):
+                self.assertNotIn(secret, data)
+
+    def test_chat_uses_exact_validated_cose_bytes_and_issued_id(self):
+        # The signer's short-coordinate encoding must not be padded or replaced.
+        keys = {"alice": "a50102032620012141ff2241ee",
+                "bob": "a50102032620012141dd2241cc"}
+        issued = "ef" * 32
+
+        def mutate(name, path, result):
+            if path == "/owner/pw/invitations/issue":
+                result["invitation_id_hex"] = issued
+            return result
+
+        with mock.patch.dict(KEYS, keys):
+            h = self.execute(mutate, chat_ready=True)
+        calls = [c for c in h.calls if len(c) == 4][-5:]
+        self.assertEqual(calls[0][3], {"recipient_public_key_hex": keys["alice"]})
+        self.assertEqual(calls[1][3], {
+            "version": 2, "target_public_key_hex": keys["bob"],
+            "invitation_id_hex": issued, "audience": "Directed"})
+
+    def test_chat_revalidates_manifest_before_issuing(self):
+        prepare = FakeHarness.prepare_chat
+
+        def tampered(harness):
+            node = self.run.manifest["nodes"]["bob"]
+            node["public_key_hex"] = KEYS["alice"]
+            self.run.save()
+            prepare(harness)
+
+        with mock.patch.object(FakeHarness, "prepare_chat", tampered):
+            with self.assertRaises(demo.DemoError):
+                self.execute(chat_ready=True)
+        self.assertFalse(any("/owner/pw/" in c[2] for c in self.harness.calls
+                             if len(c) == 4))
+        self.assertFalse((self.run.path / "config").exists())
+
+    def test_invalid_chat_receipts_stop_without_config_or_retry(self):
+        now = 1_800_000_000_000_000_000
+        cases = [(0, "invitation_id_hex", value) for value in
+                 (None, True, 123, "", "cd" * 31, "cd" * 33,
+                  "CD" * 32, "gg" * 32, "cd" * 32 + "\n")]
+        cases += [(0, "recipient_public_key_hex", value) for value in
+                  (None, KEYS["bob"], KEYS["alice"].upper())]
+        cases += [(0, "audience", value) for value in ("Any", "directed", None)]
+        cases += [(0, "expires_unix_nano", value) for value in
+                  (True, 0, -1, now - 1, now, float(now + demo.TTL_NS),
+                   str(now + demo.TTL_NS), 2 ** 63)]
+        cases += [(1, field, value) for field in ("acceptance_saved", "local_held")
+                  for value in (False, 1, "true", None)]
+        cases += [(2, "local_ready", value) for value in (False, 1, "true", None)]
+        cases += [(i, "present", value) for i in (3, 4)
+                  for value in (True, 0, "false", None)]
+        cases += [(i, "extra", "signed-private-data") for i in range(5)]
+        cases += [(i, None, None) for i in range(5)]
+        for index, field, value in cases:
+            with self.subTest(index=index, field=field, value=value):
+                self.run = self.base.allocate()
+                target, _, route, stage = CHAT_OPERATIONS[index]
+
+                def mutate(name, path, result):
+                    self.assertFalse((self.run.path / "config").exists())
+                    if (name, path) == (target, route):
+                        if field is None:
+                            return {}  # All required response fields missing.
+                        result[field] = value
+                    return result
+
+                with self.assertRaises(demo.DemoError):
+                    self.execute(mutate, chat_ready=True)
+                run = self.base.select()
+                self.assertEqual(run.manifest["stage"], stage)
+                self.assertEqual(run.manifest["state"], "failed")
+                self.assertEqual(len(run.manifest["receipts"]),
+                                 len(demo.RECEIPT_ORDER) + index)
+                calls = [c[:3] for c in self.harness.calls
+                         if len(c) == 4 and c[2].startswith("/owner/pw/")]
+                self.assertEqual(calls, [c[:3] for c in CHAT_OPERATIONS[:index + 1]])
+                self.assertFalse((run.path / "config").exists())
+
+    def test_chat_http_loss_failure_interrupt_never_retries_or_leaks(self):
+        secret = "Bearer " + "a" * 64 + " signed-private-data plaintext-private"
+        failures = (OSError(secret), demo.http.client.RemoteDisconnected(secret),
+                    TimeoutError(secret), demo.DemoError("unexpected-http-status"),
+                    KeyboardInterrupt(), {"unexpected": secret})
+        previous = signal.getsignal(signal.SIGTERM)
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        for index, (target, _, route, stage) in enumerate(CHAT_OPERATIONS):
+            for failure in failures:
+                with self.subTest(stage=stage, failure=type(failure).__name__):
+                    path = self.parent / ("failure-" + demo.uuid.uuid4().hex)
+                    harnesses = []
+
+                    def mutate(name, operation, result):
+                        if (name, operation) == (target, route):
+                            if type(failure) is dict:
+                                return failure
+                            raise failure  # May follow a committed effect.
+                        return result
+
+                    def harness(run):
+                        h = FakeHarness(run, mutate)
+                        harnesses.append(h)
+                        return h
+
+                    output, error = io.StringIO(), io.StringIO()
+                    with mock.patch.object(demo, "Harness", side_effect=harness), \
+                            mock.patch.object(demo, "process_state", return_value="running"), \
+                            mock.patch.object(demo, "stop_process", return_value="stopped") as stop, \
+                            contextlib.redirect_stdout(output), \
+                            contextlib.redirect_stderr(error):
+                        code = demo.main(["up", "--chat-ready", "--base-dir", str(path)])
+                    self.assertEqual(code, 1)
+                    self.assertEqual(stop.call_count, 4)
+                    h = harnesses[0]
+                    calls = [c[:3] for c in h.calls
+                             if len(c) == 4 and c[2].startswith("/owner/pw/")]
+                    self.assertEqual(calls, [c[:3] for c in CHAT_OPERATIONS[:index + 1]])
+                    with contextlib.closing(demo.Base(path)) as base:
+                        run = base.select()
+                        self.assertEqual(run.manifest["state"], "failed")
+                        self.assertEqual(run.manifest["stage"], stage)
+                        self.assertFalse((run.path / "config").exists())
+                    console = output.getvalue() + error.getvalue()
+                    self.assertIn("FAILED stage=" + stage, console)
+                    for value in ("READY_FOR", "Bearer", "a" * 64,
+                                  "signed-private-data", "plaintext-private", h.invitation_id):
+                        self.assertNotIn(value, console)
+
+    def test_chat_manifest_validates_pending_committed_and_final_states(self):
+        self.execute(chat_ready=True)
+        original = json.loads(json.dumps(self.run.manifest))
+        for index, stage in enumerate(demo.CHAT_STAGES, len(demo.RECEIPT_ORDER)):
+            for count in (index, index + 1):
+                for state in ("partial", "failed", "down"):
+                    with self.subTest(stage=stage, count=count, state=state):
+                        self.run.manifest = dict(original, stage=stage, state=state,
+                                                 receipts=original["receipts"][:count])
+                        self.run.save()
+                        self.base.select()
+        for state in ("ready", "failed", "down"):
+            for stage, count in (("ready-for-invitation", len(demo.RECEIPT_ORDER)),
+                                 ("ready-for-chat", len(demo.CHAT_RECEIPT_ORDER))):
+                self.run.manifest = dict(original, stage=stage, state=state,
+                                         receipts=original["receipts"][:count])
+                self.run.save()
+                self.base.select()
+        # Expired historical receipts remain readable, without a new HTTP check.
+        with mock.patch.object(demo.time, "time_ns", return_value=2 ** 63 - 1):
+            self.base.select()
+
+    def test_chat_manifest_rejects_inconsistent_or_secret_receipts(self):
+        self.execute(chat_ready=True)
+        original = json.dumps(self.run.manifest)
+        for change in ("missing", "order", "duplicate", "old-final", "ready-intermediate",
+                       "partial-final", "early-stage", "late-stage", "unknown-stage",
+                       "id", "signed", "token", "bool", "recipient", "expiry"):
+            with self.subTest(change=change):
+                m = json.loads(original)
+                receipts = m["receipts"]
+                if change == "missing":
+                    receipts.pop()
+                elif change == "order":
+                    receipts[-1], receipts[-2] = receipts[-2], receipts[-1]
+                elif change == "duplicate":
+                    receipts.append(receipts[-1])
+                elif change == "old-final":
+                    m["stage"] = "ready-for-invitation"
+                elif change == "ready-intermediate":
+                    m["stage"] = "bob-v2-inbox"
+                elif change == "partial-final":
+                    m["state"] = "partial"
+                elif change == "early-stage":
+                    m.update(state="failed", stage="bob-invitation")
+                elif change == "late-stage":
+                    m.update(state="down", stage="bob-v2-inbox",
+                             receipts=receipts[:len(demo.RECEIPT_ORDER)])
+                elif change == "unknown-stage":
+                    m.update(state="failed", stage="unknown")
+                else:
+                    result = receipts[len(demo.RECEIPT_ORDER)]["result"]
+                    field, value = {
+                        "id": ("invitation_id_hex", self.harness.invitation_id),
+                        "signed": ("signed", "signed-private-data"),
+                        "token": ("token", "a" * 64),
+                        "bool": ("issued", 1),
+                        "recipient": ("recipient_public_key_hex", KEYS["bob"]),
+                        "expiry": ("expires_unix_nano", True),
+                    }[change]
+                    result[field] = value
+                self.run.manifest = m
+                self.run.save()
+                with self.assertRaises(demo.DemoError):
+                    self.base.select()
+
+    def test_chat_status_read_only_down_retains_and_destroy_selects(self):
+        self.execute(chat_ready=True)
+        files = {p: p.read_bytes() for p in self.run.path.rglob("*") if p.is_file()}
+        output = io.StringIO()
+        with mock.patch.object(demo, "Owner", side_effect=AssertionError("no HTTP")), \
+                mock.patch.object(demo, "process_state", return_value="stopped"), \
+                contextlib.redirect_stdout(output):
+            demo.status(self.base.select())
+        self.assertEqual(files, {p: p.read_bytes() for p in files})
+        self.assertIn("ready-for-chat", output.getvalue())
+        self.assertIn("historical", output.getvalue())
+        self.assertNotIn(self.harness.invitation_id, output.getvalue())
+        with mock.patch.object(demo, "stop_process", return_value="stopped"):
+            for _ in range(2):
+                demo.down(self.base.select())
+            self.assertTrue(demo.validate_configs(self.base.select()))
+            other = self.base.allocate()
+            demo.destroy(self.run, self.run.path.name)
+        self.assertFalse(self.run.path.exists())
+        self.assertTrue(other.path.exists())
+
+    def test_chat_cli_prints_only_committed_checkpoint_and_cleans_output_failure(self):
+        previous = signal.getsignal(signal.SIGTERM)
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        real_print = print
+        for fail_output in (False, True):
+            path = self.parent / ("console-" + str(fail_output))
+            harnesses = []
+
+            def harness(run):
+                h = FakeHarness(run)
+                harnesses.append(h)
+                return h
+
+            def checkpoint(*args, **kwargs):
+                if args and args[0] == "READY_FOR_CHAT":
+                    run = harnesses[0].run
+                    recorded = run.base.select()
+                    self.assertEqual(recorded.manifest["stage"], "ready-for-chat")
+                    self.assertTrue(demo.validate_configs(recorded))
+                    if fail_output:
+                        raise BrokenPipeError("signed-private-data")
+                real_print(*args, **kwargs)
+
+            output, error = io.StringIO(), io.StringIO()
+            with mock.patch.object(demo, "Harness", side_effect=harness), \
+                    mock.patch.object(demo, "process_state", return_value="running"), \
+                    mock.patch.object(demo, "stop_process", return_value="stopped") as stop, \
+                    mock.patch("builtins.print", side_effect=checkpoint), \
+                    contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                code = demo.main(["up", "--chat-ready", "--base-dir", str(path)])
+            self.assertEqual(code, int(fail_output))
+            self.assertEqual(stop.call_count, 4 if fail_output else 0)
+            with contextlib.closing(demo.Base(path)) as base:
+                run = base.select()
+                self.assertEqual(run.manifest["state"], "failed" if fail_output else "ready")
+                self.assertEqual((run.path / "config").exists(), not fail_output)
+                if not fail_output:
+                    self.assertIn("READY_FOR_CHAT\n", output.getvalue())
+                    for name in demo.CONFIG_NAMES:
+                        self.assertIn(name.title() + " Flutter config: " +
+                                      str(run.path / "config" / (name + ".json")),
+                                      output.getvalue())
+            console = output.getvalue() + error.getvalue()
+            for value in ("READY_FOR_INVITATION", "No invitation issued", "Bearer",
+                          "a" * 64, "b" * 64, "signed-private-data",
+                          harnesses[0].invitation_id, "YQ==", "Yg=="):
+                self.assertNotIn(value, console)
+
     def test_bad_known_stops_before_bootstrap(self):
         def mutate(name, path, result):
             if path == "/owner/introductions/verify":
@@ -897,6 +1233,68 @@ class LiveSmoke(unittest.TestCase):
                 self.assertEqual(demo.process_state(process), "stopped")
         finally:
             base.close()
+
+
+@unittest.skipUnless(os.environ.get("PW_DEMO_CHAT_LIVE") == "1",
+                     "NOT RUN: opt in with PW_DEMO_CHAT_LIVE=1")
+class ChatReadyLiveSmoke(unittest.TestCase):
+    def test_current_checkout_chat_ready_histories_configs_down(self):
+        try:
+            with socket.socket() as listener:
+                listener.bind(("127.0.0.1", 0))
+        except PermissionError:
+            self.skipTest("NOT RUN / BLOCKED BY SANDBOX: loopback binding denied")
+        parent = Path(tempfile.mkdtemp(prefix="ic-pw-demo-chat-smoke-"))
+        base_path = parent / "runs"
+        command = [sys.executable, "-B", str(demo.REPO / "scripts/pw_demo.py")]
+        print("\nChat-ready smoke retained evidence parent:", parent, flush=True)
+        try:
+            up = subprocess.run(
+                [*command, "up", "--chat-ready", "--base-dir", str(base_path)],
+                capture_output=True, timeout=240)
+            demo.create_file(parent / "up.stdout", up.stdout)
+            demo.create_file(parent / "up.stderr", up.stderr)
+            self.assertEqual(up.returncode, 0, "up failed; inspect private evidence")
+            self.assertTrue(b"READY_FOR_CHAT\n" in up.stdout,
+                            "missing chat checkpoint; inspect private evidence")
+            with contextlib.closing(demo.Base(base_path)) as base:
+                run = base.select()
+                self.assertEqual(run.manifest["stage"], "ready-for-chat")
+                self.assertEqual(run.manifest["state"], "ready")
+                self.assertEqual([r["stage"] for r in run.manifest["receipts"]],
+                                 demo.RECEIPT_ORDER + [c[3] for c in CHAT_OPERATIONS])
+                self.assertTrue(demo.validate_configs(run))
+                for name in demo.CONFIG_NAMES:
+                    self.assertEqual(demo.process_state(run.manifest["processes"][name]),
+                                     "running")
+                    self.assertTrue((name.title() + " Flutter config: " + str(
+                        run.path / "config" / (name + ".json"))).encode() in up.stdout)
+                    try:
+                        owner = demo.Owner(run, name)
+                        demo.same(owner.json("GET", "/owner/status"),
+                                  {"choice": "completed"})
+                        demo.same(owner.json("GET", "/owner/pw/message/inbox?version=2"),
+                                  {"present": False})
+                    except Exception:
+                        raise AssertionError(
+                            "owner historical check failed; inspect private evidence"
+                        ) from None
+                print("Real nodes: Directed issue; v2 acceptance; v2 first use; "
+                      "Alice and Bob historical v2 inboxes empty; config pair validated; "
+                      "both processes running; no message sent.", flush=True)
+        finally:
+            stopped = subprocess.run([*command, "down", "--base-dir", str(base_path)],
+                                     capture_output=True, timeout=45)
+            demo.create_file(parent / "down.stdout", stopped.stdout)
+            demo.create_file(parent / "down.stderr", stopped.stderr)
+            self.assertEqual(stopped.returncode, 0, "down failed; inspect private evidence")
+        with contextlib.closing(demo.Base(base_path)) as base:
+            run = base.select()
+            self.assertEqual(run.manifest["state"], "down")
+            self.assertTrue(demo.validate_configs(run))
+            for process in run.manifest["processes"].values():
+                self.assertEqual(demo.process_state(process), "stopped")
+        print("Real nodes stopped; historical evidence and both configs retained.", flush=True)
 
 
 if __name__ == "__main__":

@@ -33,9 +33,69 @@ independently of the latest pointer; it does not accept a deletion path.
 
 ## Presenter workflow
 
-Wait for `READY_FOR_INVITATION`. Setup uses two successive in-memory Root
-offers, restarting the same saved Root between Alice and Bob, then stops Root.
-It starts each operational node with `--v=1`, separate owner/peer loopback
+Terminal 1, from the Go checkout:
+
+~~~sh
+python3 scripts/pw_demo.py up --chat-ready
+~~~
+
+Confirm `READY_FOR_CHAT`. The controller prints the two actual absolute paths
+(shown here with placeholders):
+
+~~~text
+READY_FOR_CHAT
+Alice Flutter config: /absolute/RUN/config/alice.json
+Bob Flutter config: /absolute/RUN/config/bob.json
+~~~
+
+Alice and Bob's Go nodes remain running after the command returns.
+Use the actual printed paths in the following commands.
+
+Terminal 2, from `apps/node_ui`, with cached dependencies on ARM64 Linux:
+
+~~~sh
+flutter build linux --debug --no-pub
+./build/linux/arm64/debug/bundle/ic_node_ui \
+    --config /absolute/RUN/config/alice.json
+~~~
+
+Terminal 3, also from `apps/node_ui`:
+
+~~~sh
+./build/linux/arm64/debug/bundle/ic_node_ui \
+    --config /absolute/RUN/config/bob.json
+~~~
+
+Use `build/linux/x64/debug/bundle/ic_node_ui` on x64 Linux. These are bundle
+executable arguments; the controller does not launch Flutter or manage tmux.
+
+1. In each window, open `Wallet demo`.
+2. Select the configured counterpart (Bob in Alice's window, Alice in Bob's).
+3. Click `Open live conversation` in each window.
+4. Send Alice's one message.
+5. Observe it in Bob's window.
+6. Send Bob's one reply.
+7. Observe it in Alice's window.
+
+The graph is illustrative; these messages use real authenticated Go state.
+The bound remains one outgoing and one incoming message per node. Transport
+is trusted same-machine loopback plaintext. This demonstration provides no
+Tor, E2EE, anonymity, shared `PWOpen`, Trust or production transport security.
+Keep both nodes at their original listener addresses throughout the trial.
+
+After the demonstration, from the Go checkout:
+
+~~~sh
+python3 scripts/pw_demo.py down
+~~~
+
+## Setup checkpoints
+
+Plain `python3 scripts/pw_demo.py up` still stops at `READY_FOR_INVITATION`,
+with no invitation, redemption or first use. Both modes use the same initial
+setup. The controller uses two successive in-memory Root offers, restarting
+the same saved Root between Alice and Bob, then stops Root. It starts each
+operational node with `--v=1`, separate owner/peer loopback
 ports, and separate stdout/stderr files. The CLI's generic `Alice` onboarding
 label is not an identity. Saved accept currently has a legacy key formatter;
 the harness checks each saved child's actual `node info` key afterward and
@@ -49,34 +109,36 @@ verifies the ad for Bob's actual public key. Fetch alone is never Known or
 VerifiedAd. The harness records validated owner receipts in `manifest.json`;
 it does not inspect or modify encrypted Vault records.
 
+Only `up --chat-ready` then performs, once and in order:
+
+| Recorded stage | Authenticated owner operation and observed result |
+| --- | --- |
+| `bob-invitation` | Bob issues a Directed invitation for Alice's validated full COSE key |
+| `alice-v2-acceptance` | Alice redeems with `version:2`, Bob's validated key and that exact issued ID; `acceptance_saved:true, local_held:true` |
+| `alice-v2-first-use` | Alice requests `{"version":2}` first use; `local_ready:true` |
+| `alice-v2-inbox` | Alice reads `/owner/pw/message/inbox?version=2`; exactly `{"present":false}` |
+| `bob-v2-inbox` | Bob independently reads that same owner route; exactly `{"present":false}` |
+
+Go owns signed establishment, immutable service-contact binding and each
+node's independent Vault commits. Alice's Ready is her local historical
+observation; Bob retains his own signed first-use receipt. The inbox reads
+authenticate each node's accepted v2 history and first-use evidence. They do
+not show current remote availability or permission. Setup sends no message.
+
+Only after all five steps does the controller commit `ready-for-chat`.
+The manifest keeps bounded non-secret receipts, never the invitation ID,
+signed messages or bearer tokens. The issued ID exists only in transient setup
+memory. `status` reports recorded history without HTTP or state changes.
+
 After successful setup, `up` publishes `RUN/config/alice.json` and
 `RUN/config/bob.json` together by an atomic directory rename. Both snapshots
 come only from the already checked manifest and startup output; generating
 them makes no additional HTTP, Vault, signing or device calls. `config` is
 0700 and both files are 0600. A failed or interrupted `up`, including failure
 while printing success, removes its new snapshots. Old runs are never rewritten.
-
-`up` and read-only `status` print both absolute config paths. Launch the
-bundled Flutter executable in two separate processes, using the appropriate
-path in each. From `apps/node_ui`, with cached offline dependencies on ARM64:
-
-~~~sh
-flutter build linux --debug --no-pub
-./build/linux/arm64/debug/bundle/ic_node_ui --config /absolute/RUN/config/alice.json
-~~~
-
-In a second terminal in the same package directory:
-
-~~~sh
-./build/linux/arm64/debug/bundle/ic_node_ui --config /absolute/RUN/config/bob.json
-~~~
-
-Use `build/linux/x64/debug/bundle/ic_node_ui` for an x64 build. These are
-executable arguments, not a `flutter run` forwarding form. The existing Linux
-runner forwards them to Dart and allows independent windows. The harness
-does not launch Flutter or change process supervision. See the
-[actual native launch check](../apps/node_ui/README.md#ui-02-verification)
-for the paths used during this increment.
+For chat-ready mode, both historical checks precede publication and
+`READY_FOR_CHAT` is printed only after publication succeeds. `up` and read-only
+`status` print both absolute config paths.
 
 Each file has exactly these five fields (Bob uses his own checked values):
 
@@ -90,30 +152,31 @@ Each file has exactly these five fields (Bob uses his own checked values):
 }
 ~~~
 
-Snapshots contain no bearer token, unlock/storage key, invitation ID or signed
-bytes. Paths themselves are not credentials. Flutter prefills `My node` and
+`version:1` is the Flutter launch-config format, not the pairwise protocol
+version. Snapshots contain no bearer token, unlock/storage key, invitation ID
+or signed bytes. Paths themselves are not credentials. Flutter prefills `My node` and
 displays the selectable role and full key with **Configuration supplied by demo
 harness; not independently authenticated by Flutter.** Editing either owner
 field hides that identity association. Startup sends no owner requests and
 does not read the credential. Launch snapshots are not proof of current
-identity, availability, invitation state or credential validity. The fictional
-wallet switcher, graph and chat remain separate fixtures.
+identity, availability, invitation state or credential validity. The graph and
+sample chat remain fixtures; explicit live conversation activation uses Go.
 
 Bob is the invitation **issuer/acceptor**; Alice is the **requester**.
-Use Bob's existing UI to issue an invitation, transfer it through the existing
-UI, redeem it as Alice, then explicitly perform authenticated first use as
-Alice. These remain operator-controlled actions. The script never calls
-invitation issue/redeem/revoke, first use, Deny or Delete, and adds no messaging.
-Bob's invitation slot is still unused when setup finishes.
+With plain `up`, Bob's invitation slot is unused when setup finishes. The
+existing `Live pairing` UI can still issue, redeem and perform first use
+manually using v1. Use `up --chat-ready` for the v2 conversation above; the
+legacy v1 controls do not prepare v2 history. The controller never calls
+invitation revoke, Deny, Delete or message send.
 
-The ad and eventual invitation have **distinct 15-minute TTLs**. Issue/redeem
-shortly after setup. READY is a checkpoint at setup time, not a permanent
-promise. There is no refresh loop, republish or invitation renewal. Use a new
+The ad and invitation have **distinct 15-minute TTLs**. For manual setup,
+issue/redeem shortly afterward. READY is a checkpoint at setup time, not a
+permanent promise. There is no refresh loop, republish or invitation renewal. Use a new
 disposable run for another trial. Historical verification and signer-probe
 receipts do not prove ongoing reachability, authorization or current readiness.
 This harness adds no cryptographic authority, shared PW, `PWOpen` or Trust.
 
-Example output, abbreviated with placeholders for per-run values (the actual
+Plain `up` output, abbreviated with placeholders for per-run values (the actual
 command prints all three full keys, all receipts and both diagnostic paths):
 
 ~~~text
@@ -172,6 +235,8 @@ or process group is signaled.
 
 Setup polls startup output and authenticated status with deadlines, detects
 early process exits, and never retries a mutation after a lost reply. A failed
+or lost mutating response can follow a committed effect; its outcome remains
+unresolved, with no rollback inferred. Create a fresh disposable run. A failed
 or interrupted `up` reports its named stage and private diagnostic path, stops
 its own children and retains the partial run. Only failure cleanup may escalate
 from SIGINT to SIGTERM/SIGKILL for the same verified child, with bounded waits.
@@ -214,13 +279,20 @@ statuses and saved Known/device/ad receipts, then runs `down`):
 PW_DEMO_LIVE=1 python3 -B -m unittest discover -s scripts -p 'test_pw_demo.py' -k LiveSmoke -v
 ~~~
 
-The live test leaves its evidence on success and failure and prints its parent
-path. It never issues an invitation. A denied loopback permission probe reports
+That existing smoke remains invitation-free. The separate chat-ready smoke
+builds the actual Go binary, runs `up --chat-ready`, checks the recorded stages,
+both running nodes' authenticated v2 empty inboxes and the config pair, then
+runs `down` and verifies process shutdown and retained configs:
+
+~~~sh
+PW_DEMO_CHAT_LIVE=1 python3 -B -m unittest discover -s scripts -p 'test_pw_demo.py' -k ChatReadyLiveSmoke -v
+~~~
+
+Both live tests retain evidence on success and failure and print their private
+`/tmp` parent paths. A denied loopback permission probe reports
 `NOT RUN / BLOCKED BY SANDBOX`; it never changes permissions or counts a skip
 as a pass. Child execution and build failures remain failures, with private
-logs. A live pass covers real CLI processes, sockets and setup receipts, not
-Flutter invitation redemption or authenticated first use. Those manual UI
-steps remain the presenter trial.
-
-The next research increment is to **specify real text messaging**. The existing
-one-shot authenticated first-use exchange is not a chat transport.
+logs. Deterministic fake-controller tests do not establish real-node readiness.
+A chat-ready live pass covers real CLI/owner operations and historical checks;
+it sends no test message and does not perform the manual Flutter rehearsal.
+Report those three forms of validation separately.
