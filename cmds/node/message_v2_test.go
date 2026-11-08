@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -27,6 +28,61 @@ import (
 
 const nodeMessageSendPath = "/owner/pw/message/send"
 const nodeMessageInboxPathV2 = "/owner/pw/message/inbox?version=2"
+
+// Capture the real owner/peer paths with ordinary glog flags, as in the
+// ownerapi diagnostic tests. Exact event lists also reject extra fields and
+// successful inbox-read logs, including reads after Deny/Delete and restart.
+func TestServeMessageV2Diagnostics(t *testing.T) {
+	defer assert.PushTester(t)()
+	const prepare = "intro_pw op=message_send version=2 " +
+		"stage=prepare result=authorized"
+	const receipt = "intro_pw op=message_receive version=2 " +
+		"stage=receipt result=prepared"
+	const ack = "intro_pw op=message_send version=2 stage=ack result=observed"
+	const refused = "intro_pw op=message_send stage=prepare " +
+		"result=refused dispatch=not_started local_state=retained"
+	const unknown = "intro_pw op=message_send stage=exchange " +
+		"result=unknown dispatch=possible local_state=retained"
+	const unknownACK = "intro_pw op=message_send stage=ack " +
+		"result=unknown dispatch=possible local_state=retained"
+	for _, tc := range []struct {
+		name, run string
+		events    []string
+	}{
+		{"both_directions_and_retries", "TestServeMessageV2TwoNodeExchange$",
+			[]string{prepare, receipt, ack, prepare, receipt, ack, refused,
+				prepare, receipt, ack, prepare, receipt, ack, refused,
+				refused, refused}},
+		{"lost_reply", "TestServeMessageV2UnknownOutcomes$/^lost_reply$",
+			[]string{prepare, receipt, unknown, prepare, receipt, ack}},
+		{"invalid_receipt", "TestServeMessageV2UnknownOutcomes$/^wrong_signature$",
+			[]string{prepare, receipt, unknownACK}},
+		{"late_ack_and_refusals", "TestServeMessageV2LateACKAndPeerRejection$",
+			[]string{prepare, receipt, ack, refused}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			defer assert.PushTester(t)()
+			for _, verbosity := range []string{"0", "1"} {
+				cmd := exec.CommandContext(t.Context(), try.To1(os.Executable()),
+					"-test.run=^"+tc.run, "-test.count=1", "-test.timeout=30s",
+					"-v="+verbosity, "-logtostderr=true")
+				output, err := cmd.CombinedOutput()
+				assert.NoError(err, "message diagnostic subprocess failed")
+				var events []string
+				for line := range strings.SplitSeq(string(output), "\n") {
+					if i := strings.Index(line, "intro_pw op=message_"); i >= 0 {
+						events = append(events, line[i:])
+					}
+				}
+				if verbosity == "0" {
+					assert.SEmpty(events)
+				} else {
+					assert.DeepEqual(events, tc.events)
+				}
+			}
+		})
+	}
+}
 
 var nodeMessageRows = []string{
 	"local-pw-message-outgoing-v1", "local-pw-message-envelope-v1",

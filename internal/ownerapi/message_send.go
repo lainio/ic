@@ -62,6 +62,10 @@ func (h *firstUseHandler) serveMessageSend(w http.ResponseWriter,
 		writeStatusError(w, http.StatusConflict)
 		return
 	}
+	if input.version == 2 {
+		glog.V(1).Info("intro_pw op=message_send version=2 " +
+			"stage=prepare result=authorized")
+	}
 
 	// sent authorizes an attempt; it does not prove dispatch or peer admission.
 	// The preparation lock is released before HTTP, including on exact retry.
@@ -94,6 +98,10 @@ func (h *firstUseHandler) serveMessageSend(w http.ResponseWriter,
 			"result=unknown dispatch=possible local_state=retained")
 		writeStatusError(w, http.StatusBadGateway)
 		return
+	}
+	if input.version == 2 {
+		glog.V(1).Info("intro_pw op=message_send version=2 " +
+			"stage=ack result=observed")
 	}
 	// Observation has released the owner lock before any response write.
 	writeIntroductionResult(w, []byte(`{"local_acknowledgement_saved":true}`))

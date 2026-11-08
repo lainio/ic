@@ -1202,6 +1202,8 @@ def main(argv=None):
         if name == "up":
             command.add_argument("--chat-ready", action="store_true",
                                  help="prepare v2 invitation and first-use history")
+            command.add_argument("--json", action="store_true",
+                                 help="print successful run metadata as JSON")
         if name in ("status", "down"):
             command.add_argument("--run-id", help="default: most recently allocated run")
         if name == "destroy":
@@ -1218,9 +1220,18 @@ def main(argv=None):
             with defer_interrupts():
                 run = base.allocate()
             up(run, chat_ready=args.chat_ready)
-            print("OK", run.path.name,
-                  "READY_FOR_CHAT" if args.chat_ready else "READY_FOR_INVITATION",
-                  flush=True)
+            checkpoint = ("READY_FOR_CHAT" if args.chat_ready
+                          else "READY_FOR_INVITATION")
+            logs = {name: str(run.path / "logs" / (name + ".stderr"))
+                    for name in ("alice", "bob")}
+            if args.json:
+                result = json.dumps({"status": "ok", "run_id": run.path.name,
+                                     "checkpoint": checkpoint, "logs": logs})
+            else:
+                result = (f"OK {run.path.name} {checkpoint}\n"
+                          f"ALICE_LOG {logs['alice']}\n"
+                          f"BOB_LOG {logs['bob']}")
+            print(result, flush=True)
         elif args.command == "list":
             list_runs(base)
         elif args.command == "destroy":

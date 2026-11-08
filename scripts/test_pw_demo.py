@@ -330,7 +330,7 @@ class ProcessTests(PrivateTest):
         real_print = print
 
         def fail_ready(*args, **kwargs):
-            if args and args[0] == "OK":
+            if args and args[0].startswith("OK "):
                 raise BrokenPipeError
             real_print(*args, **kwargs)
 
@@ -799,7 +799,7 @@ class SequenceTests(PrivateTest):
         real_print = print
 
         def fail_ready(*args, **kwargs):
-            if args and args[0] == "OK":
+            if args and args[0].startswith("OK "):
                 raise BrokenPipeError
             real_print(*args, **kwargs)
 
@@ -982,7 +982,7 @@ class SequenceTests(PrivateTest):
         previous = signal.getsignal(signal.SIGTERM)
         self.addCleanup(signal.signal, signal.SIGTERM, previous)
         for index, (target, _, route, stage) in enumerate(CHAT_OPERATIONS):
-            for failure in failures:
+            for failure_index, failure in enumerate(failures):
                 with self.subTest(stage=stage, failure=type(failure).__name__):
                     path = self.parent / ("failure-" + demo.uuid.uuid4().hex)
                     harnesses = []
@@ -1005,7 +1005,10 @@ class SequenceTests(PrivateTest):
                             mock.patch.object(demo, "stop_process", return_value="stopped") as stop, \
                             contextlib.redirect_stdout(output), \
                             contextlib.redirect_stderr(error):
-                        code = demo.main(["up", "--chat-ready", "--base-dir", str(path)])
+                        args = ["up", "--chat-ready", "--base-dir", str(path)]
+                        if failure_index % 2:
+                            args.append("--json")
+                        code = demo.main(args)
                     self.assertEqual(code, 1)
                     self.assertEqual(stop.call_count, 4)
                     h = harnesses[0]
@@ -1121,14 +1124,20 @@ class SequenceTests(PrivateTest):
         self.assertFalse(self.run.path.exists())
         self.assertTrue(other.path.exists())
 
-    def test_up_cli_one_line_after_publication_and_cleans_output_failure(self):
+    def test_up_text_and_json_after_publication_and_output_failure(self):
         previous = signal.getsignal(signal.SIGTERM)
         self.addCleanup(signal.signal, signal.SIGTERM, previous)
         real_print = print
-        for chat_ready, fail_output in ((False, False), (True, False),
-                                        (False, True), (True, True)):
-            with self.subTest(chat_ready=chat_ready, fail_output=fail_output):
-                path = self.parent / f"console-{chat_ready}-{fail_output}"
+        setups = {}
+        for chat_ready, json_output, fail_output in (
+                (False, False, False), (True, False, False),
+                (False, True, False), (True, True, False),
+                (False, False, True), (True, False, True),
+                (False, True, True), (True, True, True)):
+            with self.subTest(chat_ready=chat_ready, json=json_output,
+                              fail_output=fail_output):
+                path = self.parent / (
+                    f"console-é-{chat_ready}-{json_output}-{fail_output}")
                 harnesses = []
                 checkpoint = ("READY_FOR_CHAT" if chat_ready
                               else "READY_FOR_INVITATION")
@@ -1139,7 +1148,7 @@ class SequenceTests(PrivateTest):
                     return h
 
                 def checked_print(*args, **kwargs):
-                    if args and args[0] == "OK":
+                    if kwargs.get("file", sys.stdout) is sys.stdout:
                         run = harnesses[0].run
                         recorded = run.base.select()
                         self.assertEqual(recorded.manifest["stage"],
@@ -1160,6 +1169,8 @@ class SequenceTests(PrivateTest):
                     args = ["up", "--base-dir", str(path)]
                     if chat_ready:
                         args.append("--chat-ready")
+                    if json_output:
+                        args.append("--json")
                     code = demo.main(args)
                 self.assertEqual(code, int(fail_output))
                 self.assertEqual(stop.call_count, 4 if fail_output else 0)
@@ -1173,17 +1184,89 @@ class SequenceTests(PrivateTest):
                         self.assertEqual(output.getvalue(), "")
                         self.assertIn("FAILED run=" + run.path.name, error.getvalue())
                     else:
-                        self.assertEqual(output.getvalue(),
-                                         f"OK {run.path.name} {checkpoint}\n")
+                        logs = {name: str(run.path / "logs" / (name + ".stderr"))
+                                for name in ("alice", "bob")}
+                        if json_output:
+                            raw = output.getvalue().encode("utf-8")
+                            self.assertTrue(raw.endswith(b"\n"))
+                            self.assertEqual(len(raw.splitlines()), 1)
+                            document = json.loads(raw.decode("utf-8"))
+                            self.assertEqual(document, {
+                                "status": "ok", "run_id": run.path.name,
+                                "checkpoint": checkpoint, "logs": logs})
+                            self.assertIs(type(document), dict)
+                            self.assertIs(type(document["logs"]), dict)
+                            for value in (document["status"], document["run_id"],
+                                          document["checkpoint"], *document["logs"].values()):
+                                self.assertIs(type(value), str)
+                        else:
+                            self.assertEqual(output.getvalue(),
+                                             f"OK {run.path.name} {checkpoint}\n"
+                                             f"ALICE_LOG {logs['alice']}\n"
+                                             f"BOB_LOG {logs['bob']}\n")
+                            self.assertEqual(len(output.getvalue().splitlines()), 3)
                         self.assertEqual(error.getvalue(), "")
+                        # Only the allocated directory differs between modes.
+                        calls = repr(harnesses[0].calls).replace(
+                            str(run.path), "RUN")
+                        if json_output:
+                            self.assertEqual(calls, setups[chat_ready])
+                        else:
+                            setups[chat_ready] = calls
                 console = output.getvalue() + error.getvalue()
                 for value in ("Flutter config:", "Historical receipt:", "Bearer",
                               "a" * 64, "b" * 64, "signed-private-data",
-                              harnesses[0].invitation_id, "YQ==", "Yg=="):
+                              harnesses[0].invitation_id, "YQ==", "Yg==",
+                              *KEYS.values(), "http://", "owner.header",
+                              ".unlock", ".storage-key"):
                     self.assertNotIn(value, console)
                 if fail_output:
                     self.assertNotIn("OK", console)
                     self.assertNotIn("READY_FOR", console)
+
+    def test_up_publication_and_console_flush_failures_cleanup(self):
+        class FailedFlush(io.StringIO):
+            def flush(self):
+                raise BrokenPipeError("private output diagnostic")
+
+        previous = signal.getsignal(signal.SIGTERM)
+        self.addCleanup(signal.signal, signal.SIGTERM, previous)
+        publish = demo.write_configs
+        for json_output, stage in ((True, "publication"),
+                                   (False, "flush"), (True, "flush")):
+            with self.subTest(json=json_output, stage=stage):
+                path = self.parent / f"output-{json_output}-{stage}"
+
+                def publication(run):
+                    publish(run)
+                    if stage == "publication":
+                        raise OSError("private publication diagnostic")
+
+                output = FailedFlush() if stage == "flush" else io.StringIO()
+                error = io.StringIO()
+                args = ["up", "--chat-ready", "--base-dir", str(path)]
+                if json_output:
+                    args.append("--json")
+                with mock.patch.object(demo, "Harness", FakeHarness), \
+                        mock.patch.object(demo, "process_state", return_value="running"), \
+                        mock.patch.object(demo, "stop_process", return_value="stopped") as stop, \
+                        mock.patch.object(demo, "write_configs", side_effect=publication), \
+                        contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                    self.assertEqual(demo.main(args), 1)
+                self.assertEqual(stop.call_count, 4)
+                with contextlib.closing(demo.Base(path)) as base:
+                    run = base.select()
+                    self.assertEqual(run.manifest["state"], "failed")
+                    self.assertFalse((run.path / "config").exists())
+                    self.assertIn("Private evidence: " + str(run.path), error.getvalue())
+                self.assertIn("reason=operation-failed", error.getvalue())
+                self.assertNotIn("private output diagnostic", error.getvalue())
+                self.assertNotIn("private publication diagnostic", error.getvalue())
+                if stage == "publication":
+                    self.assertEqual(output.getvalue(), "")
+                else:
+                    # A flush error can follow an unavoidable successful write.
+                    self.assertNotEqual(output.getvalue(), "")
 
     def test_bad_known_stops_before_bootstrap(self):
         def mutate(name, path, result):
@@ -1273,6 +1356,22 @@ class ListingTests(PrivateTest):
             self.assertEqual(self.invoke("list", "--base-dir", str(path)),
                              (0, "No runs exist.\n", ""))
         self.assertEqual({p.name for p in path.iterdir()}, {"base.json", "lock"})
+
+    def test_json_is_only_an_up_option(self):
+        for command in ("status", "list", "down", "destroy"):
+            with self.subTest(command=command):
+                args = [command, "--json"]
+                if command == "destroy":
+                    args += ["--confirm", self.run.path.name]
+                output, error = io.StringIO(), io.StringIO()
+                with mock.patch.object(demo, "Base") as base, \
+                        contextlib.redirect_stdout(output), contextlib.redirect_stderr(error):
+                    with self.assertRaises(SystemExit) as raised:
+                        demo.main(args)
+                self.assertEqual(raised.exception.code, 2)
+                base.assert_not_called()
+                self.assertEqual(output.getvalue(), "")
+                self.assertIn("unrecognized arguments: --json", error.getvalue())
 
     def test_list_preserves_base_ownership_and_lock_checks(self):
         unmarked = self.parent / "unmarked"
@@ -1382,9 +1481,10 @@ class ListingTests(PrivateTest):
         path = self.parent / "allocation-failure"
         with mock.patch.object(demo.Base, "allocate",
                                side_effect=OSError("Bearer private-response")):
-            self.assertEqual(self.invoke("up", "--base-dir", str(path)),
-                             (1, "", "FAILED stage=ownership-preflight "
-                              "reason=operation-failed\n"))
+            for options in ([], ["--json"]):
+                self.assertEqual(self.invoke("up", "--base-dir", str(path), *options),
+                                 (1, "", "FAILED stage=ownership-preflight "
+                                  "reason=operation-failed\n"))
 
 
 @unittest.skipUnless(os.environ.get("PW_DEMO_LIVE") == "1",
@@ -1417,7 +1517,9 @@ class LiveSmoke(unittest.TestCase):
                 self.assertEqual(run.manifest["state"], "ready")
                 self.assertTrue(demo.validate_configs(run))
                 self.assertEqual(up.stdout,
-                                 f"OK {run.path.name} READY_FOR_INVITATION\n".encode())
+                                 (f"OK {run.path.name} READY_FOR_INVITATION\n"
+                                  f"ALICE_LOG {run.path / 'logs/alice.stderr'}\n"
+                                  f"BOB_LOG {run.path / 'logs/bob.stderr'}\n").encode())
                 for name in ("alice", "bob"):
                     self.assertEqual(demo.Owner(run, name).json("GET", "/owner/status"),
                                      {"choice": "completed"})
@@ -1466,17 +1568,21 @@ class ChatReadyLiveSmoke(unittest.TestCase):
         print("\nChat-ready smoke retained evidence parent:", parent, flush=True)
         try:
             up = subprocess.run(
-                [*command, "up", "--chat-ready", "--base-dir", str(base_path)],
+                [*command, "up", "--chat-ready", "--json",
+                 "--base-dir", str(base_path)],
                 capture_output=True, timeout=240)
             demo.create_file(parent / "up.stdout", up.stdout)
             demo.create_file(parent / "up.stderr", up.stderr)
             self.assertEqual(up.returncode, 0, "up failed; inspect private evidence")
-            self.assertTrue(b"READY_FOR_CHAT\n" in up.stdout,
-                            "missing chat checkpoint; inspect private evidence")
+            self.assertEqual(len(up.stdout.splitlines()), 1)
+            self.assertTrue(up.stdout.endswith(b"\n"))
             with contextlib.closing(demo.Base(base_path)) as base:
                 run = base.select()
-                self.assertEqual(up.stdout,
-                                 f"OK {run.path.name} READY_FOR_CHAT\n".encode())
+                self.assertEqual(json.loads(up.stdout.decode("utf-8")), {
+                    "status": "ok", "run_id": run.path.name,
+                    "checkpoint": "READY_FOR_CHAT",
+                    "logs": {name: str(run.path / "logs" / (name + ".stderr"))
+                             for name in ("alice", "bob")}})
                 self.assertEqual(run.manifest["stage"], "ready-for-chat")
                 self.assertEqual(run.manifest["state"], "ready")
                 self.assertEqual([r["stage"] for r in run.manifest["receipts"]],

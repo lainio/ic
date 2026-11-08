@@ -20,6 +20,11 @@ func TestPWDiagnosticStages(t *testing.T) {
 	const establish = "intro_pw op=establish side=acceptor "
 	const use = "intro_pw op=first_use side=requester "
 	const receipt = "intro_pw op=first_use side=acceptor stage=receipt "
+	const messagePrepare = "intro_pw op=message_send version=2 " +
+		"stage=prepare result=authorized"
+	const messageReceipt = "intro_pw op=message_receive version=2 " +
+		"stage=receipt result=prepared"
+	const messageACK = "intro_pw op=message_send version=2 stage=ack result=observed"
 	for _, tc := range []struct {
 		name, run string
 		ordered   []string
@@ -77,6 +82,21 @@ func TestPWDiagnosticStages(t *testing.T) {
 			[]string{establish + "stage=acceptance result=refused reason=undetermined"},
 			[]string{establish + "stage=acceptance result=committed",
 				establish + "stage=response result=prepared"}},
+		{"message_prepare", "TestOwnerMessageV2OperationFailures$/^prepare$",
+			[]string{"intro_pw op=message_send stage=prepare result=refused"},
+			[]string{messagePrepare, messageReceipt, messageACK}},
+		{"message_inbox", "TestOwnerMessageV2OperationFailures$/^inbox$",
+			[]string{messagePrepare,
+				"intro_pw op=message_send stage=exchange result=unknown"},
+			[]string{messageReceipt, messageACK}},
+		{"message_receipt", "TestOwnerMessageV2OperationFailures$/^receipt$",
+			[]string{messagePrepare,
+				"intro_pw op=message_send stage=exchange result=unknown"},
+			[]string{messageReceipt, messageACK}},
+		{"message_ack", "TestOwnerMessageV2OperationFailures$/^ack$",
+			[]string{messagePrepare, messageReceipt,
+				"intro_pw op=message_send stage=ack result=unknown"},
+			[]string{messageACK}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			defer assert.PushTester(t)()
@@ -87,6 +107,8 @@ func TestPWDiagnosticStages(t *testing.T) {
 				output, err := cmd.CombinedOutput()
 				assert.NoError(err, "diagnostic subprocess failed")
 				logs := string(output)
+				assert.ThatNot(strings.Contains(logs, "private message diagnostic"))
+				assert.ThatNot(strings.Contains(logs, "private receipt signer diagnostic"))
 				if verbosity == "0" {
 					assert.ThatNot(strings.Contains(logs, "intro_pw "))
 					continue

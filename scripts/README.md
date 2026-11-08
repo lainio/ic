@@ -51,11 +51,70 @@ Terminal 1, from the Go checkout:
 python3 scripts/pw_demo.py up --chat-ready
 ~~~
 
-Successful `up` prints exactly one line with the full allocated run ID:
+Successful `up` prints exactly three lines with the full allocated run ID and
+both actual absolute node log paths, after setup and config publication succeed:
 
 ~~~text
 OK run-0123456789abcdef0123456789abcdef READY_FOR_CHAT
+ALICE_LOG /home/user/.ic-pw-demo/run-0123456789abcdef0123456789abcdef/logs/alice.stderr
+BOB_LOG /home/user/.ic-pw-demo/run-0123456789abcdef0123456789abcdef/logs/bob.stderr
 ~~~
+
+In two separate tmux panes, use the paths printed after `ALICE_LOG` and
+`BOB_LOG` (replace these example paths):
+
+~~~sh
+tail -n 0 -F -- /absolute/RUN/logs/alice.stderr
+tail -n 0 -F -- /absolute/RUN/logs/bob.stderr
+~~~
+
+Run one command per pane. `-n 0` shows only new events; `-F` follows the file.
+The panes show genuine Go events as messages are exchanged. The controller
+does not start or manage tmux.
+
+For Alice's message, Alice's log shows:
+
+~~~text
+intro_pw op=message_send version=2 stage=prepare result=authorized
+intro_pw op=message_send version=2 stage=ack result=observed
+~~~
+
+Bob's log shows:
+
+~~~text
+intro_pw op=message_receive version=2 stage=receipt result=prepared
+~~~
+
+Roles reverse for Bob's reply. The existing glog severity/timestamp prefix may
+precede each line. `authorized` means local preparation, including durable
+sent-attempt authorization, completed; it does not claim HTTP dispatch.
+`prepared` means the receiver authenticated the message, admitted the inbox
+and signed a receipt; it does not claim the sender observed that receipt.
+`observed` means the sender authenticated the receiver's signed assertion and
+saved or retained its ACK. It proves neither delivery, current permission,
+a live channel nor honest remote storage. Permitted exact retries may log
+again without another durable write. The events contain no message contents,
+lengths or identifiers; successful inbox polling and historical reads stay quiet.
+
+Optional `up --json` emits exactly one UTF-8 JSON object plus a newline, with
+the same setup and actual run metadata. These are its exact fields and types:
+
+~~~json
+{"status":"ok","run_id":"run-0123456789abcdef0123456789abcdef","checkpoint":"READY_FOR_CHAT","logs":{"alice":"/home/user/.ic-pw-demo/run-0123456789abcdef0123456789abcdef/logs/alice.stderr","bob":"/home/user/.ic-pw-demo/run-0123456789abcdef0123456789abcdef/logs/bob.stderr"}}
+~~~
+
+For future shell/tmux automation with `jq`, using the optional `mysys` alias:
+
+~~~sh
+result=$(mysys up --chat-ready --json) || exit 1
+printf '%s\n' "$result" | jq -r '.logs.alice, .logs.bob'
+~~~
+
+Ordinary `up --json` reports `READY_FOR_INVITATION`. Text remains the default;
+`status`, `list`, `down` and `destroy` have no JSON mode. Setup failure returns
+nonzero, keeps stdout empty, and retains sanitized stderr diagnostics and
+private evidence paths. An output write/flush failure may leave partial output;
+it still triggers existing failure cleanup, without retrying setup.
 
 Alice and Bob's Go nodes remain running after the command returns. Use `status`
 for the detailed report, including both actual absolute Flutter config paths:
@@ -194,10 +253,12 @@ disposable run for another trial. Historical verification and signer-probe
 receipts do not prove ongoing reachability, authorization or current readiness.
 This harness adds no cryptographic authority, shared PW, `PWOpen` or Trust.
 
-Plain `up` also prints exactly one line after setup and config publication:
+Plain `up` also prints exactly three lines after setup and config publication:
 
 ~~~text
 OK run-abcdef0123456789abcdef0123456789 READY_FOR_INVITATION
+ALICE_LOG /home/user/.ic-pw-demo/run-abcdef0123456789abcdef0123456789/logs/alice.stderr
+BOB_LOG /home/user/.ic-pw-demo/run-abcdef0123456789abcdef0123456789/logs/bob.stderr
 ~~~
 
 For another message exchange, allocate a fresh disposable run with
@@ -278,9 +339,10 @@ PW_DEMO_LIVE=1 python3 -B -m unittest discover -s scripts -p 'test_pw_demo.py' -
 ~~~
 
 That existing smoke remains invitation-free. The separate chat-ready smoke
-builds the actual Go binary, runs `up --chat-ready`, checks the recorded stages,
-both running nodes' authenticated v2 empty inboxes and the config pair, then
-runs `down` and verifies process shutdown and retained configs:
+builds the actual Go binary, runs `up --chat-ready --json`, checks the JSON run
+ID and log paths, recorded stages, both running nodes' authenticated v2 empty
+inboxes and the config pair, then runs `down` and verifies process shutdown
+and retained configs:
 
 ~~~sh
 PW_DEMO_CHAT_LIVE=1 python3 -B -m unittest discover -s scripts -p 'test_pw_demo.py' -k ChatReadyLiveSmoke -v

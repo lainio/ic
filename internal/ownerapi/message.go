@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 
+	"github.com/golang/glog"
 	"github.com/lainio/ic/internal/pw"
 )
 
@@ -25,8 +26,14 @@ func (h *publicationHandler) receiveMessageLocal(version int, raw []byte,
 	case 1:
 		return pw.AcceptMessageAndReceipt(h.vault, h.root, h.child, h.signer, raw)
 	case 2:
-		return pw.AcceptMessageAndReceiptV2(h.vault, h.root, h.child, h.signer,
-			h.firstUseRuntimeV2(), raw)
+		receipt, err := pw.AcceptMessageAndReceiptV2(
+			h.vault, h.root, h.child, h.signer, h.firstUseRuntimeV2(), raw,
+		)
+		if err == nil {
+			glog.V(1).Info("intro_pw op=message_receive version=2 " +
+				"stage=receipt result=prepared")
+		}
+		return receipt, err
 	default:
 		return nil, errors.New("local message version refused")
 	}
