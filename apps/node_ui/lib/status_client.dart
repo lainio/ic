@@ -779,9 +779,31 @@ class StatusClient {
   ) async {
     if (!_messageText(text)) throw StatusFailure.messageInput;
     if (!_messagePeerUrl(peerMessageUrl)) throw StatusFailure.messagePeerUrl;
-    final bytes = utf8.encode(
-      jsonEncode({'text': text, 'peer_message_url': peerMessageUrl}),
-    );
+    return _sendMessage(ownerStatusUrl, headerPath, {
+      'text': text,
+      'peer_message_url': peerMessageUrl,
+    });
+  }
+
+  /// Go alone derives the destination from authenticated relationship history.
+  Future<MessageSendReceipt> sendMessageV2(
+    String ownerStatusUrl,
+    String headerPath,
+    String text,
+  ) async {
+    if (!_messageText(text)) throw StatusFailure.messageInput;
+    return _sendMessage(ownerStatusUrl, headerPath, {
+      'version': 2,
+      'text': text,
+    });
+  }
+
+  Future<MessageSendReceipt> _sendMessage(
+    String ownerStatusUrl,
+    String headerPath,
+    Map<String, Object> document,
+  ) async {
+    final bytes = utf8.encode(jsonEncode(document));
     if (bytes.length > 2048) throw StatusFailure.messageRequestTooLarge;
     try {
       await _request(
@@ -805,10 +827,24 @@ class StatusClient {
   Future<MessageInbox> readMessageInbox(
     String ownerStatusUrl,
     String headerPath,
-  ) async {
+  ) => _readMessageInbox(ownerStatusUrl, headerPath);
+
+  Future<MessageInbox> readMessageInboxV2(
+    String ownerStatusUrl,
+    String headerPath,
+  ) => _readMessageInbox(ownerStatusUrl, headerPath, v2: true);
+
+  Future<MessageInbox> _readMessageInbox(
+    String ownerStatusUrl,
+    String headerPath, {
+    bool v2 = false,
+  }) async {
     try {
       final json = await _request(
-        _destination(ownerStatusUrl).replace(path: '/owner/pw/message/inbox'),
+        _destination(ownerStatusUrl).replace(
+          path: '/owner/pw/message/inbox',
+          query: v2 ? 'version=2' : null,
+        ),
         headerPath,
         2048,
       );

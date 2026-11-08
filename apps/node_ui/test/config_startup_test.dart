@@ -7,7 +7,7 @@ import 'package:ic_node_ui/live_pairing.dart';
 import 'package:ic_node_ui/main.dart' as app;
 
 import 'demo_config_test.dart' show ConfigFiles, configJson;
-import 'wallet_demo_test.dart' show viewport, switchWallet;
+import 'wallet_demo_test.dart' show viewport, switchWallet, selectPeer;
 
 final _url = find.widgetWithText(TextField, 'Owner status URL');
 final _header = find.widgetWithText(TextField, 'Authorization header file');
@@ -31,63 +31,65 @@ void main() {
   });
 
   for (final role in ['alice', 'bob']) {
-    testWidgets(
-      '$role config startup and fixture switching make no owner HTTP',
-      (tester) async {
-        viewport(tester, const Size(1440, 1100));
-        final files = ConfigFiles();
-        addTearDown(files.dispose);
-        final path = files.write(role).path;
-        final expected = configJson(role);
-        var requests = 0;
-        await HttpOverrides.runZoned(
-          () async {
-            app.main(['--config', path]);
-            await tester.pumpAndSettle();
-            expect(value(tester, _url), expected['owner_status_url']);
-            expect(value(tester, _header), expected['owner_header_file']);
-            expect(find.text(demoConfigAttribution), findsOneWidget);
-            expect(
-              find.widgetWithText(
-                SelectableText,
-                expected['node_public_key_hex']! as String,
-              ),
-              findsOneWidget,
-            );
-            expect(
-              find.textContaining('Configured role: $role'),
-              findsOneWidget,
-            );
-            expect(find.text('Not checked'), findsOneWidget);
+    testWidgets('$role config startup and fixture switching make no owner HTTP', (
+      tester,
+    ) async {
+      viewport(tester, const Size(1440, 1100));
+      final files = ConfigFiles();
+      addTearDown(files.dispose);
+      final path = files.write(role).path;
+      final expected = configJson(role);
+      var requests = 0;
+      await HttpOverrides.runZoned(
+        () async {
+          app.main(['--config', path]);
+          await tester.pumpAndSettle();
+          expect(value(tester, _url), expected['owner_status_url']);
+          expect(value(tester, _header), expected['owner_header_file']);
+          expect(find.text(demoConfigAttribution), findsOneWidget);
+          expect(
+            find.widgetWithText(
+              SelectableText,
+              expected['node_public_key_hex']! as String,
+            ),
+            findsOneWidget,
+          );
+          expect(find.textContaining('Configured role: $role'), findsOneWidget);
+          expect(find.text('Not checked'), findsOneWidget);
 
-            await tester.tap(keyed('open-wallet-demo'));
-            await tester.pumpAndSettle();
-            await switchWallet(tester, 'Bob');
-            await tester.tap(keyed('open-live-pairing'));
-            await tester.pumpAndSettle();
-            final pairing = tester.widget<LivePairingScreen>(
-              find.byType(LivePairingScreen),
-            );
-            expect(pairing.ownerStatusUrl, expected['owner_status_url']);
-            expect(pairing.headerPath, expected['owner_header_file']);
-            await tester.pageBack();
-            await tester.pumpAndSettle();
-            await tester.tap(keyed('close-wallet-demo'));
-            await tester.pumpAndSettle();
-            expect(value(tester, _url), expected['owner_status_url']);
-            expect(value(tester, _header), expected['owner_header_file']);
-            expect(find.text(demoConfigAttribution), findsOneWidget);
-            await tester.pump(const Duration(seconds: 20));
-          },
-          createHttpClient: (_) {
-            requests++;
-            throw StateError('Startup and fixtures must never open HTTP');
-          },
-        );
-        expect(requests, 0);
-        expect(tester.takeException(), isNull);
-      },
-    );
+          await tester.tap(keyed('open-wallet-demo'));
+          await tester.pumpAndSettle();
+          expect(
+            find.text(
+              "${role == 'alice' ? 'Alice' : 'Bob'}'s wallet / local perspective",
+            ),
+            findsOneWidget,
+          );
+          await switchWallet(tester, 'Bob');
+          await tester.tap(keyed('open-live-pairing'));
+          await tester.pumpAndSettle();
+          final pairing = tester.widget<LivePairingScreen>(
+            find.byType(LivePairingScreen),
+          );
+          expect(pairing.ownerStatusUrl, expected['owner_status_url']);
+          expect(pairing.headerPath, expected['owner_header_file']);
+          await tester.pageBack();
+          await tester.pumpAndSettle();
+          await tester.tap(keyed('close-wallet-demo'));
+          await tester.pumpAndSettle();
+          expect(value(tester, _url), expected['owner_status_url']);
+          expect(value(tester, _header), expected['owner_header_file']);
+          expect(find.text(demoConfigAttribution), findsOneWidget);
+          await tester.pump(const Duration(seconds: 20));
+        },
+        createHttpClient: (_) {
+          requests++;
+          throw StateError('Startup and fixtures must never open HTTP');
+        },
+      );
+      expect(requests, 0);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   for (final field in ['url', 'header']) {
@@ -121,6 +123,8 @@ void main() {
 
         await tester.tap(keyed('open-wallet-demo'));
         await tester.pumpAndSettle();
+        await selectPeer(tester, 'bob');
+        expect(keyed('open-live-conversation'), findsNothing);
         await tester.tap(keyed('open-live-pairing'));
         await tester.pumpAndSettle();
         final pairing = tester.widget<LivePairingScreen>(
@@ -149,6 +153,10 @@ void main() {
           ),
           findsOneWidget,
         );
+        await tester.tap(keyed('open-wallet-demo'));
+        await tester.pumpAndSettle();
+        await selectPeer(tester, 'bob');
+        expect(keyed('open-live-conversation'), findsNothing);
       },
     );
   }

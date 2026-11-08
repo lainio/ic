@@ -7,7 +7,7 @@ a trusted same-machine loopback connection. Root can remain stopped.
 
 With no startup arguments, paste the printed owner status URL and absolute
 `owner.header` path. A disposable demo can prefill these via `--config` below.
-The app reads that header file afresh for each click; it never asks for identity
+The app reads that header file afresh for each request; it never asks for identity
 unlock files, storage keys, identity data, or a Vault. Settings and credentials
 are not persisted across app exit.
 
@@ -77,14 +77,15 @@ No-argument startup continues to use the existing manual flow.
 Flutter.** These are launch configuration snapshots, not proof of current
 identity, service availability, invitation state or credential validity.
 Startup reads only the config; credentials are still read by `StatusClient`
-afresh on each explicit owner action. Neither settings nor credentials are
+afresh on each owner request. Neither settings nor credentials are
 persisted by Flutter. The config path itself is not a credential.
 
 Both owner fields remain editable. Any edit hides the supplied role/key and
 shows `Configuration no longer matches edited owner settings.`, even if the
 text is later restored. Live pairing continues to take a transient snapshot of
 the current owner fields. Wallet switching never selects the real endpoint;
-the wallet, graph and chat remain fictional fixtures. No owner request,
+the graph and sample chat remain fictional fixtures. The opt-in v2 conversation
+below uses only the matching, unedited launch configuration. No owner request,
 pairing, first use, state refresh or messaging happens on launch.
 
 `down` retains configs as historical artifacts; restarting the node makes old
@@ -261,18 +262,90 @@ there is no seeded demo data, polling, or automatic retry.
 ## Wallet demo (UI-01)
 
 The owner screen remains the default. Its app-bar `Wallet demo` action opens
-an isolated dark relationship graph, starting with Alice's local fixture.
+the dark relationship graph, starting with the configured role's local fixture
+(Alice when no matching launch config is available).
 Select Bob for the scripted conversation; the wallet switcher also offers an
 independently defined Bob fixture. At narrow widths, `Back to graph` returns
 from peer details. Use Tab and Enter to select identities with a keyboard.
 
-`DEMO DATA · UI CONCEPT` and `SCRIPTED GRAPH AND CHAT` remain visible. Dashed
-violet paths are locally verified introduction evidence, solid cyan curves are
-local retained PW halves, and amber diamonds are separately assigned local
-trust. Layer controls only change visibility. Last readiness is a fictional
-historical observation, never current reachability or a shared `PWOpen` flag.
-Invitations alone imply no PW or trust. The disabled composer cannot send.
-Graph and chat remain fixtures, including after successful live owner actions.
+`DEMO DATA · UI CONCEPT` and `SCRIPTED GRAPH AND CHAT` label fixture mode. Dashed
+violet paths illustrate locally verified introduction evidence, solid cyan
+curves illustrate local retained PW halves, and amber diamonds illustrate
+separately assigned local trust. Layer controls only change visibility.
+Last readiness is a fictional historical observation, never current
+reachability or a shared `PWOpen` flag.
+Invitations alone imply no PW or trust. The disabled sample composer cannot send.
+Graph observations remain fixtures, including after successful live messages.
+
+## Live relationship conversation (PW-Demo-Flutter-01)
+
+After manual v2 staging below, launch the two bundle processes with their
+respective `--config` paths as shown above. In each window open `Wallet demo`.
+The validated launch role selects Alice's or Bob's local fixture perspective.
+Select the configured counterpart, then explicitly click
+`Open live conversation`. Alice can send one message to Bob; Bob's active
+conversation polls his own authenticated inbox and displays it. Bob can then
+send his one reply, which Alice's active conversation reads from her node.
+
+`LIVE CONVERSATION · V2` replaces the sample chat and composer in the same
+panel. The graph stays labeled illustrative. The wallet switcher is disabled
+while live mode is open; other peers remain presentation-only. Missing config,
+owner-field edits (even if restored), or a mismatched perspective offer only
+sample chat. The launch config's `version:1` remains the **config format**.
+The role is harness-supplied metadata, not independent identity verification.
+
+Send posts exactly `{"version":2,"text":"..."}` to
+`/owner/pw/message/send`. Flutter accepts no peer URL; Go alone selects the
+contact from authenticated relationship evidence and decides permission.
+`Local acknowledgement saved` is a historical sender-local observation, not
+current remote availability. An uncertain outcome retains the exact submitted
+text for explicit retry. No send is automatic. Accepted text remains locked
+across panel navigation within the window. Restarting the window discards its
+outgoing submission: the API has no outgoing-history read endpoint.
+
+While active and foreground, the panel reads
+`/owner/pw/message/inbox?version=2` about once a second, scheduling the next
+read only after the previous one finishes. Navigation, closing live mode,
+configuration invalidation and app inactivity stop polling and discard late
+results. These GETs read authenticated local history; they are not delivery
+notifications. Repeated message IDs render one bubble. Only a valid
+`present:false` displays absence; failed or invalid reads display unavailable
+data. No fixture text, invented timestamp or remote-read indicator is added.
+Credentials are reread on every request through the existing bounded client.
+
+### Manual v2 staging
+
+`python3 scripts/pw_demo.py up` stops at `READY_FOR_INVITATION`: prerequisites
+only, with **no invitation, redemption or first use performed**. On a fresh
+disposable run, explicitly perform these owner operations before opening live
+conversation. Use each node's printed owner origin and its own current
+`owner.header` (for example curl's `--header @/absolute/path/owner.header`),
+JSON content type, direct loopback and no redirects. Keep both existing peer
+listeners running at their original addresses throughout the rehearsal.
+
+1. POST Bob's `/owner/pw/invitations/issue` with
+   `{"recipient_public_key_hex":"<full Alice key>"}`. Retain the returned
+   invitation ID; expect a successful Directed invitation receipt.
+2. POST Alice's `/owner/pw/invitations/redeem` with the following exact shape,
+   using the real Bob key and issued ID. Confirm successful local acceptance.
+
+   ~~~json
+   {"version":2,"target_public_key_hex":"<full Bob key>","invitation_id_hex":"<issued ID>","audience":"Directed"}
+   ~~~
+
+3. POST Alice's `/owner/pw/first-use` with `{"version":2}`. Confirm
+   `{"local_ready":true}` before messaging. A timeout or failed response is
+   not confirmed setup; do not silently retry first use.
+4. Open both configured Flutter windows and activate the conversations above.
+
+The existing `Live pairing` redemption/first-use controls below remain v1;
+they do not perform this v2 staging. Launching Flutter never performs setup.
+Stage promptly: the ad and invitation have separate 15-minute TTLs. This
+increment does not automate the Python harness or change the protocol.
+The bound is one immutable outgoing and one immutable incoming message per
+node. Transport is trusted same-machine loopback **plaintext**, with no E2EE,
+Tor or production-security claim. The graph, trust and readiness remain
+illustrative, independent of these live messages.
 
 ## Live pairing (PW-Go-12 / PW-Go-13)
 
@@ -374,8 +447,8 @@ Only the exact success envelope `{"local_ready":true}` displays
 `Local readiness: observed on this exchange (historical)`. This is Alice's local
 historical observation, never shared `PWOpen`, a live pipe, current Bob permission,
 Trust, a session key or ongoing text transport. Go now supports the bounded real
-local demo message below. Graph, readiness, trust and chat stay fixtures, and
-the sample composer remains disabled.
+local demo message below. Graph, readiness and trust stay fixtures; the sample
+composer remains disabled outside the opt-in v2 conversation above.
 
 409 reports local refusal or failed response acceptance without deciding whether
 Bob processed the request. 502 reports unknown outcome with Alice's `Await`
@@ -386,7 +459,7 @@ Owner configuration or panel identity changes and disposal discard pending/old
 receipts; late responses cannot restore them. State remains in memory only.
 Startup, issue and redemption never initiate first use or any chained action.
 
-### Real message: one per direction (PW-Msg-Go-10)
+### Legacy v1 message: one per direction (PW-Msg-Go-10)
 
 After the existing invitation, redemption and successful first-use flow, open
 `Live pairing` in two independent windows using each node's own owner URL and
@@ -426,11 +499,12 @@ remain the bound. Closing the panel discards its inputs/results, not Go state.
 After reopening, any retry still needs the original exact text.
 
 The routing hint is plaintext-sensitive: a malicious local endpoint can observe
-the message. There is no polling, multi-message chat, E2EE, anonymity or
-production transport security. Wallet/graph/chat fixtures remain **SCRIPTED**.
-The next priority is a disposable real two-window rehearsal and lecture-demo
-preparation. Mock HTTP/widget tests do not establish real two-node
-interoperability; this increment stops at Go-10.
+the message. This legacy panel has no polling, multi-message chat, E2EE,
+anonymity or production transport security. Wallet/graph/chat fixtures remain
+**SCRIPTED**.
+Mock HTTP/widget tests do not establish real two-node interoperability.
+Use the v2 relationship conversation and staging instructions above for the
+new two-window rehearsal; the legacy controls remain available unchanged.
 
 ## Validate
 

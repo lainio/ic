@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'demo_config.dart';
+import 'live_conversation.dart';
 import 'publication_section.dart';
 import 'received_ad_section.dart';
 import 'status_client.dart';
@@ -230,6 +231,7 @@ class _StatusScreenState extends State<StatusScreen> {
   StatusFailure? _failure;
   int _inputRevision = 0;
   bool _configEdited = false;
+  LiveConversation? _conversation;
 
   @override
   void initState() {
@@ -242,6 +244,8 @@ class _StatusScreenState extends State<StatusScreen> {
     setState(() {
       _inputRevision++;
       _configEdited = true;
+      _conversation?.dispose();
+      _conversation = null;
       _authorized = null;
       _authorizationFailure = null;
       _published = null;
@@ -675,6 +679,7 @@ class _StatusScreenState extends State<StatusScreen> {
 
   @override
   void dispose() {
+    _conversation?.dispose();
     _client.close();
     _url.dispose();
     _headerPath.dispose();
@@ -686,12 +691,23 @@ class _StatusScreenState extends State<StatusScreen> {
   void _openWalletDemo() {
     final url = _url.text;
     final headerPath = _headerPath.text;
+    final config = widget.config;
+    if (!_configEdited &&
+        config != null &&
+        url == config.ownerStatusUrl &&
+        headerPath == config.ownerHeaderFile) {
+      _conversation ??= LiveConversation(
+        config: config,
+        createClient: widget.createPairingClient,
+      );
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => WalletDemoScreen(
           ownerStatusUrl: url,
           headerPath: headerPath,
           createPairingClient: widget.createPairingClient,
+          liveConversation: _conversation,
         ),
       ),
     );

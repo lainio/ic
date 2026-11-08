@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'demo_config.dart';
+import 'live_conversation.dart';
 import 'live_pairing.dart';
 import 'status_client.dart';
 import 'wallet_demo_fixtures.dart';
@@ -13,18 +15,21 @@ class WalletDemoScreen extends StatefulWidget {
     this.ownerStatusUrl = '',
     this.headerPath = '',
     this.createPairingClient,
+    this.liveConversation,
   });
 
   final List<WalletDemoFixture>? fixtures;
   final String ownerStatusUrl;
   final String headerPath;
   final StatusClient Function()? createPairingClient;
+  final LiveConversation? liveConversation;
 
   @override
   State<WalletDemoScreen> createState() => _WalletDemoScreenState();
 }
 
-class _WalletDemoScreenState extends State<WalletDemoScreen> {
+class _WalletDemoScreenState extends State<WalletDemoScreen>
+    with WidgetsBindingObserver {
   late final List<WalletDemoFixture> _wallets = List.unmodifiable(
     widget.fixtures ?? [aliceDemoWallet, bobDemoWallet],
   );
@@ -33,6 +38,77 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
   bool _showIntroductions = true;
   bool _showPW = true;
   bool _showTrust = true;
+  bool _live = false;
+  bool _configurationInvalidated = false;
+  bool _currentRoute = true;
+
+  LiveConversation? get _conversation {
+    final conversation = widget.liveConversation;
+    if (_configurationInvalidated ||
+        conversation == null ||
+        conversation.config.ownerStatusUrl != widget.ownerStatusUrl ||
+        conversation.config.ownerHeaderFile != widget.headerPath) {
+      return null;
+    }
+    return conversation;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _selectConfiguredWallet();
+  }
+
+  void _selectConfiguredWallet() {
+    final index = _wallets.indexWhere(
+      (wallet) => wallet.owner == _conversation?.config.role,
+    );
+    if (index >= 0) _walletIndex = index;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _currentRoute = ModalRoute.of(context)?.isCurrent ?? true;
+    _syncActivity();
+  }
+
+  @override
+  void didUpdateWidget(covariant WalletDemoScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.ownerStatusUrl != oldWidget.ownerStatusUrl ||
+        widget.headerPath != oldWidget.headerPath ||
+        widget.liveConversation != oldWidget.liveConversation) {
+      oldWidget.liveConversation?.setActive(false);
+      _configurationInvalidated = true;
+      _live = false;
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => _syncActivity();
+
+  void _syncActivity() {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _conversation?.setActive(
+      _live &&
+          _currentRoute &&
+          (lifecycle == null || lifecycle == AppLifecycleState.resumed),
+    );
+  }
+
+  void _closeConversation() {
+    _live = false;
+    widget.liveConversation?.setActive(false);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _closeConversation();
+    super.dispose();
+  }
 
   WalletDemoFixture get _wallet => _wallets[_walletIndex];
 
@@ -64,7 +140,7 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
           child: Column(
             children: [
               _header(theme),
-              const _DemoNotice(),
+              _DemoNotice(live: _live),
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
@@ -77,7 +153,20 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
                             wallet: _wallet,
                             peer: peer,
                             narrow: !wide,
-                            onClose: () => setState(() => _selected = null),
+                            onClose: () => _select(null),
+                            conversation: _live ? _conversation : null,
+                            onOpenLive:
+                                _conversation != null &&
+                                    _wallet.owner ==
+                                        _conversation!.config.role &&
+                                    peer == _conversation!.counterpart
+                                ? () => setState(() {
+                                    _selectConfiguredWallet();
+                                    _live = true;
+                                    _syncActivity();
+                                  })
+                                : null,
+                            onCloseLive: () => setState(_closeConversation),
                           );
                     return Row(
                       children: [
@@ -113,7 +202,10 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
     );
   }
 
-  void _select(String peer) => setState(() => _selected = peer);
+  void _select(String? peer) => setState(() {
+    if (_selected != peer) _closeConversation();
+    _selected = peer;
+  });
 
   Widget _header(ThemeData theme) => Container(
     width: double.infinity,
@@ -149,15 +241,18 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
         ),
         FilledButton.icon(
           key: const ValueKey('open-live-pairing'),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => LivePairingScreen(
-                ownerStatusUrl: widget.ownerStatusUrl,
-                headerPath: widget.headerPath,
-                createClient: widget.createPairingClient,
+          onPressed: () {
+            setState(_closeConversation);
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => LivePairingScreen(
+                  ownerStatusUrl: widget.ownerStatusUrl,
+                  headerPath: widget.headerPath,
+                  createClient: widget.createPairingClient,
+                ),
               ),
-            ),
-          ),
+            );
+          },
           icon: const Icon(Icons.link),
           label: const Text('Live pairing'),
         ),
@@ -178,13 +273,15 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
                 color: Colors.white,
                 fontSize: 13,
               ),
-              onChanged: (index) {
-                if (index == null) return;
-                setState(() {
-                  _walletIndex = index;
-                  _selected = null;
-                });
-              },
+              onChanged: _live
+                  ? null
+                  : (index) {
+                      if (index == null) return;
+                      setState(() {
+                        _walletIndex = index;
+                        _selected = null;
+                      });
+                    },
               items: [
                 for (var index = 0; index < _wallets.length; index++)
                   DropdownMenuItem(
@@ -348,7 +445,9 @@ class _WalletDemoScreenState extends State<WalletDemoScreen> {
 }
 
 class _DemoNotice extends StatelessWidget {
-  const _DemoNotice();
+  const _DemoNotice({required this.live});
+
+  final bool live;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -358,11 +457,11 @@ class _DemoNotice extends StatelessWidget {
       color: Color(0xff141f2e),
       border: Border.symmetric(horizontal: BorderSide(color: demoBorder)),
     ),
-    child: const Wrap(
+    child: Wrap(
       spacing: 16,
       runSpacing: 6,
       children: [
-        Text(
+        const Text(
           'DEMO DATA · UI CONCEPT',
           style: TextStyle(
             color: demoAmber,
@@ -372,9 +471,11 @@ class _DemoNotice extends StatelessWidget {
           ),
         ),
         Text(
-          'SCRIPTED GRAPH AND CHAT · fixtures, no messages sent. '
-          'Live pairing uses explicit owner submissions.',
-          style: TextStyle(color: demoMuted, fontSize: 12),
+          live
+              ? 'ILLUSTRATIVE GRAPH · LIVE MESSAGES in this conversation only.'
+              : 'SCRIPTED GRAPH AND CHAT · fixtures, no messages sent. '
+                    'Live pairing uses explicit owner submissions.',
+          style: const TextStyle(color: demoMuted, fontSize: 12),
         ),
       ],
     ),
@@ -514,12 +615,18 @@ class _PeerPanel extends StatelessWidget {
     required this.peer,
     required this.narrow,
     required this.onClose,
+    this.conversation,
+    this.onOpenLive,
+    required this.onCloseLive,
   });
 
   final WalletDemoFixture wallet;
   final String peer;
   final bool narrow;
   final VoidCallback onClose;
+  final LiveConversation? conversation;
+  final VoidCallback? onOpenLive;
+  final VoidCallback onCloseLive;
 
   @override
   Widget build(BuildContext context) {
@@ -634,57 +741,84 @@ class _PeerPanel extends StatelessWidget {
                   ),
                 ),
                 const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const _Eyebrow('SCRIPTED CONVERSATION'),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Sample scene · no live transport',
-                        style: TextStyle(color: demoMuted, fontSize: 11),
+                if (conversation != null)
+                  _LiveConversationPanel(
+                    key: ObjectKey(conversation),
+                    conversation: conversation!,
+                    onClose: onCloseLive,
+                  )
+                else ...[
+                  if (onOpenLive != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                      child: OutlinedButton.icon(
+                        key: const ValueKey('open-live-conversation'),
+                        onPressed: onOpenLive,
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        label: const Text('Open live conversation'),
                       ),
-                      const SizedBox(height: 20),
-                      if (messages.isEmpty)
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _Eyebrow('SCRIPTED CONVERSATION'),
+                        const SizedBox(height: 8),
                         const Text(
-                          'No scripted messages in this fixture.',
-                          style: TextStyle(color: demoMuted, height: 1.6),
+                          'Sample scene · no live transport',
+                          style: TextStyle(color: demoMuted, fontSize: 11),
                         ),
-                      for (final message in messages) _Bubble(message),
-                    ],
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 8, 20, 20),
-                  child: Column(
-                    children: [
-                      TextField(
-                        key: ValueKey('sample-composer'),
-                        enabled: false,
-                        decoration: InputDecoration(
-                          hintText: 'Sample message — sending disabled',
-                          hintStyle: TextStyle(color: demoMuted, fontSize: 12),
-                          border: OutlineInputBorder(),
-                          disabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(color: demoBorder),
+                        const SizedBox(height: 20),
+                        if (messages.isEmpty)
+                          const Text(
+                            'No scripted messages in this fixture.',
+                            style: TextStyle(color: demoMuted, height: 1.6),
                           ),
-                          suffixIcon: IconButton(
-                            key: ValueKey('sample-send'),
-                            tooltip: 'Sending unavailable in demo',
-                            onPressed: null,
-                            icon: Icon(Icons.arrow_upward, size: 18),
+                        for (final message in messages)
+                          _Bubble(
+                            text: message.text,
+                            fromOwner: message.fromOwner,
+                            caption: message.time,
+                            provenance: message.provenance,
+                          ),
+                      ],
+                    ),
+                  ),
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 8, 20, 20),
+                    child: Column(
+                      children: [
+                        TextField(
+                          key: ValueKey('sample-composer'),
+                          enabled: false,
+                          decoration: InputDecoration(
+                            hintText: 'Sample message — sending disabled',
+                            hintStyle: TextStyle(
+                              color: demoMuted,
+                              fontSize: 12,
+                            ),
+                            border: OutlineInputBorder(),
+                            disabledBorder: OutlineInputBorder(
+                              borderSide: BorderSide(color: demoBorder),
+                            ),
+                            suffixIcon: IconButton(
+                              key: ValueKey('sample-send'),
+                              tooltip: 'Sending unavailable in demo',
+                              onPressed: null,
+                              icon: Icon(Icons.arrow_upward, size: 18),
+                            ),
                           ),
                         ),
-                      ),
-                      SizedBox(height: 12),
-                      Text(
-                        'Scripted conversation · no live transport',
-                        style: TextStyle(color: demoMuted, fontSize: 11),
-                      ),
-                    ],
+                        SizedBox(height: 12),
+                        Text(
+                          'Scripted conversation · no live transport',
+                          style: TextStyle(color: demoMuted, fontSize: 11),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -694,40 +828,189 @@ class _PeerPanel extends StatelessWidget {
   }
 }
 
-class _Bubble extends StatelessWidget {
-  const _Bubble(this.message);
+class _LiveConversationPanel extends StatefulWidget {
+  const _LiveConversationPanel({
+    super.key,
+    required this.conversation,
+    required this.onClose,
+  });
 
-  final DemoMessage message;
+  final LiveConversation conversation;
+  final VoidCallback onClose;
+
+  @override
+  State<_LiveConversationPanel> createState() => _LiveConversationPanelState();
+}
+
+class _LiveConversationPanelState extends State<_LiveConversationPanel> {
+  late final _text = TextEditingController(
+    text: widget.conversation.submittedText ?? '',
+  );
+
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.conversation,
+    builder: (context, _) {
+      final conversation = widget.conversation;
+      final inbox = conversation.inbox;
+      final submitted = conversation.submittedText;
+      return Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _Eyebrow('LIVE CONVERSATION · V2'),
+            const SizedBox(height: 8),
+            Text(
+              'Configured local role: ${conversation.config.role}. '
+              'Graph and relationship observations above are illustrative.',
+              style: const TextStyle(color: demoMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              demoConfigAttribution,
+              style: TextStyle(color: demoMuted, fontSize: 11),
+            ),
+            const SizedBox(height: 16),
+            if (submitted != null)
+              _Bubble(
+                key: const ValueKey('live-outgoing'),
+                text: submitted,
+                fromOwner: true,
+                caption: 'Submitted in this window',
+                provenance: 'Live outgoing submission',
+              ),
+            if (conversation.acknowledged)
+              const Text(
+                'Local acknowledgement saved',
+                style: TextStyle(color: demoCyan, fontSize: 12),
+              )
+            else if (conversation.sending)
+              const Text('Submitting…')
+            else if (conversation.sendFailure case final failure?)
+              Text(failure.message, style: const TextStyle(color: demoAmber)),
+            if (conversation.outcomeUnknown &&
+                conversation.sendFailure != StatusFailure.messageUnknown)
+              const Text(
+                'Previous submission outcome remains unknown.',
+                style: TextStyle(color: demoAmber),
+              ),
+            const SizedBox(height: 16),
+            if (conversation.inboxFailure case final failure?)
+              Text(failure.message, style: const TextStyle(color: demoAmber))
+            else if (inbox == null)
+              const Text('Inbox unknown · awaiting a valid local read')
+            else if (!inbox.present)
+              const Text('No message received locally')
+            else
+              _Bubble(
+                key: ValueKey('live-incoming-${inbox.messageIdHex}'),
+                text: inbox.text!,
+                fromOwner: false,
+                caption: 'Authenticated inbox · local Vault',
+                provenance: 'Live authenticated incoming message',
+              ),
+            const SizedBox(height: 20),
+            TextField(
+              key: const ValueKey('live-composer'),
+              controller: _text,
+              enabled: conversation.active && !conversation.sending,
+              readOnly: submitted != null,
+              minLines: 1,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'One message · 1–1024 UTF-8 bytes',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              key: const ValueKey('live-send'),
+              onPressed:
+                  conversation.active &&
+                      !conversation.sending &&
+                      !conversation.acknowledged
+                  ? () => conversation.send(submitted ?? _text.text)
+                  : null,
+              icon: const Icon(Icons.arrow_upward, size: 18),
+              label: Text(
+                conversation.acknowledged
+                    ? 'Single message submitted'
+                    : submitted == null
+                    ? 'Send one message'
+                    : 'Retry exact message',
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'One message each way. Local acknowledgements are historical; '
+              'current remote availability is unknown. Outgoing history is '
+              'unavailable after restarting this window.',
+              style: TextStyle(color: demoMuted, fontSize: 11, height: 1.5),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              conversation.active
+                  ? 'Reading this node’s saved inbox about once a second.'
+                  : 'Inbox polling paused.',
+              style: const TextStyle(color: demoMuted, fontSize: 11),
+            ),
+            TextButton(
+              key: const ValueKey('close-live-conversation'),
+              onPressed: widget.onClose,
+              child: const Text('Use sample conversation'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+class _Bubble extends StatelessWidget {
+  const _Bubble({
+    super.key,
+    required this.text,
+    required this.fromOwner,
+    required this.caption,
+    required this.provenance,
+  });
+
+  final String text;
+  final bool fromOwner;
+  final String caption;
+  final String provenance;
 
   @override
   Widget build(BuildContext context) => Align(
-    alignment: message.fromOwner ? Alignment.centerRight : Alignment.centerLeft,
+    alignment: fromOwner ? Alignment.centerRight : Alignment.centerLeft,
     child: Semantics(
-      label: message.provenance,
+      label: provenance,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 258),
         margin: EdgeInsets.only(
           bottom: 12,
-          left: message.fromOwner ? 28 : 0,
-          right: message.fromOwner ? 0 : 28,
+          left: fromOwner ? 28 : 0,
+          right: fromOwner ? 0 : 28,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: message.fromOwner
-              ? const Color(0xff1b3948)
-              : const Color(0xff202d42),
+          color: fromOwner ? const Color(0xff1b3948) : const Color(0xff202d42),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
-              message.text,
-              style: const TextStyle(fontSize: 13, height: 1.5),
-            ),
+            Text(text, style: const TextStyle(fontSize: 13, height: 1.5)),
             const SizedBox(height: 4),
             Text(
-              message.time,
+              caption,
               style: const TextStyle(fontSize: 10, color: demoMuted),
             ),
           ],
