@@ -37,6 +37,14 @@ var (
 	errInvitationUnchanged = errors.New("invitation unchanged")
 )
 
+type thenRet struct {
+	err error
+}
+
+func (ew thenRet) Err(error) error {
+	return ew.err
+}
+
 // Invitation is the bounded v1 canonical CBOR array in declaration order,
 // stored only inside the encrypted Vault. ID is a fresh 32-byte local lookup
 // secret, not an authenticated invitation wire protocol. ExpiresUnixNano is a
@@ -104,21 +112,19 @@ func issueInvitation(vault *storage.Vault, root, target, recipient key.Public,
 	raw, err := wire.Marshal(row)
 	assert.NoError(err, ErrInvitationState)
 
-	err = vault.Update(func(tx storage.WriteTx) (err error) {
+	try.Out(vault.Update(func(tx storage.WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
+
 		_, found := try.To2(readInvitation(tx, row.Root, row.Target))
 		if found {
-			return ErrInvitationIssued // Abort without a seal or bookkeeping.
+			return ErrInvitationIssued
 		}
+
 		return tx.Put([]byte(invitationKey), raw)
-	})
-	if err == ErrInvitationIssued {
-		return Invitation{}, err
-	}
-	//	assert.That(err != nil, ErrInvitationState)
-	if err != nil {
-		return Invitation{}, ErrInvitationState
-	}
+	})).
+		HandleIf(ErrInvitationIssued, thenRet{ErrInvitationIssued}.Err).
+		Handle(thenRet{ErrInvitationState}.Err)
+
 	return row, nil
 }
 
@@ -140,7 +146,7 @@ func ReadInvitation(vault *storage.Vault, root, target key.Public,
 		defer err2.Handle(&err, nil)
 		row, found = try.To2(readInvitation(tx, root, target))
 		return nil
-	})).Handle(func(error) error { return ErrInvitationState })
+	})).Handle(thenRet{ErrInvitationState}.Err)
 	return row, found, nil
 }
 
@@ -151,27 +157,31 @@ func ReadInvitation(vault *storage.Vault, root, target key.Public,
 // absent, wrong-ID, Revoked and Consumed return false without any durable write
 // or encryption spending. No acceptance history or PW/policy state is touched.
 func RevokeInvitation(vault *storage.Vault, root, target key.Public, id []byte,
-) (bool, error) {
+) (_ bool, err error) {
+	defer err2.Handle(&err, nil)
+
 	if !validInvitationBinding(vault, root, target) || len(id) != 32 {
 		return false, ErrInvitationInput
 	}
 	root, target, id = bytes.Clone(root), bytes.Clone(target), bytes.Clone(id)
-	err := vault.Update(func(tx storage.WriteTx) (err error) {
+
+	unchanged := false
+	try.Out(vault.Update(func(tx storage.WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
+
 		row, found := try.To2(readInvitation(tx, root, target))
 		if !found || !bytes.Equal(row.ID, id) || row.State != InvitationActive {
+			unchanged = true
 			return errInvitationUnchanged
 		}
+
 		row.State = InvitationRevoked
 		return tx.Put([]byte(invitationKey), try.To1(wire.Marshal(row)))
-	})
-	if err == errInvitationUnchanged {
-		return false, nil
-	}
-	if err != nil {
-		return false, ErrInvitationState
-	}
-	return true, nil
+	})).
+		HandleIf(errInvitationUnchanged, err2.Reset).
+		Handle(thenRet{ErrInvitationState}.Err)
+
+	return !unchanged, nil
 }
 
 func readInvitation(tx storage.ReadTx, root, target key.Public,
@@ -188,9 +198,8 @@ func readInvitation(tx storage.ReadTx, root, target key.Public,
 
 	var row Invitation
 	// Avoid tracing decoder diagnostics containing stored bytes or secrets.
-	try.Out(wire.DecMode.Unmarshal(raw, &row)).Handle(func(error) error {
-		return ErrInvitationState
-	})
+	try.Out(wire.DecMode.Unmarshal(raw, &row)).
+		Handle(thenRet{ErrInvitationState}.Err)
 	canonical := try.To1(wire.EncMode.Marshal(row))
 	assert.That(bytes.Equal(raw, canonical), ErrInvitationState)
 	assert.Equal(row.Version, 1, ErrInvitationState)
