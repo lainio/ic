@@ -49,10 +49,9 @@ func Derive(secret []byte, vault, id [16]byte, spend func() error) (scope *Scope
 // are literal bytes; the future Vault layer supplies any reserved prefixes.
 func (s *Scope) Token(path [][]byte, key []byte) (token [32]byte, err error) {
 	defer err2.Handle(&err, nil)
+	defer assert.PushAsserter(assert.Plain)()
 
-	if s.cleared {
-		return token, ErrCleared
-	}
+	assert.That(!s.cleared, ErrCleared)
 	context := try.To1(encodeContext(s.vault, path))
 	return lookupToken(s.ki, context, s.id, key)
 }
@@ -87,10 +86,9 @@ func (s *Scope) Seal(path [][]byte, key, value []byte) (envelope []byte, err err
 // not spend and remains available when the shared budget is exhausted.
 func (s *Scope) Open(path [][]byte, token [32]byte, wantKey, envelope []byte) (key, value []byte, err error) {
 	defer err2.Handle(&err, nil)
+	defer assert.PushAsserter(assert.Plain)()
 
-	if s.cleared {
-		return nil, nil, ErrCleared
-	}
+	assert.That(!s.cleared, ErrCleared)
 	context := try.To1(encodeContext(s.vault, path))
 	return openRecord(s.ke, s.ki, s.id, context, token, wantKey, envelope)
 }
