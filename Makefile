@@ -1,5 +1,6 @@
 # Original from github.com/lainio/err2
 
+PKG ?= ./...
 PKG1 := github.com/lainio/ic/chain
 PKG2 := github.com/lainio/ic/node
 PKG3 := github.com/lainio/ic/identity
@@ -40,6 +41,9 @@ build:
 
 deps:
 	@$(GO) get -t ./...
+
+test_pkg:
+	$(GO) test $(TEST_ARGS) $(PKG)
 
 test1:
 	$(GO) test $(TEST_ARGS) $(PKG1)
