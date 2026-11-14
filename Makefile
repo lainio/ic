@@ -49,6 +49,9 @@ test_pkg:
 test_pw:
 	$(GO) test $(TEST_ARGS) $(PKG_PW)
 
+test_pwr:
+	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG_PW)
+
 test_path:
 	$(GO) test $(TEST_ARGS) $(PKG_PATH)
 
