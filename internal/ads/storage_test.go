@@ -331,7 +331,7 @@ func TestClockBoundsAndLocation(t *testing.T) {
 		assert.That(found)
 		assert.DeepEqual(got, published)
 	}
-	for _, now := range []time.Time{time.Time{}, time.Unix(-1, 0),
+	for _, now := range []time.Time{{}, time.Unix(-1, 0),
 		time.Unix(0, math.MaxInt64).Add(time.Nanosecond)} {
 		f.unchanged(t, func() {
 			got, found, err := ReadCurrentLocal(f.vault, r, r, now)
