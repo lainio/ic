@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/lainio/err2"
@@ -53,6 +54,10 @@ func corruptMessageProjectionHistoryV2(tx storage.WriteTx,
 }
 
 func TestMessageProjectionRequiredHistoryV2(t *testing.T) {
+	t.Parallel()
+
+	var testerInit sync.Once
+
 	for local := range 2 {
 		for _, mode := range []string{
 			"no relationship", "no first use", "Await", "Expired without success",
@@ -70,6 +75,12 @@ func TestMessageProjectionRequiredHistoryV2(t *testing.T) {
 			for _, present := range []bool{false, true} {
 				t.Run(fmt.Sprint(local, "/", mode, "/", present),
 					func(t *testing.T) {
+						t.Parallel()
+
+						// Initialize err2's shared default before concurrent pushes.
+						testerInit.Do(func() {
+							defer assert.PushTester(t)()
+						})
 						defer assert.PushTester(t)()
 						f, n, _, receipt := ackTestV2(t, local)
 						if present {
