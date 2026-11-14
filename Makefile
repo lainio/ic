@@ -1,22 +1,23 @@
 # Original from github.com/lainio/err2
 
 PKG ?= ./...
-PKG1 := github.com/lainio/ic/chain
-PKG2 := github.com/lainio/ic/node
-PKG3 := github.com/lainio/ic/identity
-PKG4 := github.com/lainio/ic/hop
-PKG5 := github.com/lainio/ic/key
-PKG6 := github.com/lainio/ic/internal/core/...
-PKG7 := github.com/lainio/ic/storage/...
-PKG8 := github.com/lainio/ic/internal/...
-PKGS := $(PKG1) $(PKG2) $(PKG3) $(PKG4) $(PKG5) $(PKG6) $(PKG7) $(PKG8)
 
-SRCDIRS := $(shell go list -f '{{.Dir}}' $(PKGS))
+PKG_PATH := github.com/lainio/ic/chain
+PKG_NODE_CMD := github.com/lainio/ic/cmds/node
+PKG_NODE := github.com/lainio/ic/internal/nodeidentity
+PKG_HOP := github.com/lainio/ic/hop
+PKG_KEY := github.com/lainio/ic/key
+PKG_CORE := github.com/lainio/ic/internal/core/...
+PKG_STORAGE := github.com/lainio/ic/storage/...
+PKG_INTERNAL := github.com/lainio/ic/internal/...
+PKG_PW := github.com/lainio/ic/internal/pw/...
+
+PKGS := ./...
 
 MAX_LINE ?= 80
 GO := go
 #GO := go1.18beta1
-TEST_ARGS ?= -benchmem
+TEST_ARGS ?= 
 
 check: lint test cli
 
@@ -45,38 +46,41 @@ deps:
 test_pkg:
 	$(GO) test $(TEST_ARGS) $(PKG)
 
-test1:
-	$(GO) test $(TEST_ARGS) $(PKG1)
+test_pw:
+	$(GO) test $(TEST_ARGS) $(PKG_PW)
 
-test2:
-	$(GO) test $(TEST_ARGS) $(PKG2)
+test_path:
+	$(GO) test $(TEST_ARGS) $(PKG_PATH)
 
-test3:
-	$(GO) test $(TEST_ARGS) $(PKG3)
+test_node_cmd:
+	$(GO) test $(TEST_ARGS) $(PKG_NODE_CMD)
 
-test4:
-	$(GO) test $(TEST_ARGS) $(PKG4)
+test_node:
+	$(GO) test $(TEST_ARGS) $(PKG_NODE)
 
-test5:
-	$(GO) test $(TEST_ARGS) $(PKG5)
+test_hop:
+	$(GO) test $(TEST_ARGS) $(PKG_HOP)
 
-test6:
-	$(GO) test $(TEST_ARGS) $(PKG6)
+test_key:
+	$(GO) test $(TEST_ARGS) $(PKG_KEY)
 
-test6r:
-	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG6)
+test_intro:
+	$(GO) test $(TEST_ARGS) $(PKG_INTRO)
 
-test7:
-	$(GO) test $(TEST_ARGS) $(PKG7)
+test_intror:
+	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG_INTRO)
 
-test7r:
-	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG7)
+test_storage:
+	$(GO) test $(TEST_ARGS) $(PKG_STORAGE)
 
-test8:
-	$(GO) test $(TEST_ARGS) $(PKG8)
+test_storager:
+	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG_STORAGE)
 
-test8r:
-	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG8)
+test_internal:
+	$(GO) test $(TEST_ARGS) $(PKG_INTERNAL)
+
+test_internalr:
+	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG_INTERNAL)
 
 test:
 	$(GO) test $(TEST_ARGS) $(PKGS)
@@ -93,26 +97,29 @@ testr:
 bench:
 	@$(GO) test $(TEST_ARGS) -bench=. $(PKGS)
 
-bench1:
-	@$(GO) test $(TEST_ARGS) -bench=. $(PKG1)
+bench_pw:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_PW)
 
-bench2:
-	@$(GO) test $(TEST_ARGS) -bench=. $(PKG2)
+bench_path:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_PATH)
 
-bench3:
-	@$(GO) test $(TEST_ARGS) -bench=. $(PKG3)
+bench_node_cmd:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_NODE_CMD)
 
-bench5:
-	@$(GO) test $(TEST_ARGS) -bench=. $(PKG5)
+bench_node:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_NODE)
 
-bench6:
-	@$(GO) test $(TEST_ARGS) -bench=. $(PKG6)
+bench_key:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_KEY)
 
-bench7:
-	@$(GO) test $(TEST_ARGS) -bench=. $(PKG7)
+bench_intro:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_INTRO)
 
-bench8:
-	@$(GO) test $(TEST_ARGS) -bench=. $(PKG8)
+bench_storage:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_STORAGE)
+
+bench_internal:
+	@$(GO) test $(TEST_ARGS) -bench=. $(PKG_INTERNAL)
 
 vet: | test
 	@$(GO) vet $(PKGS)
@@ -125,7 +132,7 @@ dry-fmt:
 
 gofmt:
 	@echo Checking code is gofmted
-	@test -z "$(shell gofmt -s -l -d -e $(SRCDIRS) | tee /dev/stderr)"
+	@test -z "$(shell gofmt -s -l -d -e . | tee /dev/stderr)"
 
 lint:
 	golangci-lint run
