@@ -15,6 +15,7 @@ import (
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/pw/internal/messagehttp"
 )
 
 func TestMessageClientExactRequestAndUntrustedResponse(t *testing.T) {
@@ -47,12 +48,14 @@ func TestMessageClientExactRequestAndUntrustedResponse(t *testing.T) {
 	t.Setenv("HTTPS_PROXY", proxy.URL)
 	t.Setenv("ALL_PROXY", proxy.URL)
 
-	got := try.To1(sendMessageOnce(t.Context(), saved, server.URL+messagePath))
+	got := try.To1(
+		sendMessageOnce(t.Context(), saved, server.URL+messagehttp.Path),
+	)
 	assert.DeepEqual(got, []byte{0xff}) // Intentionally unauthenticated CBOR.
 	r := <-requests
 	try.To(r.err)
 	assert.Equal(r.request.Method, "POST")
-	assert.Equal(r.request.RequestURI, messagePath)
+	assert.Equal(r.request.RequestURI, messagehttp.Path)
 	assert.Equal(string(r.body), `{"version":1,"envelope":"`+
 		base64.StdEncoding.EncodeToString([]byte(saved.envelope))+`"}`)
 	assert.Equal(r.request.ContentLength, int64(len(r.body)))
@@ -71,7 +74,7 @@ func TestMessageClientDestinationAndPreflight(t *testing.T) {
 	for _, value := range []string{
 		"http://127.0.0.1:1", "http://127.0.0.2:65535", "http://[::1]:8080",
 	} {
-		assert.That(validMessageURL(value + messagePath))
+		assert.That(messagehttp.ValidURL(value + messagehttp.Path))
 	}
 	var calls atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter,
@@ -80,7 +83,7 @@ func TestMessageClientDestinationAndPreflight(t *testing.T) {
 		calls.Add(1)
 	}))
 	defer server.Close()
-	valid := server.URL + messagePath
+	valid := server.URL + messagehttp.Path
 	invalid := []string{
 		"", "http://localhost:80", "http://127.1:80", "http://127.0.0.01:80",
 		"http://0.0.0.0:80", "http://192.0.2.1:80", "http://example.test:80",
@@ -92,19 +95,21 @@ func TestMessageClientDestinationAndPreflight(t *testing.T) {
 		"http://sensitive@127.0.0.1:80", "http://127.0.0.1:80/sensitive",
 	}
 	for _, prefix := range invalid {
-		invalidURL := prefix + messagePath
+		invalidURL := prefix + messagehttp.Path
 		raw, err := sendMessageOnce(t.Context(), savedMessageTransmit{
 			envelope: "sensitive bytes"}, invalidURL)
 		assert.Equal(err, errMessageNotDispatched)
 		assert.SNil(raw)
 	}
 	for _, suffix := range []string{"?", "?sensitive", "#", "#sensitive", "/"} {
-		assert.ThatNot(validMessageURL(valid + suffix))
+		assert.ThatNot(messagehttp.ValidURL(valid + suffix))
 	}
 	assert.ThatNot(
-		validMessageURL(strings.Replace(valid, "/message", "/%6dessage", 1)),
+		messagehttp.ValidURL(
+			strings.Replace(valid, "/message", "/%6dessage", 1),
+		),
 	)
-	assert.ThatNot(validMessageURL(strings.Repeat("a", 257)))
+	assert.ThatNot(messagehttp.ValidURL(strings.Repeat("a", 257)))
 	for _, saved := range []savedMessageTransmit{{}, {
 		envelope: strings.Repeat("x", maxMessageEnvelopeBytes+1),
 	}} {
@@ -123,48 +128,105 @@ func TestMessageClientDestinationAndPreflight(t *testing.T) {
 		assert.Equal(err, errMessageNotDispatched)
 		assert.SNil(raw)
 	}
+	for _, version := range []int{-1, 0, 3} {
+		raw, err := sendMessageVersionOnce(t.Context(), "x", valid, version)
+		assert.Equal(err, errMessageNotDispatched)
+		assert.SNil(raw)
+	}
 	assert.Equal(calls.Load(), 0)
 }
 
-func TestMessageClientStrictJSON(t *testing.T) {
+func TestMessageClientVersionSelectionAndReceiptLimits(t *testing.T) {
+	for _, version := range []int{1, 2} {
+		limit := maxMessageReceiptBytes
+		if version == 2 {
+			limit = maxMessageReceiptBytesV2
+		}
+		for _, tc := range []struct {
+			name            string
+			responseVersion int
+			receiptSize     int
+		}{
+			{"untrusted", version, 1},
+			{"limit", version, limit},
+			{"over limit", version, limit + 1},
+			{"wrong version", 3 - version, 1},
+		} {
+			t.Run(fmt.Sprintf("v%d/%s", version, tc.name), func(t *testing.T) {
+				defer assert.PushTester(t)()
+				envelope := strings.Repeat("x", maxMessageEnvelopeBytes)
+				want := bytes.Repeat([]byte{0xff}, tc.receiptSize)
+				var calls atomic.Int64
+				type captured struct {
+					body []byte
+					err  error
+				}
+				requests := make(chan captured, 1)
+				server := httptest.NewServer(http.HandlerFunc(
+					func(w http.ResponseWriter, r *http.Request) {
+						calls.Add(1)
+						body, err := io.ReadAll(r.Body)
+						requests <- captured{body, err}
+						w.Header().Set("Content-Type", "application/json")
+						w.Header().Set("Cache-Control", "no-store")
+						_, _ = fmt.Fprintf(
+							w,
+							`{"version":%d,"receipt":"%s"}`,
+							tc.responseVersion,
+							base64.StdEncoding.EncodeToString(want),
+						)
+					},
+				))
+				defer server.Close()
+				destination := server.URL + messagehttp.Path
+				var raw []byte
+				var err error
+				if version == 1 {
+					var receipt MessageSendReceipt
+					receipt, err = SendMessageOnce(
+						t.Context(),
+						PreparedMessageSend{
+							saved: savedMessageTransmit{
+								envelope: envelope,
+							}},
+						destination,
+					)
+					raw = []byte(receipt.raw)
+				} else {
+					raw, err = SendMessageOnceV2(t.Context(), PreparedMessageSendV2{
+						saved: savedMessageTransmitV2{envelope, destination}})
+				}
+				if tc.responseVersion != version || tc.receiptSize > limit {
+					assert.Equal(err, errMessageOutcomeUnknown)
+					assert.Equal(err, messagehttp.ErrOutcomeUnknown)
+					assert.Equal(len(raw), 0)
+				} else {
+					assert.NoError(err)
+					assert.DeepEqual(raw, want)
+				}
+				assert.Equal(calls.Load(), 1)
+				request := <-requests
+				try.To(request.err)
+				assert.Equal(string(request.body), fmt.Sprintf(
+					`{"version":%d,"envelope":"%s"}`, version,
+					base64.StdEncoding.EncodeToString([]byte(envelope))))
+			})
+		}
+	}
+}
+
+func TestMessageClientErrorIdentity(t *testing.T) {
 	defer assert.PushTester(t)()
-	for _, data := range []string{
-		`{"version":1,"receipt":"AA=="}`,
-		" \n { \"receipt\":\"AA==\", \"version\":1 } \t",
-	} {
-		assert.DeepEqual(
-			try.To1(decodeMessageResponse([]byte(data), 1)),
-			[]byte{0},
-		)
-	}
-	invalid := []string{
-		"", "null", "[]", "{}", "{", "\xff", `{"version":1}`,
-		`{"receipt":"AA=="}`, `{"version":1,"receipt":"AA=="} {}`,
-		`{"version":1,"receipt":"AA==","unknown":0}`,
-		`{"version":1,"version":1,"receipt":"AA=="}`,
-		`{"version":1,"receipt":"AA==","receipt":"AA=="}`,
-		`{"Version":1,"receipt":"AA=="}`,
-		`{"\u0076ersion":1,"receipt":"AA=="}`,
-		`{"version":1,"rece\u0069pt":"AA=="}`,
-		`{"version":1,"receipt":"AA==","rece\u0069pt":"AA=="}`,
-		`{"version":1,"receipt":"AA==",}`,
-		strings.Repeat(" ", maxMessageResponseBytes+1),
-	}
-	for _, version := range []string{"0", "2", "1.0", "1e0", "true", "null",
-		`"1"`, "{}", "[]"} {
-		invalid = append(invalid, `{"version":`+version+`,"receipt":"AA=="}`)
-	}
-	for _, receipt := range []string{"null", "false", "1", "{}", "[]",
-		`""`, `"AA"`, `"AB=="`, `"_w=="`, `"AA==\n"`, `"AA== "`,
-		`"` + base64.StdEncoding.EncodeToString(make([]byte, maxMessageReceiptBytes+1)) + `"`,
-	} {
-		invalid = append(invalid, `{"version":1,"receipt":`+receipt+`}`)
-	}
-	for i, data := range invalid {
-		raw, err := decodeMessageResponse([]byte(data), 1)
-		assert.Equal(err, errMessageOutcomeUnknown, fmt.Sprint(i))
-		assert.SNil(raw)
-	}
+	assert.Equal(ErrMessageNotDispatched, errMessageNotDispatched)
+	assert.Equal(errMessageNotDispatched, messagehttp.ErrNotDispatched)
+	assert.Equal(errMessageOutcomeUnknown, messagehttp.ErrOutcomeUnknown)
+
+	receipt, err := SendMessageOnce(t.Context(), PreparedMessageSend{}, "")
+	assert.Equal(err, ErrMessageNotDispatched)
+	assert.Equal(receipt, MessageSendReceipt{})
+	raw, err := SendMessageOnceV2(t.Context(), PreparedMessageSendV2{})
+	assert.Equal(err, ErrMessageNotDispatched)
+	assert.SNil(raw)
 }
 
 func TestMessageClientHostileHTTP(t *testing.T) {
@@ -225,7 +287,8 @@ func TestMessageClientHostileHTTP(t *testing.T) {
 					case "large declared body":
 						w.Header().Set("Content-Length", "1000000")
 					case "large body":
-						body = strings.Repeat("x", maxMessageResponseBytes+1)
+						// Exceed the fixed 2 KiB HTTP response limit.
+						body = strings.Repeat("x", 2049)
 						w.WriteHeader(status)
 						w.(http.Flusher).Flush() // Exercise the read bound, not length.
 						_, _ = io.WriteString(w, body)
@@ -256,7 +319,7 @@ func TestMessageClientHostileHTTP(t *testing.T) {
 			)
 			defer server.Close()
 			raw, err := sendMessageOnce(t.Context(), savedMessageTransmit{
-				envelope: "sensitive input"}, server.URL+messagePath)
+				envelope: "sensitive input"}, server.URL+messagehttp.Path)
 			assert.Equal(err, errMessageOutcomeUnknown)
 			assert.SNil(raw)
 			assert.Equal(calls.Load(), 1)
@@ -284,7 +347,7 @@ func TestMessageClientCancellationAfterDispatch(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		_, err := sendMessageOnce(ctx, savedMessageTransmit{envelope: "x"},
-			server.URL+messagePath)
+			server.URL+messagehttp.Path)
 		done <- err
 	}()
 	select {
@@ -304,8 +367,8 @@ func TestMessageClientCancellationAfterDispatch(t *testing.T) {
 func TestMessageClientSensitiveRefusal(t *testing.T) {
 	defer assert.PushTester(t)()
 	for _, destination := range []string{
-		"http://sensitive:password@127.0.0.1:80" + messagePath,
-		"http://127.0.0.1:sensitive" + messagePath,
+		"http://sensitive:password@127.0.0.1:80" + messagehttp.Path,
+		"http://127.0.0.1:sensitive" + messagehttp.Path,
 	} {
 		_, err := sendMessageOnce(t.Context(), savedMessageTransmit{
 			envelope: "sensitive plaintext"}, destination)
@@ -318,11 +381,11 @@ func TestMessageClientSensitiveRefusal(t *testing.T) {
 		_, _ = w.Write(bytes.Repeat([]byte("sensitive payload"), 10))
 	}))
 	_, err := sendMessageOnce(t.Context(), savedMessageTransmit{
-		envelope: "sensitive plaintext"}, server.URL+messagePath)
+		envelope: "sensitive plaintext"}, server.URL+messagehttp.Path)
 	assert.Equal(err, errMessageOutcomeUnknown)
 	server.Close()
 	_, err = sendMessageOnce(t.Context(), savedMessageTransmit{
-		envelope: "sensitive plaintext"}, server.URL+messagePath)
+		envelope: "sensitive plaintext"}, server.URL+messagehttp.Path)
 	assert.Equal(err, errMessageOutcomeUnknown)
 }
 
@@ -344,7 +407,7 @@ func TestMessageClientTimeout(t *testing.T) {
 	defer cancel()
 	start := time.Now()
 	raw, err := sendMessageOnce(ctx, savedMessageTransmit{envelope: "x"},
-		server.URL+messagePath)
+		server.URL+messagehttp.Path)
 	assert.Equal(err, errMessageOutcomeUnknown)
 	assert.SNil(raw)
 	assert.Equal(calls.Load(), 1)

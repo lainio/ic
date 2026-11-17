@@ -5,6 +5,7 @@ import (
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/pw/internal/messagehttp"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
@@ -25,7 +26,7 @@ type MessageSendReceipt struct{ raw string }
 // ValidMessageSendInput checks bounded text and the existing exact numeric
 // loopback route before any local writes. The URL conveys no peer authority.
 func ValidMessageSendInput(text, peerMessageURL string) bool {
-	return validOutgoingText(text) && validMessageURL(peerMessageURL)
+	return validOutgoingText(text) && messagehttp.ValidURL(peerMessageURL)
 }
 
 // PrepareMessageSend composes CreateOutgoing, envelope preparation and the

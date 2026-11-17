@@ -10,6 +10,7 @@ import (
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/core/wire"
+	"github.com/lainio/ic/internal/pw/internal/messagehttp"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
@@ -39,7 +40,7 @@ func TestMessageSendV2SeparateCommitsAndReadOnlyRetry(t *testing.T) {
 				n.local, n.signer, f.aliceRuntime, "retained"))
 			assert.Equal(
 				prepared.saved.destination,
-				f.bobRuntime.BoundOrigin+messagePath,
+				f.bobRuntime.BoundOrigin+messagehttp.Path,
 			)
 			assert.Equal(n.own.lease.remaining.Load(), 0)
 			for name, row := range before["root"] {

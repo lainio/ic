@@ -8,6 +8,7 @@ import (
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/device"
+	"github.com/lainio/ic/internal/pw/internal/messagehttp"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
@@ -102,8 +103,8 @@ func checkMessageTransmitV2(tx storage.ReadTx, root, local key.Public,
 	message := try.To1(readEnvelopeMessageV2(tx, binding))
 	envelope := try.To1(readMessageEnvelopeV2(tx, binding, message))
 	assert.That(envelope != nil, errMessageTransmit)
-	destination := history.peerContact(binding.Requester) + messagePath
-	assert.That(validMessageURL(destination), errMessageTransmit)
+	destination := history.peerContact(binding.Requester) + messagehttp.Path
+	assert.That(messagehttp.ValidURL(destination), errMessageTransmit)
 	snapshot := savedMessageTransmitV2{string(envelope), destination}
 
 	raw, found := try.To2(tx.Get([]byte(messageSentKey)))
