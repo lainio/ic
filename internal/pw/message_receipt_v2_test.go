@@ -14,6 +14,8 @@ import (
 )
 
 func TestMessageReceiptCurrentGuardsAndHistoricalVerificationV2(t *testing.T) {
+	t.Parallel()
+
 	for _, receiver := range []int{0, 1} {
 		for _, guard := range []string{"deny", "delete", "own Known",
 			"peer Known", "authorization", "history", "first use", "signer"} {
@@ -22,6 +24,7 @@ func TestMessageReceiptCurrentGuardsAndHistoricalVerificationV2(t *testing.T) {
 				t.Run(
 					fmt.Sprint(receiver, "/", guard, "/", call),
 					func(t *testing.T) {
+						t.Parallel()
 						defer assert.PushTester(t)()
 						f, n, raw, expected := receiptTestV2(t, receiver)
 						prior := try.To1(IssueMessageReceiptV2(
