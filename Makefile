@@ -49,6 +49,12 @@ test_pkg:
 test_pw:
 	$(GO) test $(TEST_ARGS) $(PKG_PW)
 
+# Additional feedback; full regression and relevant race tests still apply.
+# Fresh execution: make test_fast TEST_ARGS=-count=1
+.PHONY: test_fast
+test_fast:
+	python3 scripts/test_fast.py $(GO) $(TEST_ARGS)
+
 test_pwr:
 	$(GO) test -mod=readonly -race -count 1 $(TEST_ARGS) $(PKG_PW)
 
