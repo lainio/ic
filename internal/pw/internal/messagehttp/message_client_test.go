@@ -76,8 +76,8 @@ func TestMessageClientReceiptLimits(t *testing.T) {
 		for _, limit := range []int{1, 2, 3, 640} {
 			for _, size := range []int{0, limit, limit + 1, limit + 3} {
 				want := make([]byte, size)
-				data := []byte(fmt.Sprintf(`{"version":%d,"receipt":"%s"}`,
-					version, base64.StdEncoding.EncodeToString(want)))
+				data := fmt.Appendf(nil, `{"version":%d,"receipt":"%s"}`,
+					version, base64.StdEncoding.EncodeToString(want))
 				raw, err := decodeMessageResponse(data, version, limit)
 				if size == limit {
 					assert.NoError(err)
