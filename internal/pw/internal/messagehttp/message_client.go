@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"io"
 	"mime"
@@ -14,7 +15,6 @@ import (
 	"net/netip"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/lainio/ic/internal/localhttp"
 )
@@ -135,58 +135,31 @@ func readMessageResponse(ctx context.Context, response *http.Response,
 	return decodeMessageResponse(data, version, receiptLimit)
 }
 
+type messageResponse struct {
+	Version int    `json:"version"`
+	Receipt string `json:"receipt"`
+}
+
 func decodeMessageResponse(data []byte, version, receiptLimit int,
 ) ([]byte, error) {
-	if len(data) > maxMessageResponseBytes || !utf8.Valid(data) {
+	if len(data) > maxMessageResponseBytes {
 		return nil, ErrOutcomeUnknown
 	}
-	d := json.NewDecoder(bytes.NewReader(data))
-	d.UseNumber()
-	if token, err := d.Token(); err != nil || token != json.Delim('{') {
+	// JSON v2 rejects duplicates, invalid UTF-8 and trailing data, and matches
+	// names case-sensitively after unescaping. Never trace raw parser errors.
+	var response messageResponse
+	if jsonv2.Unmarshal(data, &response,
+		jsonv2.RejectUnknownMembers(true)) != nil {
 		return nil, ErrOutcomeUnknown
 	}
-	seen := make(map[string]bool, 2)
-	var receipt []byte
-	for d.More() {
-		start := d.InputOffset()
-		token, err := d.Token()
-		name, valid := token.(string)
-		if err != nil || !valid || seen[name] ||
-			bytes.Contains(data[start:d.InputOffset()], []byte{'\\'}) {
-			return nil, ErrOutcomeUnknown
-		}
-		seen[name] = true
-		value, err := d.Token()
-		if err != nil {
-			return nil, ErrOutcomeUnknown
-		}
-		switch name {
-		case "version":
-			if (version != 1 || value != json.Number("1")) &&
-				(version != 2 || value != json.Number("2")) {
-				return nil, ErrOutcomeUnknown
-			}
-		case "receipt":
-			encoded, valid := value.(string)
-			if !valid || len(encoded) >
-				base64.StdEncoding.EncodedLen(receiptLimit) {
-				return nil, ErrOutcomeUnknown
-			}
-			receipt, err = base64.StdEncoding.Strict().DecodeString(encoded)
-			if err != nil || len(receipt) == 0 ||
-				len(receipt) > receiptLimit ||
-				base64.StdEncoding.EncodeToString(receipt) != encoded {
-				return nil, ErrOutcomeUnknown
-			}
-		default:
-			return nil, ErrOutcomeUnknown
-		}
-	}
-	if token, err := d.Token(); err != nil || token != json.Delim('}') ||
-		len(seen) != 2 {
+	if (version != 1 && version != 2) || response.Version != version ||
+		len(response.Receipt) > base64.StdEncoding.EncodedLen(receiptLimit) {
 		return nil, ErrOutcomeUnknown
 	}
-	if _, err := d.Token(); err != io.EOF {
+
+	receipt, err := base64.StdEncoding.Strict().DecodeString(response.Receipt)
+	if err != nil || len(receipt) == 0 || len(receipt) > receiptLimit ||
+		base64.StdEncoding.EncodeToString(receipt) != response.Receipt {
 		return nil, ErrOutcomeUnknown
 	}
 	return receipt, nil

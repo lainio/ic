@@ -1,6 +1,6 @@
 module github.com/lainio/ic
 
-go 1.24.0
+go 1.27.0
 
 require (
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
