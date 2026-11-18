@@ -150,10 +150,7 @@ func preflight(backend *enclave.Enclave, wrapped []byte) (err error) {
 	if private.Curve != elliptic.P256() {
 		return errors.New("identity handle requires P-256")
 	}
-	if private.D.Sign() <= 0 || private.D.Cmp(private.Params().N) >= 0 {
-		return errors.New("invalid P-256 identity key")
-	}
-	// ParseECPrivateKey derives the public point from the private scalar.
+	// ParseECPrivateKey validates the scalar and derives the public point.
 	// Only validated material reaches IsKeyHandle's unsafe parse-error path.
 	// Clearing plain does not erase all backend or Go-heap copies.
 	return nil

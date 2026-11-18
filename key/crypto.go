@@ -10,7 +10,6 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
-	"math/big"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/duo-labs/webauthn/protocol/webauthncose"
@@ -204,10 +203,19 @@ func (sig Signature) Verify(pubKey Public, msg []byte) bool {
 	hash := crypto.SHA256.New()
 	try.To1(hash.Write(msg))
 
-	pk := &ecdsa.PublicKey{
-		Curve: elliptic.P256(),
-		X:     big.NewInt(0).SetBytes(pubK.XCoord),
-		Y:     big.NewInt(0).SetBytes(pubK.YCoord),
+	// Preserve integer coordinate encodings, including omitted leading zeros.
+	x := bytes.TrimLeft(pubK.XCoord, "\x00")
+	y := bytes.TrimLeft(pubK.YCoord, "\x00")
+	if len(x) > 32 || len(y) > 32 {
+		return false
+	}
+	var point [65]byte
+	point[0] = 4 // SEC 1 uncompressed point.
+	copy(point[33-len(x):33], x)
+	copy(point[65-len(y):], y)
+	pk, err := ecdsa.ParseUncompressedPublicKey(elliptic.P256(), point[:])
+	if err != nil {
+		return false
 	}
 
 	return ecdsa.VerifyASN1(pk, hash.Sum(nil), sig)

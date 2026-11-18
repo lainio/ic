@@ -79,11 +79,16 @@ func TestRejectedRecords(t *testing.T) {
 	otherCurve := try.To1(ecdsa.GenerateKey(elliptic.P384(), rand.Reader))
 	otherDER := try.To1(x509.MarshalECPrivateKey(otherCurve))
 	defer clear(otherDER)
-	zeroScalar := try.To1(asn1.Marshal(struct {
+	invalidScalar := struct {
 		Version       int
 		PrivateKey    []byte
 		NamedCurveOID asn1.ObjectIdentifier `asn1:"explicit,tag:0"`
-	}{1, make([]byte, 32), asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}}))
+	}{1, make([]byte, 32), asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}}
+	zeroScalar := try.To1(asn1.Marshal(invalidScalar))
+	invalidScalar.PrivateKey = elliptic.P256().Params().N.Bytes()
+	orderScalar := try.To1(asn1.Marshal(invalidScalar))
+	invalidScalar.PrivateKey = bytes.Repeat([]byte{0xff}, 32)
+	largeScalar := try.To1(asn1.Marshal(invalidScalar))
 
 	for _, tc := range []struct {
 		name   string
@@ -119,6 +124,12 @@ func TestRejectedRecords(t *testing.T) {
 		}},
 		{name: "authenticated zero scalar", change: func(r *record) {
 			r.WrappedHandle = backend.TryEncrypt(zeroScalar)
+		}},
+		{name: "authenticated scalar at curve order", change: func(r *record) {
+			r.WrappedHandle = backend.TryEncrypt(orderScalar)
+		}},
+		{name: "authenticated scalar above curve order", change: func(r *record) {
+			r.WrappedHandle = backend.TryEncrypt(largeScalar)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
