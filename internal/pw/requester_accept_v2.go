@@ -2,11 +2,11 @@ package pw
 
 import (
 	"bytes"
-	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/ads"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/device"
 	"github.com/lainio/ic/key"
@@ -22,14 +22,10 @@ import (
 // An exact duplicate is read-only, subject to Alice's current guards, and
 // returns her current holding; it cannot undo Delete. No peer Vault, callback,
 // transport, first use, PWOpen or Trust is involved. Errors are sanitized.
+// Expiry alone does not invalidate Bob's committed response; the original
+// received/verified ad must remain authentic and identical to the saved request.
 func ReceiveAcceptanceV2(vault *storage.Vault, root, local key.Public,
 	signer key.Handle, response []byte,
-) (bool, error) {
-	return receiveAcceptanceV2(vault, root, local, signer, response, time.Now)
-}
-
-func receiveAcceptanceV2(vault *storage.Vault, root, local key.Public,
-	signer key.Handle, response []byte, now func() time.Time,
 ) (_ bool, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, func(error) error { return ErrEstablishment })
@@ -40,7 +36,7 @@ func receiveAcceptanceV2(vault *storage.Vault, root, local key.Public,
 	var saved localHistoryV2
 	read := func(tx storage.ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
-		saved = try.To1(checkRequesterAcceptanceV2(tx, root, local, response, now))
+		saved = try.To1(checkRequesterAcceptanceV2(tx, root, local, response))
 		return nil
 	}
 	try.To(vault.View(read))
@@ -52,7 +48,7 @@ func receiveAcceptanceV2(vault *storage.Vault, root, local key.Public,
 	}
 	updateErr := vault.Update(func(tx storage.WriteTx) (err error) {
 		defer err2.Handle(&err, nil)
-		saved = try.To1(commitRequesterAcceptanceV2(tx, root, local, response, now))
+		saved = try.To1(commitRequesterAcceptanceV2(tx, root, local, response))
 		if saved.accepted {
 			return errRequesterUnchanged
 		}
@@ -66,7 +62,7 @@ func receiveAcceptanceV2(vault *storage.Vault, root, local key.Public,
 }
 
 func checkRequesterAcceptanceV2(tx storage.ReadTx, root, local key.Public,
-	response []byte, now func() time.Time,
+	response []byte,
 ) (_ localHistoryV2, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
@@ -76,15 +72,19 @@ func checkRequesterAcceptanceV2(tx storage.ReadTx, root, local key.Public,
 		acceptedPayloadV2(saved.binding, saved.request)))
 	assert.That(!saved.accepted || bytes.Equal(saved.response, response),
 		ErrEstablishment)
-	try.To1(requesterGuards(tx, saved.binding.guardBinding(), now))
+	p := saved.binding.guardBinding()
+	try.To(requesterPermissions(tx, p))
+	ad := try.To1(ads.ReadRetainedEstablishmentAdInTx(tx, p.Root, p.Target))
+	assert.That(bytes.Equal(p.Ad, ad),
+		establishmentRefusal("ad_evidence_changed"))
 	return saved, nil
 }
 
 func commitRequesterAcceptanceV2(tx storage.WriteTx, root, local key.Public,
-	response []byte, now func() time.Time,
+	response []byte,
 ) (_ localHistoryV2, err error) {
 	defer err2.Handle(&err, nil)
-	saved := try.To1(checkRequesterAcceptanceV2(tx, root, local, response, now))
+	saved := try.To1(checkRequesterAcceptanceV2(tx, root, local, response))
 	if saved.accepted {
 		return saved, nil
 	}

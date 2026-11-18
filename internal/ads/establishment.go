@@ -24,6 +24,33 @@ func ReadEstablishmentAdInTx(tx storage.ReadTx, root, subject key.Public,
 	try.To(validatePublic(root))
 	try.To(validatePublic(subject))
 	try.To(validateTime(now))
+	ad := try.To1(readEstablishmentAd(tx, root, subject))
+	current := try.To1(decodeCurrent(ad, root, subject))
+	assert.That(now.UnixNano() < current.Payload.ExpiresUnixNano,
+		ErrInvalidRecord)
+	return ad, nil
+}
+
+// ReadRetainedEstablishmentAdInTx authenticates the identical received and
+// verified evidence retained for Alice's v2 acceptance, without checking expiry.
+// The caller must authenticate the exact saved request/response and revalidate
+// current local permission. This is not fresh bootstrap or ad verification.
+func ReadRetainedEstablishmentAdInTx(tx storage.ReadTx,
+	root, subject key.Public,
+) (_ []byte, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+
+	try.To(validatePublic(root))
+	try.To(validatePublic(subject))
+	return readEstablishmentAd(tx, root, subject)
+}
+
+func readEstablishmentAd(tx storage.ReadTx, root, subject key.Public,
+) (_ []byte, err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+
 	received := try.To1(readReceivedClaims(tx, root))
 	verified := try.To1(readVerifiedClaims(tx, root))
 	i, found := claimIndex(received.Entries, subject)
@@ -34,8 +61,6 @@ func ReadEstablishmentAdInTx(tx storage.ReadTx, root, subject key.Public,
 		bytes.Equal(ad, verified.Entries[j].Ad),
 		ErrReceivedClaimChanged,
 	)
-	current := try.To1(decodeCurrent(ad, root, subject))
-	assert.That(now.UnixNano() < current.Payload.ExpiresUnixNano,
-		ErrInvalidRecord)
+	// readVerifiedClaims authenticates every original signature and binding.
 	return bytes.Clone(ad), nil
 }

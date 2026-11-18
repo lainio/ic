@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/ads"
+	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/policy"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -28,6 +28,27 @@ func (f *requesterFixture) invalidateAliceV2(guard string) (err error) {
 	case "received", "verified":
 		return f.alice.vault.Update(func(tx storage.WriteTx) error {
 			return tx.Delete([]byte(guard + "-ad-claims-v1"))
+		})
+	case "changed received", "changed verified", "corrupt ads":
+		var ad ads.Current
+		try.To(wire.UnmarshalCanonical(&ad, f.request.Payload.Ad))
+		ad.Payload.Token[0] ^= 1
+		if guard != "corrupt ads" {
+			digest := key.HashTagged(ads.SignaturePurpose,
+				try.To1(wire.Marshal(ad.Payload)))
+			ad.Signature = try.To1(f.local.handle.Sign(digest[:]))
+		}
+		raw := try.To1(wire.Marshal(ad))
+		return f.alice.vault.Update(func(tx storage.WriteTx) (err error) {
+			defer err2.Handle(&err, nil)
+			for _, collection := range []string{"received", "verified"} {
+				if guard == "changed "+collection || guard == "corrupt ads" {
+					try.To(tx.Put([]byte(collection+"-ad-claims-v1"),
+						try.To1(wire.Marshal([]any{uint8(1),
+							[]any{[]any{f.local.public, raw}}}))))
+				}
+			}
+			return nil
 		})
 	default:
 		ns, subject := knownNS, []byte(f.peer.public)
@@ -46,25 +67,31 @@ func (f *requesterFixture) invalidateAliceV2(guard string) (err error) {
 }
 
 func TestReceiveAcceptanceV2CurrentGuards(t *testing.T) {
-	for _, phase := range []string{"before", "probe", "duplicate probe"} {
+	for _, phase := range []string{"before", "probe", "duplicate",
+		"duplicate probe"} {
 		for _, guard := range []string{"deny", "known self", "known peer",
-			"device", "received", "verified", "expiry", "replaced ad"} {
+			"device", "received", "verified", "replaced ad", "changed contact",
+			"changed received", "changed verified", "corrupt ads"} {
 			t.Run(phase+"/"+guard, func(t *testing.T) {
 				defer assert.PushTester(t)()
 				f := newRequester(t, false)
 				response := f.responseV2(t)
-				if phase == "duplicate probe" {
+				if phase == "duplicate" || phase == "duplicate probe" {
 					assert.That(try.To1(f.receiveV2(response)))
 				}
 				before := requesterRecords(t, f.alice.vault)
 				invalidate := func() error {
-					if guard == "replaced ad" {
-						replaceRequesterAd(t, f, establishmentEndpoint)
+					if guard == "replaced ad" || guard == "changed contact" {
+						endpoint := establishmentEndpoint
+						if guard == "changed contact" {
+							endpoint = "http://127.0.0.1:12346/peer/introduction"
+						}
+						replaceRequesterAd(t, f, endpoint)
 						return nil
 					}
 					return f.invalidateAliceV2(guard)
 				}
-				if phase == "before" {
+				if phase == "before" || phase == "duplicate" {
 					try.To(invalidate())
 				} else {
 					f.signer.sign = func(d []byte) ([]byte, error) {
@@ -117,8 +144,8 @@ func TestReceiveAcceptanceV2PinnedIdentityAndSigner(t *testing.T) {
 				f.signer.signErr = errors.New("private signer diagnostic")
 			}
 			f.alice.unchanged(t, func() {
-				held, err := receiveAcceptanceV2(vault, root, local, signer,
-					response, func() time.Time { return f.now })
+				held, err := ReceiveAcceptanceV2(vault, root, local, signer,
+					response)
 				assert.Equal(err, ErrEstablishment)
 				assert.ThatNot(held)
 			})
@@ -153,8 +180,7 @@ func TestReceiveAcceptanceV2AtomicRollback(t *testing.T) {
 						defer err2.Handle(&err, nil)
 						try.To1(commitRequesterAcceptanceV2(&failingAcceptanceTx{
 							WriteTx: tx, failAfter: boundary, cause: cause},
-							f.root.public, f.peer.public, response,
-							func() time.Time { return f.now }))
+							f.root.public, f.peer.public, response))
 						return nil
 					})
 					assert.ErrorIs(err, cause)
@@ -184,9 +210,8 @@ func TestReceiveAcceptanceV2RevalidatesExactHistory(t *testing.T) {
 				defer err2.Handle(&err, nil)
 				switch mode {
 				case "concurrent commit", "commit then delete":
-					try.To1(receiveAcceptanceV2(f.alice.vault, f.root.public,
-						f.peer.public, f.peer.handle, response,
-						func() time.Time { return f.now }))
+					try.To1(ReceiveAcceptanceV2(f.alice.vault, f.root.public,
+						f.peer.public, f.peer.handle, response))
 					if mode == "commit then delete" {
 						try.To1(DeleteHeldLocal(f.alice.vault, f.root.public,
 							f.peer.public))

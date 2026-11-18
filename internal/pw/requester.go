@@ -286,6 +286,19 @@ func requesterGuards(tx storage.ReadTx, p Establishment,
 ) (_ []byte, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
+	try.To(requesterPermissions(tx, p))
+	ad := try.To1(ads.ReadEstablishmentAdInTx(tx, p.Root, p.Target, now()))
+	assert.That(p.Ad == nil || bytes.Equal(p.Ad, ad),
+		establishmentRefusal("ad_evidence_changed"))
+	return ad, nil
+}
+
+// Both fresh bootstrap and delayed v2 acceptance require current permission.
+// Each caller separately checks its fresh or retained exact ad evidence.
+func requesterPermissions(tx storage.ReadTx, p Establishment) (err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+
 	own := try.To1(onboarding.IsKnownIntroductionInTx(tx, p.Root, p.Requester))
 	peer := try.To1(onboarding.IsKnownIntroductionInTx(tx, p.Root, p.Target))
 	assert.That(own || bytes.Equal(p.Root, p.Requester),
@@ -296,10 +309,7 @@ func requesterGuards(tx storage.ReadTx, p Establishment,
 		p.Target)), establishmentRefusal("policy_deny"))
 	assert.That(try.To1(device.IsAuthorizedLocalInTx(tx, p.Root, p.Requester)),
 		establishmentRefusal("device_not_authorized"))
-	ad := try.To1(ads.ReadEstablishmentAdInTx(tx, p.Root, p.Target, now()))
-	assert.That(p.Ad == nil || bytes.Equal(p.Ad, ad),
-		establishmentRefusal("ad_evidence_changed"))
-	return ad, nil
+	return nil
 }
 
 func attemptSnapshot(raw, ad []byte, accepted, held bool) SavedAttempt {

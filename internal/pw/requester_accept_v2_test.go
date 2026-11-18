@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
@@ -14,8 +13,8 @@ import (
 )
 
 func (f *requesterFixture) receiveV2(response []byte) (bool, error) {
-	return receiveAcceptanceV2(f.alice.vault, f.root.public, f.peer.public,
-		f.signer, response, func() time.Time { return f.now })
+	return ReceiveAcceptanceV2(f.alice.vault, f.root.public, f.peer.public,
+		f.signer, response)
 }
 
 func (f *requesterFixture) responseV2(t *testing.T) []byte {
