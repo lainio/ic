@@ -152,6 +152,16 @@ func assertInvalidStorage(t *testing.T, f vaultFixture, local savedSigner) {
 			assert.DeepEqual(got, Current{})
 			assert.ThatNot(found)
 		}
+		assert.Error(f.vault.View(func(tx storage.ReadTx) (err error) {
+			defer err2.Handle(&err, nil)
+
+			got, found, err := ReadRetainedLocalInTx(tx,
+				local.public, local.public)
+			assert.Error(err)
+			assert.DeepEqual(got, Current{})
+			assert.ThatNot(found)
+			return err
+		}))
 		got, err := PublishLocal(f.vault, local.public, local.public,
 			local.handle, endpoint, fixedNow)
 		assert.Error(err)

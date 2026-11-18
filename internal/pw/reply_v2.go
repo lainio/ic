@@ -2,11 +2,11 @@ package pw
 
 import (
 	"bytes"
-	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/ads"
 	"github.com/lainio/ic/internal/device"
 	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
@@ -17,15 +17,10 @@ import (
 // BobAcceptV2. A fresh discarded signer-usability probe occurs outside View;
 // acceptance is never re-signed, rebound or written. This is also the initial
 // delivery path. Release the lock before I/O; a later Deny cannot recall bytes.
-// Consumed invitation expiry alone is irrelevant; current ad guards still apply.
+// Invitation/ad expiry alone is irrelevant after commit. The original local
+// ad must still authenticate and match exactly, including the bound endpoint.
 func BobReplyV2(vault *storage.Vault, root, local key.Public, signer key.Handle,
 	endpoint string, raw []byte,
-) ([]byte, error) {
-	return bobReplyV2(vault, root, local, signer, endpoint, raw, time.Now)
-}
-
-func bobReplyV2(vault *storage.Vault, root, local key.Public, signer key.Handle,
-	endpoint string, raw []byte, now func() time.Time,
 ) (_ []byte, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, func(error) error { return ErrEstablishment })
@@ -43,8 +38,10 @@ func bobReplyV2(vault *storage.Vault, root, local key.Public, signer key.Handle,
 		history := try.To1(readLocalHistoryV2(tx, root, local, false))
 		assert.That(history.version == 2 && history.accepted && history.held &&
 			bytes.Equal(history.request, raw), ErrEstablishment)
-		try.To1(currentEstablishmentGuards(tx, request.Payload.guardBinding(),
-			endpoint, now))
+		p := request.Payload.guardBinding()
+		try.To(establishmentPermissions(tx, p))
+		current, found := try.To2(ads.ReadRetainedLocalInTx(tx, root, local))
+		try.To(checkEstablishmentAd(p, endpoint, current, found))
 		response = bytes.Clone(history.response)
 		return nil
 	}))

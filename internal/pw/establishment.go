@@ -172,6 +172,19 @@ func matchesInvitation(row Invitation, p Establishment) bool {
 func currentEstablishmentGuards(tx storage.ReadTx, p Establishment,
 	endpoint string, now func() time.Time,
 ) (_ time.Time, err error) {
+	defer err2.Handle(&err, nil)
+
+	try.To(establishmentPermissions(tx, p))
+	timeNow := now()
+	current, found := try.To2(ads.ReadCurrentLocalInTx(tx, p.Root, p.Target,
+		timeNow))
+	try.To(checkEstablishmentAd(p, endpoint, current, found))
+	return timeNow, nil
+}
+
+// Durable authorization is shared by fresh establishment and saved v2 reply.
+// Each caller separately chooses fresh or retained authenticated ad evidence.
+func establishmentPermissions(tx storage.ReadTx, p Establishment) (err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 
@@ -190,12 +203,18 @@ func currentEstablishmentGuards(tx storage.ReadTx, p Establishment,
 		p.Requester)), establishmentRefusal("policy_deny"))
 	assert.That(try.To1(device.IsAuthorizedLocalInTx(tx, p.Root, p.Target)),
 		establishmentRefusal("device_not_authorized"))
-	timeNow := now()
-	current, found := try.To2(ads.ReadCurrentLocalInTx(tx, p.Root, p.Target,
-		timeNow))
+	return nil
+}
+
+func checkEstablishmentAd(p Establishment, endpoint string,
+	current ads.Current, found bool,
+) (err error) {
+	defer assert.PushAsserter(assert.Plain)()
+	defer err2.Handle(&err, nil)
+
 	assert.That(endpoint != "" && found &&
 		current.Payload.PeerIntroductionURL == endpoint &&
 		bytes.Equal(try.To1(wire.Marshal(current)), p.Ad),
 		establishmentRefusal("ad_unavailable_or_mismatched"))
-	return timeNow, nil
+	return nil
 }

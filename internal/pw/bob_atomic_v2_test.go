@@ -38,6 +38,22 @@ func (f *requesterFixture) invalidateBobV2(guard string) (err error) {
 			f.local.handle, endpoint, f.now))
 	case "expiry":
 		f.now = time.Unix(0, f.invitation.ExpiresUnixNano)
+	case "missing ad", "corrupt ad", "malformed ad":
+		return f.f.vault.Update(func(tx storage.WriteTx) (err error) {
+			defer err2.Handle(&err, nil)
+			ns := try.To1(tx.ChildForUpdate([]byte("local-current-ad-v1")))
+			if guard == "missing ad" {
+				return ns.Delete([]byte("slot-1"))
+			}
+			raw := []byte{0xff}
+			if guard == "corrupt ad" {
+				var ad ads.Current
+				try.To(wire.UnmarshalCanonical(&ad, f.request.Payload.Ad))
+				ad.Signature[0] ^= 1
+				raw = try.To1(wire.Marshal(ad))
+			}
+			return ns.Put([]byte("slot-1"), raw)
+		})
 	case "revoke":
 		try.To1(RevokeInvitation(f.f.vault, f.root.public, f.local.public,
 			f.invitation.ID))
@@ -118,6 +134,65 @@ func TestBobAcceptV2ExpiryBoundary(t *testing.T) {
 				f.unconsumed(t)
 			}
 		})
+	}
+}
+
+func TestBobAcceptV2AdExpiryBoundary(t *testing.T) {
+	for _, phase := range []string{"before", "probe", "sign"} {
+		for _, offset := range []time.Duration{-time.Nanosecond, 0, time.Nanosecond} {
+			t.Run(phase+"/"+offset.String(), func(t *testing.T) {
+				defer assert.PushTester(t)()
+				f := newRequester(t, false)
+				// Publish earlier so ad expiry is independent of invitation expiry.
+				ad := try.To1(ads.PublishLocal(f.f.vault, f.root.public,
+					f.local.public, f.local.handle, establishmentEndpoint,
+					f.now.Add(-time.Minute)))
+				raw := try.To1(wire.Marshal(ad))
+				try.To1(ads.ReceiveClaim(f.alice.vault, f.root.public,
+					f.local.public, raw))
+				// Same test-only VerifiedAd admission as newRequester.
+				try.To(f.alice.vault.Update(func(tx storage.WriteTx) (err error) {
+					defer err2.Handle(&err, nil)
+					return tx.Put([]byte("verified-ad-claims-v1"),
+						try.To1(wire.Marshal([]any{uint8(1),
+							[]any{[]any{f.local.public, raw}}})))
+				}))
+				saved := try.To1(f.saveV2(aliceServiceOrigin))
+				deadline := time.Unix(0, ad.Payload.ExpiresUnixNano).Add(offset)
+				assert.That(invitationBeforeExpiry(f.invitation, deadline))
+				signer := &probeSigner{Handle: f.local.handle}
+				if phase == "before" {
+					f.now = deadline
+				} else {
+					at := int64(1)
+					if phase == "sign" {
+						at = 2
+					}
+					signer.sign = func(d []byte) ([]byte, error) {
+						if signer.signCalls.Load() == at {
+							f.now = deadline
+						}
+						return f.local.handle.Sign(d)
+					}
+				}
+				f.alice.unchanged(t, func() {
+					if offset < 0 {
+						try.To(f.acceptV2(saved.request, signer))
+						return
+					}
+					f.f.unchanged(t, func() {
+						assert.Equal(f.acceptV2(saved.request, signer),
+							ErrEstablishment)
+					})
+					f.unconsumed(t)
+					f.f.reopen(t)
+					f.unconsumed(t)
+					if phase == "before" {
+						assert.Equal(signer.signCalls.Load(), 0)
+					}
+				})
+			})
+		}
 	}
 }
 

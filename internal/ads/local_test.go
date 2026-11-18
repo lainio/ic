@@ -177,6 +177,18 @@ func TestReplacementExpiryAndStateBoundary(t *testing.T) {
 			if !found {
 				assert.DeepEqual(current, Current{})
 			}
+			try.To(f.vault.View(func(tx storage.ReadTx) (err error) {
+				defer err2.Handle(&err, nil)
+				fresh, available := try.To2(ReadCurrentLocalInTx(tx,
+					r, owner, tc.now))
+				assert.Equal(available, tc.found)
+				assert.DeepEqual(fresh, current)
+				retained, available := try.To2(ReadRetainedLocalInTx(tx,
+					r, owner))
+				assert.That(available)
+				assert.DeepEqual(retained, second)
+				return nil
+			}))
 		}
 	})
 	assert.DeepEqual(try.To1(records(f.vault, currentNamespace)), stored)
@@ -186,6 +198,35 @@ func TestReplacementExpiryAndStateBoundary(t *testing.T) {
 	assert.Equal(third.Payload.ExpiresUnixNano, expiry.Add(TTL).UnixNano())
 	assert.ThatNot(bytes.Equal(third.Payload.Token, second.Payload.Token))
 	assert.DeepEqual(try.To1(records(f.vault, names...)), before)
+}
+
+func TestReadRetainedLocalInTxAbsentAndInputs(t *testing.T) {
+	defer assert.PushTester(t)()
+	f, local := newVault(t), newSigner(t)
+	f.unchanged(t, func() {
+		try.To(f.vault.View(func(tx storage.ReadTx) (err error) {
+			defer err2.Handle(&err, nil)
+
+			got, found, err := ReadRetainedLocalInTx(tx, local.public, local.public)
+			assert.NoError(err)
+			assert.ThatNot(found)
+			assert.DeepEqual(got, Current{})
+			for _, tc := range []struct {
+				tx          storage.ReadTx
+				root, local key.Public
+			}{
+				{nil, local.public, local.public},
+				{tx, nil, local.public},
+				{tx, local.public, nil},
+			} {
+				got, found, err := ReadRetainedLocalInTx(tc.tx, tc.root, tc.local)
+				assert.ErrorIs(err, ErrInvalidInput)
+				assert.ThatNot(found)
+				assert.DeepEqual(got, Current{})
+			}
+			return nil
+		}))
+	})
 }
 
 func TestEndpointNormalization(t *testing.T) {

@@ -182,8 +182,8 @@ func TestBobV2PinnedInputsAndSigner(t *testing.T) {
 						assert.Equal(bobAcceptV2(vault, root, local, signer,
 							endpoint, saved.request, now), ErrEstablishment)
 					} else {
-						response, err := bobReplyV2(vault, root, local, signer,
-							endpoint, saved.request, now)
+						response, err := BobReplyV2(vault, root, local, signer,
+							endpoint, saved.request)
 						assert.Equal(err, ErrEstablishment)
 						assert.SNil(response)
 					}

@@ -9,6 +9,7 @@ import (
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/ads"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/nodeidentity"
 	"github.com/lainio/ic/key"
@@ -25,30 +26,52 @@ func TestBobReplyV2ExactLossRestartAndExpiry(t *testing.T) {
 	try.To(wire.UnmarshalCanonical(&history, raw))
 	var result SignedAcceptedV2
 	try.To(wire.UnmarshalCanonical(&result, history.Response))
+	var ad ads.Current
+	try.To(wire.UnmarshalCanonical(&ad, result.Payload.Binding.Ad))
+	expiry := time.Unix(0, ad.Payload.ExpiresUnixNano)
 	digest := key.HashTagged(AcceptedPurposeV2,
 		try.To1(wire.Marshal(result.Payload)))
 	var probes [][]byte
+	crossExpiry := false
 	signer := &probeSigner{Handle: f.local.handle}
 	signer.sign = func(d []byte) ([]byte, error) {
 		if bytes.Equal(d, digest[:]) {
 			return nil, errors.New("must not sign acceptance again")
 		}
 		probes = append(probes, bytes.Clone(d))
+		if crossExpiry {
+			f.now = expiry
+		}
 		return signer.Handle.Sign(d)
 	}
 	f.f.lease.remaining.Store(0)
-	for _, restart := range []bool{false, true} {
-		if restart {
+	steps := []struct {
+		now         time.Time
+		restart     bool
+		crossExpiry bool
+	}{
+		{f.now, false, false},
+		{time.Unix(0, f.invitation.ExpiresUnixNano), true, false},
+		{expiry.Add(-time.Nanosecond), false, true},
+		{expiry, false, false},
+		{expiry.Add(time.Hour), false, false},
+		{expiry.Add(time.Hour), true, false},
+	}
+	for _, step := range steps {
+		f.now, crossExpiry = step.now, step.crossExpiry
+		if step.restart {
 			f.f.reopen(t)
 			signer.Handle = try.To1(nodeidentity.OpenDirectory(
 				f.local.dir, f.local.unlock))
-			f.now = time.Unix(0, f.invitation.ExpiresUnixNano)
 		}
 		f.f.unchanged(t, func() {
 			f.alice.unchanged(t, func() {
 				response := try.To1(f.replyV2(saved.request, signer))
 				assert.DeepEqual(response, history.Response)
 				response[0] ^= 1 // Caller bytes cannot mutate saved history.
+				_, fresh := try.To2(ads.ReadCurrentLocal(f.f.vault,
+					f.root.public, f.local.public, f.now))
+				assert.Equal(fresh, f.now.Before(expiry))
 			})
 		})
 		gotRow, gotRaw, gotHeld := f.records(t)
@@ -56,16 +79,11 @@ func TestBobReplyV2ExactLossRestartAndExpiry(t *testing.T) {
 		assert.DeepEqual(gotRaw, raw)
 		assert.DeepEqual(gotHeld, held)
 	}
-	assert.Equal(signer.signCalls.Load(), 2) // Fresh probes only, no acceptance.
-	assert.ThatNot(bytes.Equal(probes[0], probes[1]))
-	f.now = f.now.Add(time.Minute) // Current ad has now expired too.
-	f.f.unchanged(t, func() {
-		response, err := f.replyV2(saved.request, signer)
-		assert.Equal(err, ErrEstablishment)
-		assert.SNil(response)
-	})
-	_, after, _ := f.records(t)
-	assert.DeepEqual(after, raw)
+	// One fresh discarded probe per retrieval; no acceptance re-signing.
+	assert.Equal(signer.signCalls.Load(), int64(len(steps)))
+	for i, probe := range probes[1:] {
+		assert.ThatNot(bytes.Equal(probes[i], probe))
+	}
 }
 
 func TestBobReplyV2ExactBytesAndContacts(t *testing.T) {
@@ -129,7 +147,8 @@ func TestBobReplyV2ExactBytesAndContacts(t *testing.T) {
 func TestBobReplyV2CurrentGuardsAndDeletion(t *testing.T) {
 	for _, phase := range []string{"before", "probe"} {
 		for _, guard := range []string{"deny", "held", "known self",
-			"known peer", "device", "ad", "origin"} {
+			"known peer", "device", "ad", "origin", "missing ad",
+			"corrupt ad", "malformed ad"} {
 			t.Run(phase+"/"+guard, func(t *testing.T) {
 				defer assert.PushTester(t)()
 				f := newRequester(t, false)

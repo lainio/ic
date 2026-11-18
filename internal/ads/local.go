@@ -194,3 +194,21 @@ func ReadCurrentLocalInTx(tx storage.ReadTx, root, local key.Public,
 	}
 	return current, true, nil
 }
+
+// ReadRetainedLocalInTx authenticates the saved slot-1 publication regardless
+// of expiry, for comparison with already committed relationship evidence only.
+// It does not authorize fresh bootstrap. Callers must require the exact saved
+// ad binding and enforce current Known, policy, device and signer guards.
+// Absence returns zero, false, nil; malformed or unauthentic evidence fails.
+// There is no nested View, signing, write, refresh or discovery fallback.
+func ReadRetainedLocalInTx(tx storage.ReadTx, root, local key.Public,
+) (_ Current, _ bool, err error) {
+	defer err2.Handle(&err, nil)
+
+	if tx == nil {
+		return Current{}, false, ErrInvalidInput
+	}
+	try.To(validatePublic(root))
+	try.To(validatePublic(local))
+	return readStored(tx, root, local)
+}

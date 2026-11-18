@@ -22,8 +22,8 @@ func (f *establishmentFixture) acceptV2(raw []byte, signer key.Handle) error {
 
 func (f *establishmentFixture) replyV2(raw []byte, signer key.Handle,
 ) ([]byte, error) {
-	return bobReplyV2(f.f.vault, f.root.public, f.local.public, signer,
-		establishmentEndpoint, raw, func() time.Time { return f.now })
+	return BobReplyV2(f.f.vault, f.root.public, f.local.public, signer,
+		establishmentEndpoint, raw)
 }
 
 func TestBobAcceptV2IndependentContactCommit(t *testing.T) {
