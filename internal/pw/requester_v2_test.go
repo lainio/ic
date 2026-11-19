@@ -86,6 +86,121 @@ func TestRequesterV2ContactsAndExactReopen(t *testing.T) {
 	}
 }
 
+func TestRequesterV2SavedAttemptAdExpiry(t *testing.T) {
+	for _, directed := range []bool{false, true} {
+		for _, state := range []string{"pending", "accepted", "deleted"} {
+			t.Run(fmt.Sprint(directed, "/", state), func(t *testing.T) {
+				defer assert.PushTester(t)()
+				f := newRequester(t, directed)
+				saved := try.To1(f.saveV2(aliceServiceOrigin))
+				if state != "pending" {
+					try.To(f.acceptV2(saved.request, f.local.handle))
+					assert.That(try.To1(f.receiveV2(try.To1(
+						f.replyV2(saved.request, f.local.handle)))))
+					if state == "deleted" {
+						assert.That(try.To1(DeleteHeldLocal(f.alice.vault,
+							f.root.public, f.peer.public)))
+					}
+				}
+				saved.Accepted, saved.Held = state != "pending", state == "accepted"
+				p := try.To1(decodeEstablishmentV2(saved.request,
+					f.root.public, f.local.public)).Payload
+				digest := key.HashTagged(EstablishPurposeV2,
+					try.To1(wire.Marshal(p)))
+				var ad ads.Current
+				try.To(wire.UnmarshalCanonical(&ad, p.Ad))
+				deadline := time.Unix(0, ad.Payload.ExpiresUnixNano)
+				before := heldTestState(t, f.alice.vault)
+				f.alice.lease.remaining.Store(0)
+
+				for _, phase := range []string{"before", "probe", "at", "after",
+					"reopen"} {
+					t.Run(phase, func(t *testing.T) {
+						defer assert.PushTester(t)()
+						f.now = deadline.Add(-time.Nanosecond)
+						switch phase {
+						case "at":
+							f.now = deadline
+						case "after", "reopen":
+							f.now = deadline.Add(time.Nanosecond)
+						}
+						if phase == "reopen" {
+							f.alice.reopen(t)
+							f.signer.Handle = try.To1(nodeidentity.OpenDirectory(
+								f.peer.dir, f.peer.unlock))
+						}
+						f.signer.sign = func(d []byte) ([]byte, error) {
+							if bytes.Equal(d, digest[:]) {
+								return nil, errors.New("attempt must not be re-signed")
+							}
+							if phase == "probe" {
+								f.now = deadline // Between the two read transactions.
+							}
+							return f.signer.Handle.Sign(d)
+						}
+						calls := f.signer.signCalls.Load()
+						f.f.unchanged(t, func() {
+							f.alice.unchanged(t, func() {
+								again := try.To1(f.saveV2(aliceServiceOrigin))
+								assert.DeepEqual(again, saved)
+								assert.DeepEqual(try.To1(decodeEstablishmentV2(
+									again.request, f.root.public, f.local.public)).Payload, p)
+								again.request[0] ^= 1 // No alias to durable bytes.
+							})
+						})
+						assert.Equal(f.signer.signCalls.Load()-calls, 1) // Probe only.
+						assert.DeepEqual(heldTestState(t, f.alice.vault), before)
+					})
+				}
+			})
+		}
+	}
+}
+
+func TestRequesterV2NewAttemptAdExpiryBoundary(t *testing.T) {
+	for _, phase := range []string{"before", "probe", "sign"} {
+		for _, offset := range []time.Duration{-time.Nanosecond, 0, time.Nanosecond} {
+			t.Run(phase+"/"+offset.String(), func(t *testing.T) {
+				defer assert.PushTester(t)()
+				f := newRequester(t, false)
+				var ad ads.Current
+				try.To(wire.UnmarshalCanonical(&ad, f.request.Payload.Ad))
+				deadline := time.Unix(0, ad.Payload.ExpiresUnixNano).Add(offset)
+				if phase == "before" {
+					f.now = deadline
+				} else {
+					at := int64(1)
+					if phase == "sign" {
+						at = 2
+					}
+					f.signer.sign = func(d []byte) ([]byte, error) {
+						if f.signer.signCalls.Load() == at {
+							f.now = deadline
+						}
+						return f.peer.handle.Sign(d)
+					}
+				}
+				f.f.unchanged(t, func() {
+					if offset < 0 {
+						saved := try.To1(f.saveV2(aliceServiceOrigin))
+						assert.SNotEmpty(saved.request)
+						assert.ThatNot(saved.Accepted || saved.Held)
+						return
+					}
+					f.alice.unchanged(t, func() {
+						saved, err := f.saveV2(aliceServiceOrigin)
+						assert.Equal(err, ErrEstablishment)
+						assert.DeepEqual(saved, SavedAttemptV2{})
+					})
+					assert.DeepEqual(requesterRecords(t, f.alice.vault), [3][]byte{})
+					f.alice.reopen(t)
+					assert.DeepEqual(requesterRecords(t, f.alice.vault), [3][]byte{})
+				})
+			})
+		}
+	}
+}
+
 func TestRequesterV2RejectsOwnConfiguration(t *testing.T) {
 	for _, origin := range []string{
 		"", "http://127.0.0.1:0", "http://localhost:4040",
@@ -157,8 +272,48 @@ func TestRequesterV2SignerAndIdentity(t *testing.T) {
 	}
 }
 
+func TestRequesterV2RetainedSigner(t *testing.T) {
+	for _, fault := range []string{"nil", "typed nil", "wrong signer",
+		"sign failure", "wrong signature", "lying signer"} {
+		t.Run(fault, func(t *testing.T) {
+			defer assert.PushTester(t)()
+			f := newRequester(t, false)
+			try.To1(f.saveV2(aliceServiceOrigin))
+			f.now = f.now.Add(2 * ads.TTL)
+			f.alice.reopen(t)
+			before := heldTestState(t, f.alice.vault)
+			f.alice.lease.remaining.Store(0)
+			signer := key.Handle(f.signer)
+			switch fault {
+			case "nil":
+				signer = nil
+			case "typed nil":
+				signer = (*probeSigner)(nil)
+			case "wrong signer":
+				signer = f.local.handle
+			case "sign failure":
+				f.signer.signErr = errors.New("private signer diagnostic")
+			case "wrong signature":
+				f.signer.sign = func([]byte) ([]byte, error) { return []byte{1}, nil }
+			case "lying signer":
+				f.signer.sign = f.local.handle.Sign
+			}
+			f.alice.unchanged(t, func() {
+				saved, err := saveAttemptV2(f.alice.vault, f.root.public,
+					f.peer.public, f.local.public, signer, f.invitation.ID,
+					f.invitation.Audience, aliceServiceOrigin,
+					func() time.Time { return f.now })
+				assert.Equal(err, ErrEstablishment)
+				assert.DeepEqual(saved, SavedAttemptV2{})
+			})
+			assert.DeepEqual(heldTestState(t, f.alice.vault), before)
+		})
+	}
+}
+
 func TestRequesterV2DescriptorConflicts(t *testing.T) {
-	for _, field := range []string{"origin", "target", "invitation", "audience"} {
+	for _, field := range []string{"origin", "root", "requester", "target",
+		"invitation", "audience"} {
 		t.Run(field, func(t *testing.T) {
 			defer assert.PushTester(t)()
 			f := newRequester(t, false)
@@ -168,6 +323,10 @@ func TestRequesterV2DescriptorConflicts(t *testing.T) {
 			switch field {
 			case "origin":
 				origin = "http://127.0.0.1:4041" // A new :0 listener's port.
+			case "root":
+				f.root.public = f.local.public
+			case "requester":
+				f.peer.public = f.root.public
 			case "target":
 				f.local.public = f.root.public
 			case "invitation":
@@ -176,8 +335,12 @@ func TestRequesterV2DescriptorConflicts(t *testing.T) {
 				f.invitation.Audience = InvitationDirected
 			}
 			f.alice.unchanged(t, func() {
-				_, err := f.saveV2(origin)
-				assert.Equal(err, ErrEstablishment)
+				for range 2 {
+					again, err := f.saveV2(origin)
+					assert.Equal(err, ErrEstablishment)
+					assert.DeepEqual(again, SavedAttemptV2{})
+					f.now = f.now.Add(2 * ads.TTL)
+				}
 			})
 			assert.Equal(f.signer.signCalls.Load(), 2)
 			assert.DeepEqual(requesterRecords(t, f.alice.vault),
@@ -229,14 +392,26 @@ func TestRequesterV2ChangedAdConflicts(t *testing.T) {
 }
 
 func TestRequesterV2CurrentGuards(t *testing.T) {
-	for _, phase := range []string{"before", "probe", "sign", "retry"} {
-		for _, guard := range []string{"known self", "known peer", "device",
-			"deny", "received", "verified", "expiry"} {
+	for _, phase := range []string{"before", "probe", "sign", "retry",
+		"retry probe"} {
+		guards := []string{"known self", "known peer", "device",
+			"deny", "received", "verified", "expiry", "changed received",
+			"changed verified", "corrupt ads", "malformed received",
+			"malformed verified"}
+		if phase != "before" {
+			// Replacement conflicts only once preparation binds the original ad.
+			guards = append(guards, "replaced ad", "changed contact")
+		}
+		for _, guard := range guards {
 			t.Run(phase+"/"+guard, func(t *testing.T) {
 				defer assert.PushTester(t)()
 				f := newRequester(t, false)
-				if phase == "retry" {
+				retry := phase == "retry" || phase == "retry probe"
+				if retry {
 					try.To1(f.saveV2(aliceServiceOrigin))
+					if guard != "expiry" {
+						f.now = f.now.Add(2 * ads.TTL)
+					}
 				}
 				before := requesterRecords(t, f.alice.vault)
 				invalidate := func() (err error) {
@@ -263,6 +438,19 @@ func TestRequesterV2CurrentGuards(t *testing.T) {
 						return f.alice.vault.Update(func(tx storage.WriteTx) error {
 							return tx.Delete([]byte(guard + "-ad-claims-v1"))
 						})
+					case "changed received", "changed verified", "corrupt ads":
+						return f.invalidateAliceV2(guard)
+					case "replaced ad", "changed contact":
+						endpoint := establishmentEndpoint
+						if guard == "changed contact" {
+							endpoint = "http://127.0.0.1:12346/peer/introduction"
+						}
+						replaceRequesterAd(t, f, endpoint)
+					case "malformed received", "malformed verified":
+						name := strings.TrimPrefix(guard, "malformed ")
+						return f.alice.vault.Update(func(tx storage.WriteTx) error {
+							return tx.Put([]byte(name+"-ad-claims-v1"), []byte{0xff})
+						})
 					case "expiry":
 						f.now = f.now.Add(2 * ads.TTL)
 					}
@@ -274,6 +462,8 @@ func TestRequesterV2CurrentGuards(t *testing.T) {
 					at := int64(1)
 					if phase == "sign" {
 						at = 2
+					} else if phase == "retry probe" {
+						at = 3
 					}
 					f.signer.sign = func(d []byte) ([]byte, error) {
 						if f.signer.signCalls.Load() == at {
@@ -285,8 +475,13 @@ func TestRequesterV2CurrentGuards(t *testing.T) {
 					}
 				}
 				saved, err := f.saveV2(aliceServiceOrigin)
-				assert.Equal(err, ErrEstablishment)
-				assert.DeepEqual(saved, SavedAttemptV2{})
+				if retry && guard == "expiry" {
+					assert.NoError(err)
+					assert.DeepEqual(saved, SavedAttemptV2{request: before[0]})
+				} else {
+					assert.Equal(err, ErrEstablishment)
+					assert.DeepEqual(saved, SavedAttemptV2{})
+				}
 				assert.DeepEqual(requesterRecords(t, f.alice.vault), before)
 				if phase == "before" {
 					assert.Equal(f.signer.signCalls.Load(), 0)
@@ -471,6 +666,7 @@ func TestRequesterV2CorruptSavedAttemptIsNotRepaired(t *testing.T) {
 				return tx.Put([]byte(name), raw)
 			}))
 			before := requesterRecords(t, f.alice.vault)
+			f.now = f.now.Add(2 * ads.TTL)
 			f.alice.reopen(t)
 			f.alice.unchanged(t, func() {
 				_, err := f.saveV2(aliceServiceOrigin)
@@ -478,6 +674,53 @@ func TestRequesterV2CorruptSavedAttemptIsNotRepaired(t *testing.T) {
 			})
 			assert.Equal(f.signer.signCalls.Load(), 2)
 			assert.DeepEqual(requesterRecords(t, f.alice.vault), before)
+		})
+	}
+}
+
+func TestRequesterV2RetainedHistoryDuringProbe(t *testing.T) {
+	for _, mode := range []string{"attempt", "response signature", "held digest",
+		"first use", "delete"} {
+		t.Run(mode, func(t *testing.T) {
+			defer assert.PushTester(t)()
+			f := newRequester(t, false)
+			assert.That(try.To1(f.receiveV2(f.responseV2(t))))
+			original := requesterRecords(t, f.alice.vault)
+			f.now = f.now.Add(2 * ads.TTL)
+			var injected [3][]byte
+			f.signer.sign = func(d []byte) (_ []byte, err error) {
+				defer err2.Handle(&err, nil)
+				if mode == "delete" {
+					try.To1(DeleteHeldLocal(f.alice.vault,
+						f.root.public, f.peer.public))
+				} else {
+					try.To(f.alice.vault.Update(func(tx storage.WriteTx) error {
+						if mode == "first use" {
+							return tx.Put([]byte(firstUseKey), []byte{0xff})
+						}
+						return corruptContactHistoryV2(tx, f.peer.public, true, mode)
+					}))
+				}
+				injected = requesterRecords(t, f.alice.vault)
+				f.alice.lease.remaining.Store(0)
+				return f.peer.handle.Sign(d)
+			}
+			calls := f.signer.signCalls.Load()
+			f.f.unchanged(t, func() {
+				saved, err := f.saveV2(aliceServiceOrigin)
+				if mode == "delete" {
+					assert.NoError(err)
+					assert.DeepEqual(saved, SavedAttemptV2{
+						request: original[0], Accepted: true, Held: false})
+				} else {
+					assert.Equal(err, ErrEstablishment)
+					assert.DeepEqual(saved, SavedAttemptV2{})
+				}
+			})
+			assert.Equal(f.signer.signCalls.Load()-calls, 1)
+			assert.DeepEqual(requesterRecords(t, f.alice.vault), injected)
+			f.alice.reopen(t)
+			assert.DeepEqual(requesterRecords(t, f.alice.vault), injected)
 		})
 	}
 }

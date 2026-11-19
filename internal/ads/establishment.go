@@ -32,8 +32,8 @@ func ReadEstablishmentAdInTx(tx storage.ReadTx, root, subject key.Public,
 }
 
 // ReadRetainedEstablishmentAdInTx authenticates the identical received and
-// verified evidence retained for Alice's v2 acceptance, without checking expiry.
-// The caller must authenticate the exact saved request/response and revalidate
+// verified evidence retained for Alice's v2 attempt/acceptance, ignoring expiry.
+// The caller must authenticate the exact saved history and revalidate
 // current local permission. This is not fresh bootstrap or ad verification.
 func ReadRetainedEstablishmentAdInTx(tx storage.ReadTx,
 	root, subject key.Public,

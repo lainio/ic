@@ -109,7 +109,7 @@ func TestReceiveAcceptanceV2AdExpiry(t *testing.T) {
 				f.root.public, f.peer.public)), "http://127.0.0.1:12345")
 			assert.DeepEqual(useRecords(t, f.alice.vault), [2][]byte{})
 
-			// The fresh reader and saved-attempt retrieval retain their guards.
+			// Fresh discovery refuses; exact retained-attempt retrieval succeeds.
 			f.alice.unchanged(t, func() {
 				err := f.alice.vault.View(func(tx storage.ReadTx) (err error) {
 					defer err2.Handle(&err, nil)
@@ -118,8 +118,9 @@ func TestReceiveAcceptanceV2AdExpiry(t *testing.T) {
 					return nil
 				})
 				assert.ErrorIs(err, ads.ErrInvalidRecord)
-				_, err = f.saveV2(aliceServiceOrigin)
-				assert.Equal(err, ErrEstablishment)
+				saved := try.To1(f.saveV2(aliceServiceOrigin))
+				assert.DeepEqual(saved.request, committed[0])
+				assert.That(saved.Accepted && saved.Held)
 			})
 
 			f.alice.reopen(t)

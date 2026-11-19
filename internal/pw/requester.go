@@ -293,7 +293,7 @@ func requesterGuards(tx storage.ReadTx, p Establishment,
 	return ad, nil
 }
 
-// Both fresh bootstrap and delayed v2 acceptance require current permission.
+// Fresh bootstrap and retained v2 evidence require current permission.
 // Each caller separately checks its fresh or retained exact ad evidence.
 func requesterPermissions(tx storage.ReadTx, p Establishment) (err error) {
 	defer assert.PushAsserter(assert.Plain)()
@@ -340,6 +340,8 @@ type SavedAttemptV2 struct {
 // Retained attempts are read, never re-signed or rebound. A new runtime port
 // conflicts; disposable demos need fresh relationship state for a fresh port
 // unless an explicit fixed contact is configured. No reachability is promised.
+// Expiry alone does not prevent retrieval: the original received/verified ad
+// must still authenticate and match. New attempts still require a fresh ad.
 // This API does not commit acceptance or change the live v1 owner route.
 func SaveAttemptV2(vault *storage.Vault, root, local, target key.Public,
 	signer key.Handle, invitationID []byte, audience, requesterContact string,
@@ -375,7 +377,7 @@ func saveAttemptV2(vault *storage.Vault, root, local, target key.Public,
 	var saved SavedAttemptV2
 	read := func(tx storage.ReadTx) (err error) {
 		defer err2.Handle(&err, nil)
-		saved = try.To1(readAttemptV2(tx, p, now))
+		saved = try.To1(readAttemptV2(tx, p))
 		if saved.request == nil {
 			p.Ad = try.To1(requesterGuards(tx, p.guardBinding(), now))
 			p.TargetContact = try.To1(serviceContactFromAd(p.Ad))
@@ -412,7 +414,6 @@ func saveAttemptV2(vault *storage.Vault, root, local, target key.Public,
 // Accepted/deleted v2 history is never mistaken for an available attempt slot.
 // Legacy v1 evidence retains its interpretation and cannot be overwritten.
 func readAttemptV2(tx storage.ReadTx, expected EstablishmentV2,
-	now func() time.Time,
 ) (_ SavedAttemptV2, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
@@ -431,7 +432,10 @@ func readAttemptV2(tx storage.ReadTx, expected EstablishmentV2,
 		establishmentRefusal("attempt_incompatible"))
 	assert.That(expected.Ad == nil || bytes.Equal(p.Ad, expected.Ad),
 		establishmentRefusal("ad_evidence_changed"))
-	try.To1(requesterGuards(tx, p.guardBinding(), now))
+	try.To(requesterPermissions(tx, p.guardBinding()))
+	ad := try.To1(ads.ReadRetainedEstablishmentAdInTx(tx, p.Root, p.Target))
+	assert.That(bytes.Equal(p.Ad, ad),
+		establishmentRefusal("ad_evidence_changed"))
 	return SavedAttemptV2{request: saved.request,
 		Accepted: saved.accepted, Held: saved.held}, nil
 }
@@ -447,7 +451,7 @@ func commitAttemptV2(tx storage.WriteTx, root, local key.Public,
 	p := request.Payload
 	assert.That(bytes.Equal(p.Requester, local) &&
 		p.RequesterContact == requesterContact, ErrEstablishment)
-	prior := try.To1(readAttemptV2(tx, p, now))
+	prior := try.To1(readAttemptV2(tx, p))
 	assert.That(prior.request == nil, establishmentRefusal("attempt_incompatible"))
 	try.To1(requesterGuards(tx, p.guardBinding(), now))
 	return tx.Put([]byte(attemptKey), raw)
