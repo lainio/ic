@@ -9,12 +9,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
+	"github.com/lainio/ic/internal/ads"
 	"github.com/lainio/ic/internal/core/wire"
 	"github.com/lainio/ic/internal/nodevault"
 	"github.com/lainio/ic/internal/ownerapi"
@@ -22,6 +25,7 @@ import (
 	"github.com/lainio/ic/internal/policy"
 	"github.com/lainio/ic/internal/pw"
 	"github.com/lainio/ic/key"
+	"github.com/lainio/ic/storage"
 )
 
 // Both origins are actual independent listeners. The existing fixture observes
@@ -202,6 +206,18 @@ func TestOwnerV2LiveIndependentCommits(t *testing.T) {
 func TestOwnerV2LostResponseExactRetryAndReopen(t *testing.T) {
 	defer assert.PushTester(t)()
 	f := newRedemptionV2(t, true)
+	// Publish and remotely verify before saving any attempt. Only publication's
+	// explicit time input is shifted; all HTTP guards use the real wall clock.
+	ad := try.To1(ads.PublishLocal(f.b.store.Vault(), f.root, f.b.public,
+		f.b.signer, f.server.URL+"/peer/introduction",
+		time.Now().Add(-ads.TTL+5*time.Second)))
+	f.ad = try.To1(wire.Marshal(ad))
+	assert.That(try.To1(ads.ReceiveClaim(f.a.store.Vault(), f.root,
+		f.b.public, f.ad)))
+	assert.That(try.To1(ads.VerifyReceivedRemote(t.Context(),
+		f.a.store.Vault(), f.root, f.a.public, f.b.public)))
+	deadline := time.Unix(0, ad.Payload.ExpiresUnixNano)
+
 	f.drop = true
 	assert.Equal(f.invoke().Code, 502)
 	f.mu.Lock()
@@ -214,6 +230,56 @@ func TestOwnerV2LostResponseExactRetryAndReopen(t *testing.T) {
 	assert.SNotEmpty(b[1])
 	assert.SNotEmpty(b[2])
 	assert.Equal(len(f.requests), 1) // No automatic retry after response loss.
+	assert.Equal(len(f.responses), 1)
+	assert.DeepEqual(f.requests[0], a[0])
+	var history observedUseReceipt
+	try.To(wire.UnmarshalCanonical(&history, b[1]))
+	var envelope struct {
+		Version    int
+		Acceptance []byte
+	}
+	try.To(json.Unmarshal(f.responses[0], &envelope))
+	assert.Equal(envelope.Version, 2)
+	assert.DeepEqual(envelope.Acceptance, history.Response)
+	invitation, found := try.To2(pw.ReadInvitation(f.b.store.Vault(),
+		f.root, f.b.public))
+	assert.That(found)
+	assert.Equal(invitation.State, pw.InvitationConsumed)
+	assert.That(ad.Payload.ExpiresUnixNano < invitation.ExpiresUnixNano)
+	current, fresh := try.To2(ads.ReadCurrentLocal(f.b.store.Vault(),
+		f.root, f.b.public, time.Now()))
+	assert.That(fresh, "Bob must commit before advertisement expiry")
+	assert.DeepEqual(current, ad)
+	t.Logf("Bob committed with %s remaining before ad expiry",
+		time.Until(deadline))
+	aSigns, bSigns := len(f.a.signer.signed()), len(f.b.signer.signed())
+	f.mu.Unlock()
+
+	// Expiry changes no evidence. Wait for the signed deadline, not the 15m TTL.
+	before := f.snapshot(t)
+	timer := time.NewTimer(time.Until(deadline))
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+	case <-t.Context().Done():
+		t.Fatal(t.Context().Err())
+	}
+	assert.ThatNot(time.Now().Before(deadline))
+	current, fresh = try.To2(ads.ReadCurrentLocal(f.b.store.Vault(),
+		f.root, f.b.public, time.Now()))
+	assert.ThatNot(fresh)
+	assert.DeepEqual(current, ads.Current{})
+	err := f.a.store.Vault().View(func(tx storage.ReadTx) (err error) {
+		defer err2.Handle(&err, nil)
+		try.To1(ads.ReadEstablishmentAdInTx(tx, f.root, f.b.public,
+			time.Now()))
+		return nil
+	})
+	assert.ErrorIs(err, ads.ErrInvalidRecord)
+	assert.DeepEqual(try.To1(exchangeRecords(f.b.store.Vault())), b)
+	assert.DeepEqual(f.snapshot(t), before)
+
+	f.mu.Lock()
 	for _, n := range []*exchangeNode{f.a, f.b} {
 		try.To(n.store.Close())
 		n.store = try.To1(
@@ -223,19 +289,75 @@ func TestOwnerV2LostResponseExactRetryAndReopen(t *testing.T) {
 	}
 	f.bindV2(t)
 	f.drop = false
+	// The retried response must still precede Alice's independent acceptance.
+	// Report worker errors on the test goroutine after joining the HTTP handler.
+	f.after = func() (err error) {
+		defer err2.Handle(&err, nil)
+		records := try.To1(exchangeRecords(f.a.store.Vault()))
+		for i, record := range a {
+			if !bytes.Equal(records[i], record) {
+				return errors.New("retry changed Alice before response delivery")
+			}
+		}
+		return nil
+	}
 	f.mu.Unlock()
-	assert.Equal(f.invoke().Code, 200)
+	assert.DeepEqual(try.To1(exchangeRecords(f.a.store.Vault())), a)
+	assert.DeepEqual(try.To1(exchangeRecords(f.b.store.Vault())), b)
+	before = f.snapshot(t)
+	aliceState := exchangeHeldState(t, f.a.store.Vault())
+	w := f.invoke()
+	assert.Equal(w.Code, 200)
+	assert.Equal(w.Body.String(),
+		`{"acceptance_saved":true,"local_held":true}`)
 	f.mu.Lock()
 	assert.NoError(f.failure)
+	assert.Equal(f.callbacks, 0)
 	assert.Equal(len(f.requests), 2)
+	assert.Equal(len(f.responses), 2)
 	assert.DeepEqual(f.requests[0], f.requests[1])
 	assert.DeepEqual(f.responses[0], f.responses[1])
 	assert.DeepEqual(try.To1(exchangeRecords(f.b.store.Vault())), b)
+	assert.DeepEqual(try.To1(exchangeRecords(f.a.store.Vault())),
+		[3][]byte{a[0], b[1], b[2]})
+	retained, found := try.To2(pw.ReadInvitation(f.b.store.Vault(),
+		f.root, f.b.public))
+	assert.That(found)
+	assert.DeepEqual(retained, invitation)
 	checkV2Evidence(t, f)
+	// Saved-attempt retrieval and receipt probe Alice; only reply probes Bob.
+	assert.Equal(len(f.a.signer.signed()), aSigns+2)
+	assert.Equal(len(f.b.signer.signed()), bSigns+1)
 	f.mu.Unlock()
-	before := f.snapshot(t)
+	afterState := exchangeHeldState(t, f.a.store.Vault())
+	delete(afterState["root"], "local-pw-accepted-v1")
+	delete(afterState["root"], "local-pw-held-v1")
+	assert.DeepEqual(afterState, aliceState)
+	// Only Alice's Vault changes; Bob's encrypted bytes and both usage files
+	// remain exact. Reopening was completed before taking this snapshot.
+	after := f.snapshot(t)
+	delete(before, filepath.Join(f.a.dir, "state", "vault.db"))
+	delete(after, filepath.Join(f.a.dir, "state", "vault.db"))
+	assert.DeepEqual(after, before)
+
+	before = f.snapshot(t)
+	var request pw.SignedEstablishmentV2
+	try.To(wire.UnmarshalCanonical(&request, a[0]))
+	assert.Equal(try.To1(pw.RequesterUsableContactV2(f.a.store.Vault(),
+		f.root, f.a.public, f.a.signer,
+		pw.ContactRuntimeV2{Running: true, BoundOrigin: f.alicePeer.URL})),
+		request.Payload.TargetContact)
+	assert.Equal(try.To1(pw.BobUsableContactV2(f.b.store.Vault(),
+		f.root, f.b.public, f.b.signer,
+		pw.ContactRuntimeV2{Running: true, BoundOrigin: f.server.URL})),
+		request.Payload.RequesterContact)
+	assert.DeepEqual(f.snapshot(t), before)
+	assert.Equal(len(f.a.signer.signed()), aSigns+3)
+	assert.Equal(len(f.b.signer.signed()), bSigns+2)
+
 	assert.Equal(f.invoke().Code, 200)
 	assert.DeepEqual(f.snapshot(t), before)
+	checkV2Evidence(t, f) // Still exactly one request and acceptance signature.
 	assert.That(
 		try.To1(pw.DeleteHeldLocal(f.a.store.Vault(), f.root, f.a.public)),
 	)
@@ -245,7 +367,13 @@ func TestOwnerV2LostResponseExactRetryAndReopen(t *testing.T) {
 		`{"acceptance_saved":true,"local_held":false}`,
 	)
 	assert.DeepEqual(f.snapshot(t), before)
+	assert.DeepEqual(try.To1(exchangeRecords(f.a.store.Vault())),
+		[3][]byte{a[0], b[1], nil})
+	assert.DeepEqual(try.To1(exchangeRecords(f.b.store.Vault())), b)
+	assert.Equal(len(f.a.signer.signed()), aSigns+5)
+	assert.Equal(len(f.b.signer.signed()), bSigns+2)
 	assert.Equal(len(f.requests), 2)
+	assert.Equal(f.callbacks, 0)
 }
 
 func TestOwnerV2DenyDeleteAndDelayedAcceptance(t *testing.T) {
