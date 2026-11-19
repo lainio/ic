@@ -3,7 +3,6 @@ package pw
 import (
 	"bytes"
 	"errors"
-	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
@@ -72,12 +71,14 @@ func (h localHistoryV2) peerContact(alice bool) string {
 // policy and signer eligibility to BobContactV2. Hold the same owner lock as
 // BobAcceptV2, including runtime changes. Probe outside View; authenticate
 // history and recheck durable prerequisites against one final local snapshot.
+// Ad expiry alone is irrelevant; retained evidence must authenticate and match
+// the signed establishment exactly. Fresh bootstrap still requires a fresh ad.
 // Empty with nil error means absent/ineligible; corrupt evidence returns error.
 // This grants no remote permission, first use, PWOpen, Trust or reachability.
 func BobUsableContactV2(vault *storage.Vault, root, local key.Public,
 	signer key.Handle, runtime ContactRuntimeV2,
 ) (string, error) {
-	return usableContactV2(vault, root, local, signer, runtime, false, time.Now)
+	return usableContactV2(vault, root, local, signer, runtime, false)
 }
 
 // RequesterUsableContactV2 has BobUsableContactV2's local-only contract, using
@@ -86,11 +87,11 @@ func BobUsableContactV2(vault *storage.Vault, root, local key.Public,
 func RequesterUsableContactV2(vault *storage.Vault, root, local key.Public,
 	signer key.Handle, runtime ContactRuntimeV2,
 ) (string, error) {
-	return usableContactV2(vault, root, local, signer, runtime, true, time.Now)
+	return usableContactV2(vault, root, local, signer, runtime, true)
 }
 
 func usableContactV2(vault *storage.Vault, root, local key.Public,
-	signer key.Handle, runtime ContactRuntimeV2, alice bool, now func() time.Time,
+	signer key.Handle, runtime ContactRuntimeV2, alice bool,
 ) (_ string, err error) {
 	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, func(error) error { return ErrEstablishment })
@@ -114,7 +115,7 @@ func usableContactV2(vault *storage.Vault, root, local key.Public,
 			runtime.BoundOrigin != ownOrigin {
 			return nil
 		}
-		guardErr := contactGuardsV2(tx, history.binding, alice, now)
+		guardErr := contactGuardsV2(tx, history.binding, alice)
 		if contactIneligibleV2(guardErr, alice) {
 			return nil
 		}
@@ -126,14 +127,19 @@ func usableContactV2(vault *storage.Vault, root, local key.Public,
 }
 
 func contactGuardsV2(tx storage.ReadTx, p EstablishmentV2, alice bool,
-	now func() time.Time,
 ) (err error) {
+	defer assert.PushAsserter(assert.Plain)()
 	defer err2.Handle(&err, nil)
 	if alice {
-		try.To1(requesterGuards(tx, p.guardBinding(), now))
+		try.To(requesterPermissions(tx, p.guardBinding()))
+		ad := try.To1(ads.ReadRetainedEstablishmentAdInTx(tx, p.Root, p.Target))
+		assert.That(bytes.Equal(p.Ad, ad),
+			establishmentRefusal("ad_evidence_changed"))
 	} else {
-		try.To1(currentEstablishmentGuards(tx, p.guardBinding(),
-			p.TargetContact+"/peer/introduction", now))
+		try.To(establishmentPermissions(tx, p.guardBinding()))
+		ad, found := try.To2(ads.ReadRetainedLocalInTx(tx, p.Root, p.Target))
+		try.To(checkEstablishmentAd(p.guardBinding(),
+			p.TargetContact+"/peer/introduction", ad, found))
 	}
 	return nil
 }
@@ -143,11 +149,8 @@ func contactIneligibleV2(err error, alice bool) bool {
 	if errors.As(err, &refusal) {
 		return true // Explicit missing eligibility or changed binding.
 	}
-	// ReadEstablishmentAdInTx validates the complete received/verified
-	// collections first. Their corrupt records have distinct errors; only its
-	// final expiry check can return ErrInvalidRecord after exact equality to
-	// the authenticated verified claim. Bob's ErrInvalidRecord is corruption.
+	// The retained reader ignores expiry. Only missing or changed claims mean
+	// ineligibility; malformed or unauthentic evidence must remain an error.
 	return alice && (errors.Is(err, ads.ErrNoReceivedClaim) ||
-		errors.Is(err, ads.ErrReceivedClaimChanged) ||
-		errors.Is(err, ads.ErrInvalidRecord))
+		errors.Is(err, ads.ErrReceivedClaimChanged))
 }

@@ -18,7 +18,7 @@ import (
 func TestContactV2LocalEligibilityAndImmutableHistory(t *testing.T) {
 	for _, alice := range []bool{false, true} {
 		for _, guard := range []string{"deny", "known self", "known peer",
-			"device", "expiry", "ad", "delete", "stopped", "origin", "unusable"} {
+			"device", "ad", "delete", "stopped", "origin", "unusable"} {
 			for _, duringProbe := range []bool{false, true} {
 				if duringProbe && (guard == "stopped" || guard == "origin") {
 					continue // Configuration is supplied under the owner's lock.
@@ -49,8 +49,6 @@ func TestContactV2LocalEligibilityAndImmutableHistory(t *testing.T) {
 								runtime.BoundOrigin = "http://127.0.0.1:4041"
 							case "unusable":
 								signer.signErr = errors.New("unavailable")
-							case "expiry":
-								f.now = f.now.Add(2 * ads.TTL)
 							case "ad":
 								if alice {
 									replaceRequesterAd(t, f, establishmentEndpoint)
@@ -78,8 +76,7 @@ func TestContactV2LocalEligibilityAndImmutableHistory(t *testing.T) {
 							try.To(invalidate())
 						}
 						contact, err := usableContactV2(node.vault, f.root.public,
-							local, signer, runtime, alice,
-							func() time.Time { return f.now })
+							local, signer, runtime, alice)
 						assert.Equal(contact, "")
 						if guard == "device" {
 							assert.Equal(err, ErrEstablishment) // Partial auth namespace.
@@ -96,8 +93,7 @@ func TestContactV2LocalEligibilityAndImmutableHistory(t *testing.T) {
 						node.unchanged(t, func() {
 							assert.Equal(try.To1(read(node.vault, f.root.public, local)), want)
 							contact, err := usableContactV2(node.vault, f.root.public,
-								local, signer, runtime, alice,
-								func() time.Time { return f.now })
+								local, signer, runtime, alice)
 							assert.Equal(contact, "")
 							if guard == "device" {
 								assert.Equal(err, ErrEstablishment)
@@ -111,43 +107,97 @@ func TestContactV2LocalEligibilityAndImmutableHistory(t *testing.T) {
 	}
 }
 
-func TestContactV2CurrentAdAbsenceAndCorruption(t *testing.T) {
-	for _, mode := range []string{"received", "verified", "bad received",
-		"bad verified", "bad Bob ad"} {
-		t.Run(mode, func(t *testing.T) {
-			defer assert.PushTester(t)()
-			f := newRequester(t, false)
-			try.To1(f.receiveV2(f.responseV2(t)))
-			alice := mode != "bad Bob ad"
-			node, local, read, origin, want := &f.alice, f.peer.public,
-				RequesterContactV2, aliceServiceOrigin, "http://127.0.0.1:12345"
-			if !alice {
-				node, local, read, origin, want = &f.f, f.local.public,
-					BobContactV2, want, origin
-				putRecord(t, node.vault, "local-current-ad-v1", []byte("slot-1"),
-					[]byte{0xff})
-			} else if mode == "received" || mode == "verified" {
-				try.To(f.invalidateAliceV2(mode))
-			} else {
-				name := "received-ad-claims-v1"
-				if mode == "bad verified" {
-					name = "verified-ad-claims-v1"
-				}
-				try.To(node.vault.Update(func(tx storage.WriteTx) error {
-					return tx.Put([]byte(name), []byte{0xff})
-				}))
-			}
-			node.unchanged(t, func() {
-				assert.Equal(try.To1(read(node.vault, f.root.public, local)), want)
-				contact, err := f.usableContactV2(alice, ContactRuntimeV2{true, origin})
-				assert.Equal(contact, "")
-				if mode == "received" || mode == "verified" {
-					assert.NoError(err)
-				} else {
-					assert.Equal(err, ErrEstablishment)
-				}
-			})
-		})
+func TestContactV2RetainedAdAbsenceAndCorruption(t *testing.T) {
+	for _, tc := range []struct {
+		alice   bool
+		guard   string
+		corrupt bool
+	}{
+		{false, "ad", false},
+		{false, "origin", false},
+		{false, "missing ad", true}, // A partial namespace is corruption.
+		{false, "corrupt ad", true},
+		{false, "malformed ad", true},
+		{true, "received", false},
+		{true, "verified", false},
+		{true, "changed received", false},
+		{true, "changed verified", false},
+		{true, "replaced ad", false},
+		{true, "changed contact", false},
+		{true, "corrupt ads", true},
+		{true, "bad received", true},
+		{true, "bad verified", true},
+	} {
+		for _, duringProbe := range []bool{false, true} {
+			t.Run(fmt.Sprint(tc.alice, "/", tc.guard, "/", duringProbe),
+				func(t *testing.T) {
+					defer assert.PushTester(t)()
+					f := newRequester(t, false)
+					try.To1(f.receiveV2(f.responseV2(t)))
+					f.now = f.now.Add(2 * ads.TTL)
+					node, local, read, usable := &f.f, f.local.public,
+						BobContactV2, BobUsableContactV2
+					signer := &probeSigner{Handle: f.local.handle}
+					origin, want := "http://127.0.0.1:12345", aliceServiceOrigin
+					if tc.alice {
+						node, local, read, usable = &f.alice, f.peer.public,
+							RequesterContactV2, RequesterUsableContactV2
+						signer, origin, want = f.signer, want, origin
+					}
+					before := requesterRecords(t, node.vault)
+					invalidate := func() error {
+						if !tc.alice {
+							return f.invalidateBobV2(tc.guard)
+						}
+						switch tc.guard {
+						case "bad received", "bad verified":
+							name := "received-ad-claims-v1"
+							if tc.guard == "bad verified" {
+								name = "verified-ad-claims-v1"
+							}
+							return node.vault.Update(func(tx storage.WriteTx) error {
+								return tx.Put([]byte(name), []byte{0xff})
+							})
+						case "replaced ad", "changed contact":
+							endpoint := establishmentEndpoint
+							if tc.guard == "changed contact" {
+								endpoint = "http://127.0.0.1:12346/peer/introduction"
+							}
+							replaceRequesterAd(t, f, endpoint)
+							return nil
+						default:
+							return f.invalidateAliceV2(tc.guard)
+						}
+					}
+					if duringProbe {
+						signer.sign = func(d []byte) (_ []byte, err error) {
+							defer err2.Handle(&err, nil)
+							try.To(invalidate())
+							return signer.Handle.Sign(d)
+						}
+					} else {
+						try.To(invalidate())
+					}
+					check := func() {
+						assert.Equal(try.To1(read(node.vault,
+							f.root.public, local)), want)
+						contact, err := usable(node.vault, f.root.public, local,
+							signer, ContactRuntimeV2{true, origin})
+						assert.Equal(contact, "")
+						if tc.corrupt {
+							assert.Equal(err, ErrEstablishment)
+						} else {
+							assert.NoError(err)
+						}
+					}
+					check()
+					node.reopen(t)
+					signer.sign = nil
+					node.lease.remaining.Store(0)
+					node.unchanged(t, check)
+					assert.DeepEqual(requesterRecords(t, node.vault), before)
+				})
+		}
 	}
 }
 
@@ -201,6 +251,10 @@ func TestContactV2LegacyAndWrongRoles(t *testing.T) {
 					assert.Equal(contact, "")
 				}
 				contact, err := wrongRole(node.vault, f.root.public, local)
+				assert.Equal(err, ErrEstablishment)
+				assert.Equal(contact, "")
+				contact, err = usableContactV2(node.vault, f.root.public,
+					local, nil, ContactRuntimeV2{}, !alice)
 				assert.Equal(err, ErrEstablishment)
 				assert.Equal(contact, "")
 				assert.Error(node.vault.View(func(tx storage.ReadTx) (err error) {

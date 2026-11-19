@@ -1,25 +1,69 @@
 package pw
 
 import (
+	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/lainio/err2"
 	"github.com/lainio/err2/assert"
 	"github.com/lainio/err2/try"
 	"github.com/lainio/ic/internal/policy"
+	"github.com/lainio/ic/key"
 	"github.com/lainio/ic/storage"
 )
 
 func (f *requesterFixture) usableContactV2(alice bool, runtime ContactRuntimeV2,
 ) (string, error) {
 	if alice {
-		return usableContactV2(f.alice.vault, f.root.public, f.peer.public,
-			f.signer, runtime, true, func() time.Time { return f.now })
+		return RequesterUsableContactV2(f.alice.vault, f.root.public,
+			f.peer.public, f.signer, runtime)
 	}
-	return usableContactV2(f.f.vault, f.root.public, f.local.public,
-		f.local.handle, runtime, false, func() time.Time { return f.now })
+	return BobUsableContactV2(f.f.vault, f.root.public, f.local.public,
+		f.local.handle, runtime)
+}
+
+func TestContactV2SignerRefusals(t *testing.T) {
+	for _, alice := range []bool{false, true} {
+		for _, mode := range []string{"nil", "typed nil", "wrong signer",
+			"sign failure", "invalid signature", "wrong signature"} {
+			t.Run(fmt.Sprint(alice, "/", mode), func(t *testing.T) {
+				defer assert.PushTester(t)()
+				f := newRequester(t, false)
+				try.To1(f.receiveV2(f.responseV2(t)))
+				node, local, usable := &f.f, f.local.public, BobUsableContactV2
+				origin := "http://127.0.0.1:12345"
+				probe := &probeSigner{Handle: f.local.handle}
+				if alice {
+					node, local, usable = &f.alice, f.peer.public,
+						RequesterUsableContactV2
+					probe, origin = f.signer, aliceServiceOrigin
+				}
+				var signer key.Handle = probe
+				switch mode {
+				case "nil":
+					signer = nil
+				case "typed nil":
+					signer = (*probeSigner)(nil)
+				case "wrong signer":
+					signer = f.root.handle
+				case "sign failure":
+					probe.signErr = errors.New("unavailable")
+				case "invalid signature":
+					probe.sign = func([]byte) ([]byte, error) {
+						return []byte{1}, nil
+					}
+				case "wrong signature":
+					probe.sign = f.root.handle.Sign
+				}
+				node.lease.remaining.Store(0)
+				node.unchanged(t, func() {
+					assert.Equal(try.To1(usable(node.vault, f.root.public,
+						local, signer, ContactRuntimeV2{true, origin})), "")
+				})
+			})
+		}
+	}
 }
 
 func TestContactV2DeleteBothRoles(t *testing.T) {

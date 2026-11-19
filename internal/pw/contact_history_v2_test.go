@@ -114,10 +114,17 @@ func TestContactV2CorruptionNeverBecomesAbsenceOrDeletion(t *testing.T) {
 					contact, err := read(node.vault, f.root.public, local)
 					assert.Equal(err, ErrEstablishment)
 					assert.Equal(contact, "")
-					// Stopped runtime must not disguise corrupt retained history.
-					contact, err = f.usableContactV2(alice, ContactRuntimeV2{})
-					assert.Equal(err, ErrEstablishment)
-					assert.Equal(contact, "")
+					origin := "http://127.0.0.1:12345"
+					if alice {
+						origin = aliceServiceOrigin
+					}
+					for _, running := range []bool{false, true} {
+						// Stopping must not disguise corrupt retained history.
+						contact, err = f.usableContactV2(alice,
+							ContactRuntimeV2{running, origin})
+						assert.Equal(err, ErrEstablishment)
+						assert.Equal(contact, "")
+					}
 					deleted, err := DeleteHeldLocal(node.vault, f.root.public, local)
 					assert.Equal(err, ErrDeleteHeld)
 					assert.ThatNot(deleted)
@@ -128,6 +135,63 @@ func TestContactV2CorruptionNeverBecomesAbsenceOrDeletion(t *testing.T) {
 						assert.Equal(err, ErrEstablishment)
 					}
 				})
+			})
+		}
+	}
+}
+
+func TestContactV2HistoryChangedDuringProbe(t *testing.T) {
+	for _, alice := range []bool{false, true} {
+		for _, mode := range []string{"request signature", "response signature",
+			"held digest", "role", "signed contact substitution"} {
+			t.Run(fmt.Sprint(alice, "/", mode), func(t *testing.T) {
+				defer assert.PushTester(t)()
+				f := newRequester(t, false)
+				try.To1(f.receiveV2(f.responseV2(t)))
+				node, local, usable := &f.f, f.local.public, BobUsableContactV2
+				signer := &probeSigner{Handle: f.local.handle}
+				origin := "http://127.0.0.1:12345"
+				if alice {
+					node, local, usable = &f.alice, f.peer.public,
+						RequesterUsableContactV2
+					signer, origin = f.signer, aliceServiceOrigin
+				}
+				signer.sign = func(d []byte) (_ []byte, err error) {
+					defer err2.Handle(&err, nil)
+					try.To(node.vault.Update(func(tx storage.WriteTx) (err error) {
+						defer err2.Handle(&err, nil)
+						if mode != "signed contact substitution" {
+							return corruptContactHistoryV2(tx, local, alice, mode)
+						}
+						raw, _ := try.To2(tx.Get([]byte(acceptedKey)))
+						var history acceptedRecord
+						try.To(wire.UnmarshalCanonical(&history, raw))
+						var response SignedAcceptedV2
+						try.To(wire.UnmarshalCanonical(&response, history.Response))
+						response.Payload.Binding.RequesterContact =
+							"http://127.0.0.1:4041"
+						digest := key.HashTagged(AcceptedPurposeV2,
+							try.To1(wire.Marshal(response.Payload)))
+						response.Signature = try.To1(f.local.handle.Sign(digest[:]))
+						history.Response = try.To1(wire.Marshal(response))
+						return tx.Put([]byte(acceptedKey),
+							try.To1(wire.Marshal(history)))
+					}))
+					return signer.Handle.Sign(d)
+				}
+				check := func() {
+					contact, err := usable(node.vault, f.root.public, local,
+						signer, ContactRuntimeV2{true, origin})
+					assert.Equal(err, ErrEstablishment)
+					assert.Equal(contact, "")
+				}
+				check()
+				after := requesterRecords(t, node.vault)
+				node.reopen(t)
+				signer.sign = nil
+				node.lease.remaining.Store(0)
+				node.unchanged(t, check)
+				assert.DeepEqual(requesterRecords(t, node.vault), after)
 			})
 		}
 	}
